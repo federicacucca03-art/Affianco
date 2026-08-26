@@ -135,6 +135,13 @@ export type DatiSalvataggioCampagna = {
   heroProduct?: string;
   /** Metadata creatività (fino a 3) per export Meta A/B visivo. */
   creativitaMeta?: CreativitaMeta[];
+  /**
+   * Se presente: UPDATE della stessa campagna (o INSERT idempotente con questo id).
+   * Se assente in create: viene generato un UUID client-side.
+   */
+  campaignId?: string;
+  /** Su update: riusa questo client senza trovaOCrea per nome. */
+  clientId?: string;
 };
 
 function normalizzaBookingChannel(
@@ -405,8 +412,22 @@ export async function trovaOCreaCliente(input: {
   };
 }
 
-/** Inserisce una campagna (tutti gli obiettivi) collegata al cliente. */
-export async function creaCampagnaLeadGen(input: {
+function isDuplicateKeyError(message: string): boolean {
+  return /23505|duplicate key|already exists/i.test(message);
+}
+
+function nuovoUuidCampagna(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+type CampagnaWriteInput = {
   clientId: string;
   name: string;
   dailyBudget: number;
@@ -444,28 +465,39 @@ export async function creaCampagnaLeadGen(input: {
   targetAge?: TargetAgeBand;
   shippingMarket?: EcommerceShippingMarket;
   heroProduct?: string;
-}): Promise<CampaignRow> {
+};
+
+function nomeCampagnaFallback(objective: CampagnaObjective): string {
+  if (objective === "BOOKINGS") return "Prenotazioni";
+  if (objective === "ECOMMERCE") return "Vendite Online";
+  if (objective === "IN_STORE") return "Traffico Negozio";
+  if (objective === "RETARGETING") return "Retargeting / Recupero";
+  if (objective === "AWARENESS") return "Apertura / Lancio Locale";
+  return "Richieste Contatto";
+}
+
+/**
+ * Mapper condiviso wizard → colonne DB.
+ * `includeStatus: false` su UPDATE wizard (preserva APPROVED / REVISION_REQUESTED).
+ */
+export function costruisciPayloadCampagna(
+  input: CampagnaWriteInput,
+  opts?: { includeStatus?: boolean; id?: string },
+): Record<string, unknown> {
   const objective = input.objective ?? "LEADS";
-  const nomeFallback =
-    objective === "BOOKINGS"
-      ? "Prenotazioni"
-      : objective === "ECOMMERCE"
-        ? "Vendite Online"
-        : objective === "IN_STORE"
-          ? "Traffico Negozio"
-          : objective === "RETARGETING"
-            ? "Retargeting / Recupero"
-            : objective === "AWARENESS"
-              ? "Apertura / Lancio Locale"
-              : "Richieste Contatto";
+  const includeStatus = opts?.includeStatus !== false;
   const payload: Record<string, unknown> = {
     client_id: input.clientId,
-    name: input.name.trim() || nomeFallback,
+    name: input.name.trim() || nomeCampagnaFallback(objective),
     objective,
-    status: input.status ?? "DRAFT",
     daily_budget: input.dailyBudget,
     max_sustainable_cpa: input.maxSustainableCpa,
   };
+
+  if (opts?.id) payload.id = opts.id;
+  if (includeStatus) {
+    payload.status = input.status ?? "DRAFT";
+  }
 
   if (input.varianteA?.trim()) payload.variante_a = input.varianteA.trim();
   if (input.varianteB?.trim()) payload.variante_b = input.varianteB.trim();
@@ -519,7 +551,123 @@ export async function creaCampagnaLeadGen(input: {
     payload.hero_product = input.heroProduct.trim();
   }
 
+  return payload;
+}
+
+function writeInputDaDati(
+  dati: DatiSalvataggioCampagna,
+  clientId: string,
+): CampagnaWriteInput {
+  return {
+    clientId,
+    name: dati.nomeCampagna,
+    dailyBudget: dati.dailyBudget,
+    maxSustainableCpa: dati.maxSustainableCpa,
+    objective: dati.objective ?? "LEADS",
+    bookingServiceValue: dati.bookingServiceValue,
+    showUpRate: dati.showUpRate,
+    bookingChannel: dati.bookingChannel,
+    bookingConfirmationPolicy: dati.bookingConfirmationPolicy,
+    averageOrderValue: dati.averageOrderValue,
+    productMargin: dati.productMargin,
+    averageReceipt: dati.averageReceipt,
+    storeMargin: dati.storeMargin,
+    recoveryValue: dati.recoveryValue,
+    recoveryMargin: dati.recoveryMargin,
+    recoveryDiscount: dati.recoveryDiscount,
+    launchBudget: dati.launchBudget,
+    awarenessRadiusKm: dati.awarenessRadiusKm,
+    estimatedCpm: dati.estimatedCpm,
+    varianteA: dati.varianteA,
+    varianteB: dati.varianteB,
+    varianteC: dati.varianteC,
+    pageId: dati.pageId,
+    formId: dati.formId,
+    settore: dati.settore,
+    citta: dati.citta,
+    raggioKm: dati.raggioKm,
+    etaMin: dati.etaMin,
+    etaMax: dati.etaMax,
+    titoloAnnuncio: dati.titoloAnnuncio,
+    targetMargin: dati.targetMargin,
+    frontEndOffer: dati.frontEndOffer,
+    targetType: dati.targetType,
+    targetAge: dati.targetAge,
+    shippingMarket: dati.shippingMarket,
+    heroProduct: dati.heroProduct,
+  };
+}
+
+async function leggiMetaCampagna(
+  id: string,
+): Promise<{ client_id: string | null; status: string | null } | null> {
+  const { data, error } = await supabase
+    .from("campaigns")
+    .select("client_id, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return data as { client_id: string | null; status: string | null };
+}
+
+async function aggiornaClienteConosciuto(
+  clientId: string,
+  dati: DatiSalvataggioCampagna,
+): Promise<ClientRow> {
+  const patch: Record<string, unknown> = {};
+  if (dati.nomeCliente.trim()) patch.name = dati.nomeCliente.trim();
+  if (dati.elevatorPitch?.trim()) {
+    patch.elevator_pitch = dati.elevatorPitch.trim();
+  }
+  const ticket =
+    dati.recoveryValue ??
+    dati.averageReceipt ??
+    dati.averageOrderValue ??
+    dati.bookingServiceValue ??
+    dati.averageTicketValue;
+  if (ticket != null && Number.isFinite(ticket)) {
+    patch.average_ticket_value = ticket;
+  }
+  const closing = dati.showUpRate ?? dati.closingRate;
+  if (closing != null && Number.isFinite(closing)) {
+    patch.closing_rate = closing;
+  }
+  if (dati.website?.trim()) patch.website = dati.website.trim();
+
+  if (Object.keys(patch).length === 0) {
+    const { data, error } = await supabase
+      .from("clients")
+      .select("*")
+      .eq("id", clientId)
+      .single();
+    if (error) throw new Error(error.message);
+    return data as ClientRow;
+  }
+
+  const aggiornato = await updateConFallbackColonne("clients", clientId, patch);
+  return aggiornato as unknown as ClientRow;
+}
+
+/** Inserisce una campagna (tutti gli obiettivi) collegata al cliente. */
+export async function creaCampagnaLeadGen(
+  input: CampagnaWriteInput & { id?: string },
+): Promise<CampaignRow> {
+  const payload = costruisciPayloadCampagna(input, {
+    includeStatus: true,
+    id: input.id,
+  });
   const data = await insertConFallbackColonne("campaigns", payload);
+  return data as unknown as CampaignRow;
+}
+
+/** Aggiorna campagna esistente senza toccare status / approved_at / revision_notes. */
+export async function aggiornaCampagnaLeadGen(
+  id: string,
+  input: CampagnaWriteInput,
+): Promise<CampaignRow> {
+  const payload = costruisciPayloadCampagna(input, { includeStatus: false });
+  const data = await updateConFallbackColonne("campaigns", id, payload);
   return data as unknown as CampaignRow;
 }
 
@@ -565,69 +713,68 @@ function assetsDaDati(dati: DatiSalvataggioCampagna): CampagnaAssets {
   };
 }
 
-/** Cliente + campagna in un’unica operazione (con asset). */
+/** Cliente + campagna: CREATE (UUID client) o UPDATE idempotente sulla stessa riga. */
 export async function salvaCampagnaCompleta(
   dati: DatiSalvataggioCampagna,
 ): Promise<Campagna> {
-  const cliente = await trovaOCreaCliente({
-    name: dati.nomeCliente,
-    elevatorPitch: dati.elevatorPitch,
-    website: dati.website,
-    averageTicketValue:
-      dati.recoveryValue ??
-      dati.averageReceipt ??
-      dati.averageOrderValue ??
-      dati.bookingServiceValue ??
-      dati.averageTicketValue,
-    closingRate: dati.showUpRate ?? dati.closingRate,
-  });
+  const campaignId = (dati.campaignId ?? "").trim() || nuovoUuidCampagna();
+  const metaEsistente = await leggiMetaCampagna(campaignId);
+  const isUpdate = metaEsistente != null;
 
-  const campagna = await creaCampagnaLeadGen({
-    clientId: cliente.id,
-    name: dati.nomeCampagna,
-    dailyBudget: dati.dailyBudget,
-    maxSustainableCpa: dati.maxSustainableCpa,
-    objective: dati.objective ?? "LEADS",
-    bookingServiceValue: dati.bookingServiceValue,
-    showUpRate: dati.showUpRate,
-    bookingChannel: dati.bookingChannel,
-    bookingConfirmationPolicy: dati.bookingConfirmationPolicy,
-    averageOrderValue: dati.averageOrderValue,
-    productMargin: dati.productMargin,
-    averageReceipt: dati.averageReceipt,
-    storeMargin: dati.storeMargin,
-    recoveryValue: dati.recoveryValue,
-    recoveryMargin: dati.recoveryMargin,
-    recoveryDiscount: dati.recoveryDiscount,
-    launchBudget: dati.launchBudget,
-    awarenessRadiusKm: dati.awarenessRadiusKm,
-    estimatedCpm: dati.estimatedCpm,
-    varianteA: dati.varianteA,
-    varianteB: dati.varianteB,
-    varianteC: dati.varianteC,
-    pageId: dati.pageId,
-    formId: dati.formId,
-    settore: dati.settore,
-    citta: dati.citta,
-    raggioKm: dati.raggioKm,
-    etaMin: dati.etaMin,
-    etaMax: dati.etaMax,
-    titoloAnnuncio: dati.titoloAnnuncio,
-    targetMargin: dati.targetMargin,
-    frontEndOffer: dati.frontEndOffer,
-    targetType: dati.targetType,
-    targetAge: dati.targetAge,
-    shippingMarket: dati.shippingMarket,
-    heroProduct: dati.heroProduct,
-  });
+  let cliente: ClientRow;
+  if (metaEsistente?.client_id) {
+    cliente = await aggiornaClienteConosciuto(metaEsistente.client_id, dati);
+  } else if (dati.clientId?.trim()) {
+    cliente = await aggiornaClienteConosciuto(dati.clientId.trim(), dati);
+  } else {
+    cliente = await trovaOCreaCliente({
+      name: dati.nomeCliente,
+      elevatorPitch: dati.elevatorPitch,
+      website: dati.website,
+      averageTicketValue:
+        dati.recoveryValue ??
+        dati.averageReceipt ??
+        dati.averageOrderValue ??
+        dati.bookingServiceValue ??
+        dati.averageTicketValue,
+      closingRate: dati.showUpRate ?? dati.closingRate,
+    });
+  }
+
+  const writeInput = writeInputDaDati(dati, cliente.id);
+  let campagna: CampaignRow;
+  let appenaCreata = false;
+
+  if (isUpdate) {
+    campagna = await aggiornaCampagnaLeadGen(campaignId, writeInput);
+  } else {
+    try {
+      campagna = await creaCampagnaLeadGen({
+        ...writeInput,
+        id: campaignId,
+        status: "DRAFT",
+      });
+      appenaCreata = true;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      // INSERT riuscito ma risposta persa / race: stesso UUID → UPDATE.
+      if (isDuplicateKeyError(message)) {
+        campagna = await aggiornaCampagnaLeadGen(campaignId, writeInput);
+      } else {
+        throw e;
+      }
+    }
+  }
 
   const assets = assetsDaDati(dati);
   salvaAssetCampagnaLocale(campagna.id, assets);
 
-  try {
-    await logCampagnaCreata(campagna.id);
-  } catch {
-    // Diario non bloccante.
+  if (appenaCreata) {
+    try {
+      await logCampagnaCreata(campagna.id);
+    } catch {
+      // Diario non bloccante.
+    }
   }
 
   return mappaCampagnaDaRow({

@@ -12,6 +12,10 @@ import {
   leggiCampagnaDaSupabase,
 } from "@/lib/campagne-db";
 import { assicuraVariantiCampagna } from "@/lib/assicura-varianti";
+import {
+  logErroreSupabaseDev,
+  messaggioErroreSupabase,
+} from "@/lib/supabase-errori";
 import { PannelloAssetStrategia } from "@/components/campagne/PannelloAssetStrategia";
 import { DiarioBordo } from "@/components/campagne/DiarioBordo";
 import {
@@ -169,6 +173,10 @@ export default function DettaglioCampagnaPage() {
   const [linkCopiato, setLinkCopiato] = useState(false);
   const [revisioneInChiusura, setRevisioneInChiusura] = useState(false);
   const [erroreRevisione, setErroreRevisione] = useState<string | null>(null);
+  /** Errore rete/API distinto da record assente. */
+  const [erroreCaricamento, setErroreCaricamento] = useState<string | null>(
+    null,
+  );
   const [diarioRefreshKey, setDiarioRefreshKey] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const prevMetricsKeyRef = useRef<string | null>(null);
@@ -177,6 +185,7 @@ export default function DettaglioCampagnaPage() {
   useEffect(() => {
     let attivo = true;
     setCampagna(undefined);
+    setErroreCaricamento(null);
     setNomeFile(null);
     setAggregati(null);
     setMostraManuale(false);
@@ -189,14 +198,17 @@ export default function DettaglioCampagnaPage() {
       try {
         const trovata = await leggiCampagnaDaSupabase(params.id);
         if (!attivo) return;
+        setErroreCaricamento(null);
         setCampagna(
           trovata
             ? assicuraVariantiCampagna(trovata, { persistiLocale: true })
             : null,
         );
-      } catch {
+      } catch (e) {
         if (!attivo) return;
+        logErroreSupabaseDev("carica_dettaglio_campagna", e);
         setCampagna(null);
+        setErroreCaricamento(messaggioErroreSupabase(e, "carica_dettaglio"));
       }
     })();
 
@@ -524,11 +536,8 @@ export default function DettaglioCampagnaPage() {
         stato: "In attesa di approvazione cliente",
       });
     } catch (e) {
-      setErroreRevisione(
-        e instanceof Error
-          ? e.message
-          : "Non riesco a aggiornare lo stato. Riprova.",
-      );
+      logErroreSupabaseDev("completa_revisione", e);
+      setErroreRevisione(messaggioErroreSupabase(e, "azione_approvazione"));
     } finally {
       setRevisioneInChiusura(false);
     }
@@ -538,6 +547,23 @@ export default function DettaglioCampagnaPage() {
     return (
       <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         <p className="text-sm text-[var(--ink-muted)]">Caricamento…</p>
+      </main>
+    );
+  }
+
+  if (erroreCaricamento) {
+    return (
+      <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+        <Link
+          href="/campagne"
+          className="text-sm font-medium text-[var(--accent)] transition-opacity hover:opacity-80"
+        >
+          Torna alle campagne
+        </Link>
+        <h1 className="mt-4 text-xl font-medium text-[var(--ink)]">
+          Campagna non disponibile
+        </h1>
+        <p className="mt-2 text-sm text-[var(--ink-muted)]">{erroreCaricamento}</p>
       </main>
     );
   }

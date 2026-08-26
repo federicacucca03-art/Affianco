@@ -445,6 +445,10 @@ export function PercorsoContatti({
   const [campagnaIdSalvata, setCampagnaIdSalvata] = useState<string | null>(
     null,
   );
+  /** UUID stabile per create idempotente (anche se la risposta INSERT si perde). */
+  const campagnaIdStabileRef = useRef<string | null>(null);
+  /** Lock: seconde chiamate riusano la stessa Promise (niente doppio INSERT). */
+  const saveInFlightRef = useRef<Promise<string> | null>(null);
   const [linkApprovazioneCopiato, setLinkApprovazioneCopiato] = useState(false);
   const [linkApprovazioneInCorso, setLinkApprovazioneInCorso] = useState(false);
   const [erroreLinkApprovazione, setErroreLinkApprovazione] = useState<
@@ -1487,145 +1491,178 @@ export function PercorsoContatti({
   }
 
   async function assicuraCampagnaSalvata(): Promise<string> {
-    if (campagnaIdSalvata) return campagnaIdSalvata;
+    if (saveInFlightRef.current) return saveInFlightRef.current;
 
-    const ticket = Number(scontrinoMedio) || 0;
-    const tasso = Number(tassoConversione) || (isBookings ? 75 : 10);
-    const margineProdotto =
-      Number(productMargin) || (isEcommerce ? 60 : isInStore ? 40 : 50);
-    const costoFulfillment = Number(fulfillmentCost) || 0;
-    const sconto = Number(recoveryDiscount) || 0;
-    const budgetLancio = Number(launchBudget) || 300;
-    const cpm = Number(estimatedCpm) || 7;
-    const raggioAwareness = config.raggioKm || 10;
-    const maxCpa = isAwareness
-      ? cpm
-      : isRetargeting
-        ? calculateMaxSustainableRecoveryCpa(ticket, margineProdotto, sconto)
-        : isInStore
-          ? calculateMaxSustainableInStoreCpa(
-              ticket,
-              margineProdotto,
-              targetMargin,
-            )
-          : isEcommerce
-            ? calculateEcommerceCpaMax(
+    const operazione = (async () => {
+      if (!campagnaIdStabileRef.current) {
+        campagnaIdStabileRef.current =
+          campagnaIdSalvata ??
+          (typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : null);
+        if (!campagnaIdStabileRef.current) {
+          throw new Error(
+            "Impossibile generare un ID campagna stabile in questo browser.",
+          );
+        }
+      }
+      const campaignId = campagnaIdStabileRef.current;
+
+      const ticket = Number(scontrinoMedio) || 0;
+      const tasso = Number(tassoConversione) || (isBookings ? 75 : 10);
+      const margineProdotto =
+        Number(productMargin) || (isEcommerce ? 60 : isInStore ? 40 : 50);
+      const costoFulfillment = Number(fulfillmentCost) || 0;
+      const sconto = Number(recoveryDiscount) || 0;
+      const budgetLancio = Number(launchBudget) || 300;
+      const cpm = Number(estimatedCpm) || 7;
+      const raggioAwareness = config.raggioKm || 10;
+      const maxCpa = isAwareness
+        ? cpm
+        : isRetargeting
+          ? calculateMaxSustainableRecoveryCpa(ticket, margineProdotto, sconto)
+          : isInStore
+            ? calculateMaxSustainableInStoreCpa(
                 ticket,
                 margineProdotto,
-                costoFulfillment,
-                ecommerceLtvAttivo,
+                targetMargin,
               )
-            : (() => {
-                const base = isBookings
-                  ? calculateMaxSustainableBookingCpa(
-                      ticket,
-                      tasso,
-                      targetMargin,
-                    )
-                  : calculateMaxSustainableCpl(ticket, tasso, targetMargin);
-                if (
-                  !ltvAttivo ||
-                  isEcommerce ||
-                  isInStore ||
-                  isRetargeting ||
-                  isAwareness
-                ) {
-                  return base;
-                }
-                const ltv = calculateLtvEconomics({
-                  scontrinoMedio: ticket,
-                  frequenzaAnnuale: Number(frequenzaAnnuale) || 1,
-                  anniPermanenza: Number(anniPermanenza) || 1,
-                  loyaltyPercent: Number(loyaltyPercent) || 0,
-                  margineLordoPercent: Number(margineLordoLtv) || 50,
-                  tassoConversionePercent: tasso,
-                  targetMarginPercent: targetMargin,
-                });
-                return ltv.cplSostenibileLtv > 0
-                  ? ltv.cplSostenibileLtv
-                  : base;
-              })();
+            : isEcommerce
+              ? calculateEcommerceCpaMax(
+                  ticket,
+                  margineProdotto,
+                  costoFulfillment,
+                  ecommerceLtvAttivo,
+                )
+              : (() => {
+                  const base = isBookings
+                    ? calculateMaxSustainableBookingCpa(
+                        ticket,
+                        tasso,
+                        targetMargin,
+                      )
+                    : calculateMaxSustainableCpl(ticket, tasso, targetMargin);
+                  if (
+                    !ltvAttivo ||
+                    isEcommerce ||
+                    isInStore ||
+                    isRetargeting ||
+                    isAwareness
+                  ) {
+                    return base;
+                  }
+                  const ltv = calculateLtvEconomics({
+                    scontrinoMedio: ticket,
+                    frequenzaAnnuale: Number(frequenzaAnnuale) || 1,
+                    anniPermanenza: Number(anniPermanenza) || 1,
+                    loyaltyPercent: Number(loyaltyPercent) || 0,
+                    margineLordoPercent: Number(margineLordoLtv) || 50,
+                    tassoConversionePercent: tasso,
+                    targetMarginPercent: targetMargin,
+                  });
+                  return ltv.cplSostenibileLtv > 0
+                    ? ltv.cplSostenibileLtv
+                    : base;
+                })();
 
-    const dailyBudget = isAwareness
-      ? Math.max(5, Math.round(budgetLancio / 7))
-      : config.budgetGiornaliero;
+      const dailyBudget = isAwareness
+        ? Math.max(5, Math.round(budgetLancio / 7))
+        : config.budgetGiornaliero;
 
-    const creata = await salvaCampagnaCompleta({
-      nomeCliente: config.nomeCliente || "Nuovo cliente",
-      elevatorPitch,
-      website: sitoWeb,
-      nomeCampagna:
-        config.nomeCampagna.trim() ||
-        nomeCampagnaPerObiettivo(
-          objectiveEffettivo,
-          config.nomeCliente || "Nuovo cliente",
-        ),
-      dailyBudget,
-      maxSustainableCpa: maxCpa,
-      averageTicketValue: isAwareness ? undefined : ticket || undefined,
-      closingRate:
-        isEcommerce || isInStore || isRetargeting || isAwareness
-          ? undefined
-          : tasso,
-      targetMargin: isRetargeting || isAwareness ? undefined : targetMargin,
-      objective: objectiveEffettivo,
-      bookingServiceValue: isBookings ? ticket || undefined : undefined,
-      showUpRate: isBookings ? tasso : undefined,
-      bookingChannel: isBookings ? bookingChannel : undefined,
-      bookingConfirmationPolicy: isBookings
-        ? bookingConfirmationPolicy
-        : undefined,
-      averageOrderValue: isEcommerce ? ticket || undefined : undefined,
-      productMargin: isEcommerce ? margineProdotto : undefined,
-      averageReceipt: isInStore ? ticket || undefined : undefined,
-      storeMargin: isInStore ? margineProdotto : undefined,
-      recoveryValue: isRetargeting ? ticket || undefined : undefined,
-      recoveryMargin: isRetargeting ? margineProdotto : undefined,
-      recoveryDiscount: isRetargeting ? sconto : undefined,
-      launchBudget: isAwareness ? budgetLancio : undefined,
-      awarenessRadiusKm: isAwareness ? raggioAwareness : undefined,
-      estimatedCpm: isAwareness ? cpm : undefined,
-      varianteA: config.varianteA,
-      varianteB: config.varianteB,
-      varianteC: config.varianteC,
-      pageId,
-      formId,
-      settore: contesto.settore,
-      citta: contesto.citta,
-      raggioKm: isAwareness ? raggioAwareness : config.raggioKm,
-      etaMin: config.etaMin,
-      etaMax: config.etaMax,
-      titoloAnnuncio: config.titoloAnnuncio,
-      frontEndOffer: frontEndOffer.trim() || undefined,
-      shippingMarket: isEcommerce ? shippingMarket : undefined,
-      heroProduct: isEcommerce
-        ? heroProduct.trim() || elevatorPitch.trim() || undefined
-        : undefined,
-      targetType,
-      targetAge,
-      creativitaMeta: creativitaToMeta(creativita),
-    });
+      const salvata = await salvaCampagnaCompleta({
+        campaignId,
+        nomeCliente: config.nomeCliente || "Nuovo cliente",
+        elevatorPitch,
+        website: sitoWeb,
+        nomeCampagna:
+          config.nomeCampagna.trim() ||
+          nomeCampagnaPerObiettivo(
+            objectiveEffettivo,
+            config.nomeCliente || "Nuovo cliente",
+          ),
+        dailyBudget,
+        maxSustainableCpa: maxCpa,
+        averageTicketValue: isAwareness ? undefined : ticket || undefined,
+        closingRate:
+          isEcommerce || isInStore || isRetargeting || isAwareness
+            ? undefined
+            : tasso,
+        targetMargin: isRetargeting || isAwareness ? undefined : targetMargin,
+        objective: objectiveEffettivo,
+        bookingServiceValue: isBookings ? ticket || undefined : undefined,
+        showUpRate: isBookings ? tasso : undefined,
+        bookingChannel: isBookings ? bookingChannel : undefined,
+        bookingConfirmationPolicy: isBookings
+          ? bookingConfirmationPolicy
+          : undefined,
+        averageOrderValue: isEcommerce ? ticket || undefined : undefined,
+        productMargin: isEcommerce ? margineProdotto : undefined,
+        averageReceipt: isInStore ? ticket || undefined : undefined,
+        storeMargin: isInStore ? margineProdotto : undefined,
+        recoveryValue: isRetargeting ? ticket || undefined : undefined,
+        recoveryMargin: isRetargeting ? margineProdotto : undefined,
+        recoveryDiscount: isRetargeting ? sconto : undefined,
+        launchBudget: isAwareness ? budgetLancio : undefined,
+        awarenessRadiusKm: isAwareness ? raggioAwareness : undefined,
+        estimatedCpm: isAwareness ? cpm : undefined,
+        varianteA: config.varianteA,
+        varianteB: config.varianteB,
+        varianteC: config.varianteC,
+        pageId,
+        formId,
+        settore: contesto.settore,
+        citta: contesto.citta,
+        raggioKm: isAwareness ? raggioAwareness : config.raggioKm,
+        etaMin: config.etaMin,
+        etaMax: config.etaMax,
+        titoloAnnuncio: config.titoloAnnuncio,
+        frontEndOffer: frontEndOffer.trim() || undefined,
+        shippingMarket: isEcommerce ? shippingMarket : undefined,
+        heroProduct: isEcommerce
+          ? heroProduct.trim() || elevatorPitch.trim() || undefined
+          : undefined,
+        targetType,
+        targetAge,
+        creativitaMeta: creativitaToMeta(creativita),
+      });
 
-    const clientIdSalvato = persistiClienteSeRichiesto();
-    saveCampaign({
-      id: creata.id,
-      clientId: clientIdSalvato,
-      nomeCliente: config.nomeCliente || "Nuovo cliente",
-      nomeCampagna:
-        config.nomeCampagna.trim() ||
-        nomeCampagnaPerObiettivo(
-          objectiveEffettivo,
-          config.nomeCliente || "Nuovo cliente",
-        ),
-      objective: objectiveEffettivo,
-      settore: contesto.settore,
-      citta: contesto.citta,
-      status: creata.status ?? "DRAFT",
-      frontEndOffer: frontEndOffer.trim(),
-    });
+      const clientIdSalvato = persistiClienteSeRichiesto();
+      campagnaIdStabileRef.current = salvata.id;
+      setCampagnaIdSalvata(salvata.id);
 
-    setCampagnaIdSalvata(creata.id);
-    return creata.id;
+      saveCampaign({
+        id: salvata.id,
+        clientId: clientIdSalvato,
+        nomeCliente: config.nomeCliente || "Nuovo cliente",
+        nomeCampagna:
+          config.nomeCampagna.trim() ||
+          nomeCampagnaPerObiettivo(
+            objectiveEffettivo,
+            config.nomeCliente || "Nuovo cliente",
+          ),
+        objective: objectiveEffettivo,
+        settore: contesto.settore,
+        citta: contesto.citta,
+        // Preserva status remoto (APPROVED / REVISION_REQUESTED / DRAFT).
+        status: salvata.status ?? "DRAFT",
+        frontEndOffer: frontEndOffer.trim(),
+      });
+
+      if (salvata.status) {
+        setStatusApprovazioneGrezzo(salvata.status);
+      }
+
+      return salvata.id;
+    })();
+
+    saveInFlightRef.current = operazione;
+    try {
+      return await operazione;
+    } finally {
+      if (saveInFlightRef.current === operazione) {
+        saveInFlightRef.current = null;
+      }
+    }
   }
 
   async function copiaLinkApprovazione() {

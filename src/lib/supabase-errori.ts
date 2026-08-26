@@ -4,10 +4,20 @@
  */
 
 export type CategoriaErroreSupabase =
-  | "rete"
-  | "config"
-  | "api"
-  | "non_trovato";
+  | "NETWORK"
+  | "CONFIG"
+  | "NOT_FOUND"
+  | "DATABASE"
+  | "UNKNOWN";
+
+export type ContestoErroreSupabase =
+  | "salva"
+  | "copia_link"
+  | "carica_approvazione"
+  | "azione_approvazione"
+  | "lista"
+  | "carica_dettaglio"
+  | "generico";
 
 function supabaseEnvPresenti(): boolean {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim();
@@ -23,79 +33,125 @@ export function isSupabaseConfigurato(): boolean {
 function testoErrore(error: unknown): string {
   if (error instanceof Error) return error.message || error.name;
   if (typeof error === "string") return error;
+  if (error && typeof error === "object") {
+    const o = error as { message?: unknown; code?: unknown; details?: unknown };
+    const parts = [o.message, o.code, o.details]
+      .filter((x) => typeof x === "string" && x.trim())
+      .map((x) => String(x));
+    if (parts.length) return parts.join(" ");
+  }
   return "";
 }
 
+function codiceErrore(error: unknown): string {
+  if (error && typeof error === "object" && "code" in error) {
+    const c = (error as { code?: unknown }).code;
+    if (typeof c === "string") return c;
+  }
+  return "";
+}
+
+/**
+ * Classifica un errore throwato (rete/config/API).
+ * Non usare per “zero record”: quello è NOT_FOUND solo se lo passi
+ * esplicitamente o se il messaggio/codice PostgREST lo indica.
+ */
 export function classificaErroreSupabase(
   error: unknown,
 ): CategoriaErroreSupabase {
-  if (!supabaseEnvPresenti()) return "config";
+  if (!supabaseEnvPresenti()) return "CONFIG";
 
   const msg = testoErrore(error);
   const lower = msg.toLowerCase();
+  const code = codiceErrore(error).toUpperCase();
 
   if (
     error instanceof TypeError ||
-    /failed to fetch|networkerror|network request failed|load failed|fetch failed|enotfound|econnrefused|econnreset|etimedout|err_name_not_resolved|err_internet_disconnected|offline/i.test(
+    /failed to fetch|networkerror|network request failed|load failed|fetch failed|enotfound|econnrefused|econnreset|etimedout|err_name_not_resolved|err_internet_disconnected|offline|network unreachable|connecting to/i.test(
       lower,
     )
   ) {
-    return "rete";
+    return "NETWORK";
   }
 
   if (
-    /not configured|invalid supabase|missing.*supabase|supabase.*url|supabase.*key/i.test(
+    /not configured|invalid supabase|missing.*supabase|supabase.*url|supabase.*key|supabase non è configurato/i.test(
       lower,
     )
   ) {
-    return "config";
+    return "CONFIG";
+  }
+
+  // PostgREST: zero rows da .single() — distinto da query fallita / colonna mancante.
+  if (
+    code === "PGRST116" ||
+    /pgrst116|0 rows|no rows|results contain 0 rows|record assente/i.test(
+      lower,
+    )
+  ) {
+    return "NOT_FOUND";
   }
 
   if (
-    /not found|0 rows|pgrst116|no rows|does not exist|record assente/i.test(
+    code.startsWith("PGRST") ||
+    code.startsWith("23") ||
+    code.startsWith("42") ||
+    /postgrest|postgres|permission denied|rls|jwt|duplicate key|foreign key|violates|could not find the .* column|schema cache/i.test(
       lower,
     )
   ) {
-    return "non_trovato";
+    return "DATABASE";
   }
 
-  return "api";
+  return "UNKNOWN";
 }
-
-type ContestoErroreSupabase =
-  | "salva"
-  | "copia_link"
-  | "carica_approvazione"
-  | "azione_approvazione"
-  | "lista"
-  | "generico";
 
 const COPY: Record<
   CategoriaErroreSupabase,
   Partial<Record<ContestoErroreSupabase, string>> & { default: string }
 > = {
-  rete: {
+  NETWORK: {
     default:
       "Non riesco a collegarmi al database. Controlla la connessione e riprova.",
     carica_approvazione:
-      "Non riesco a caricare la proposta in questo momento. Controlla la connessione e riprova.",
+      "Non riesco a caricare la proposta in questo momento.",
+    carica_dettaglio:
+      "Non riesco a caricare la campagna in questo momento.",
     azione_approvazione:
       "Non riesco a salvare la risposta in questo momento. Controlla la connessione e riprova.",
+    salva: "Non riesco a salvare la campagna in questo momento. Riprova.",
+    copia_link: "Non riesco a salvare la campagna in questo momento. Riprova.",
     lista: "Non riesco a collegarmi al database. Riprova tra qualche secondo.",
   },
-  config: {
+  CONFIG: {
     default:
       "Supabase non è configurato correttamente in questo ambiente.",
   },
-  api: {
-    default: "Operazione non riuscita. Riprova tra poco.",
-    salva: "Salvataggio non riuscito. Riprova tra poco.",
-    copia_link: "Impossibile preparare il link. Riprova tra poco.",
-    azione_approvazione: "Operazione non riuscita. Riprova tra poco.",
-  },
-  non_trovato: {
+  NOT_FOUND: {
     default: "Proposta non trovata.",
     carica_approvazione: "Proposta non trovata.",
+    carica_dettaglio: "Campagna non trovata.",
+  },
+  DATABASE: {
+    default: "Operazione non riuscita. Riprova tra poco.",
+    salva: "Salvataggio non riuscito. Riprova tra poco.",
+    copia_link: "Non riesco a salvare la campagna in questo momento. Riprova.",
+    carica_approvazione:
+      "Non riesco a caricare la proposta in questo momento.",
+    carica_dettaglio:
+      "Non riesco a caricare la campagna in questo momento.",
+    azione_approvazione: "Operazione non riuscita. Riprova tra poco.",
+    lista: "Non riesco a caricare le campagne. Riprova tra poco.",
+  },
+  UNKNOWN: {
+    default: "Operazione non riuscita. Riprova tra poco.",
+    salva: "Non riesco a salvare la campagna in questo momento. Riprova.",
+    copia_link: "Non riesco a salvare la campagna in questo momento. Riprova.",
+    carica_approvazione:
+      "Non riesco a caricare la proposta in questo momento.",
+    carica_dettaglio:
+      "Non riesco a caricare la campagna in questo momento.",
+    azione_approvazione: "Operazione non riuscita. Riprova tra poco.",
   },
 };
 

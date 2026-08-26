@@ -111,10 +111,6 @@ export function ListaCampagne() {
       setMessaggioErrore(null);
     } catch (e) {
       logErroreSupabaseDev("lista_campagne", e);
-      console.warn(
-        "[Affianco] Impossibile caricare campagne da Supabase, uso fallback locale",
-        e,
-      );
       const daLocale = fondiCampagne([], locali);
       setCampagne(daLocale);
       if (daLocale.length === 0) {
