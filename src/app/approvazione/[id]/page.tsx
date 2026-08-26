@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import type { Campagna } from "@/types/campagne";
 import {
-  approvaCampagnaSuSupabase,
-  leggiCampagnaDaSupabase,
-  richiediRevisioneCampagnaSuSupabase,
+  approvaCampagnaPubblica,
+  leggiCampagnaPerApprovazionePubblica,
+  richiediRevisioneCampagnaPubblica,
 } from "@/lib/campagne-db";
 import { assicuraVariantiCampagna } from "@/lib/assicura-varianti";
 import {
@@ -54,7 +54,7 @@ export default function ApprovazioneCampagnaPage() {
 
     (async () => {
       try {
-        const trovata = await leggiCampagnaDaSupabase(params.id);
+        const trovata = await leggiCampagnaPerApprovazionePubblica(params.id);
         if (!attivo) return;
         if (!trovata) {
           setCampagna(null);
@@ -205,7 +205,7 @@ export default function ApprovazioneCampagnaPage() {
     setAzioneInCorso(true);
     setErrore(null);
     try {
-      const approvedAt = await approvaCampagnaSuSupabase(campagna.id);
+      const approvedAt = await approvaCampagnaPubblica(campagna.id);
       setApprovata(true);
       setMostraModifica(false);
       setCampagna((c) =>
@@ -242,7 +242,7 @@ export default function ApprovazioneCampagnaPage() {
     setAzioneInCorso(true);
     setErrore(null);
     try {
-      const salvata = await richiediRevisioneCampagnaSuSupabase(
+      const salvata = await richiediRevisioneCampagnaPubblica(
         campagna.id,
         notesText,
       );

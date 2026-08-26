@@ -1,15 +1,22 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Briefcase,
   LayoutGrid,
+  LogOut,
   Settings,
   TrendingUp,
   X,
   type LucideIcon,
 } from "lucide-react";
+import { useAuth } from "@/components/auth/AuthProvider";
+import {
+  logErroreAuthDev,
+  messaggioErroreAuth,
+} from "@/lib/auth-errori";
 
 type VoceNav = {
   etichetta: string;
@@ -31,6 +38,25 @@ type Props = {
 
 export function BarraLaterale({ aperta, onChiudi }: Props) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { email, signOut } = useAuth();
+  const [logoutErrore, setLogoutErrore] = useState<string | null>(null);
+  const [logoutInCorso, setLogoutInCorso] = useState(false);
+
+  async function esci() {
+    setLogoutErrore(null);
+    setLogoutInCorso(true);
+    try {
+      await signOut();
+      onChiudi();
+      router.replace("/login");
+    } catch (e) {
+      logErroreAuthDev("logout", e);
+      setLogoutErrore(messaggioErroreAuth(e, "logout"));
+    } finally {
+      setLogoutInCorso(false);
+    }
+  }
 
   return (
     <>
@@ -66,7 +92,7 @@ export function BarraLaterale({ aperta, onChiudi }: Props) {
           </button>
         </div>
 
-        <nav className="flex flex-col gap-1 px-3 pb-6">
+        <nav className="flex flex-col gap-1 px-3 pb-4">
           {voci.map((voce) => {
             const Icona = voce.icona;
             const attiva =
@@ -105,6 +131,29 @@ export function BarraLaterale({ aperta, onChiudi }: Props) {
             );
           })}
         </nav>
+
+        <div className="mt-auto border-t border-[var(--border)] px-4 py-4">
+          {email ? (
+            <p
+              className="truncate text-xs text-[var(--ink-muted)]"
+              title={email}
+            >
+              {email}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void esci()}
+            disabled={logoutInCorso}
+            className="mt-2 flex w-full items-center gap-2 rounded-xl px-2 py-2 text-sm text-[var(--ink-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--ink)] disabled:opacity-60"
+          >
+            <LogOut className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+            {logoutInCorso ? "Uscita…" : "Esci"}
+          </button>
+          {logoutErrore ? (
+            <p className="mt-1 text-xs text-[#C45C5C]">{logoutErrore}</p>
+          ) : null}
+        </div>
       </aside>
     </>
   );

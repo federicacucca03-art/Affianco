@@ -12,7 +12,7 @@ export function LandingCtaFinale() {
           Il modo in cui le gestisci non deve esserlo.
         </p>
         <Link
-          href="/campagne"
+          href="/login"
           className="mt-8 inline-flex items-center gap-2 rounded-full bg-[var(--ink)] px-6 py-3 text-sm font-medium text-white hover:opacity-90"
         >
           Inizia con Affianco

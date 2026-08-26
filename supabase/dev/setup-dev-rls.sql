@@ -5,7 +5,9 @@
 -- Chiunque abbia la publishable key può SELECT/INSERT/UPDATE.
 --
 -- NON eseguire su ambienti di produzione.
--- Auth + RLS restrittive + token approval = fase successiva.
+-- Conflitto con P3: supabase/migrations/20260826_p3_ownership_rls.sql
+-- (ownership + RLS owner-only + approval RPC).
+-- Auth + RLS restrittive + token approval = P3/P4.
 -- ============================================================
 
 grant select, insert, update on public.clients to anon, authenticated;

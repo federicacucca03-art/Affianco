@@ -41,13 +41,13 @@ export function LandingNavbar({
 
         <div className="hidden items-center gap-2 sm:flex">
           <Link
-            href="/campagne"
+            href="/login"
             className="rounded-full border border-[var(--border)] bg-white px-3.5 py-2 text-sm text-[var(--ink)] hover:bg-[var(--surface-hover)]"
           >
             Accedi
           </Link>
           <Link
-            href="/campagne"
+            href="/login"
             className="rounded-full bg-[var(--ink)] px-3.5 py-2 text-sm font-medium text-white hover:opacity-90"
           >
             Inizia con Affianco →
@@ -77,14 +77,14 @@ export function LandingNavbar({
               </a>
             ))}
             <Link
-              href="/campagne"
+              href="/login"
               className="rounded-full border border-[var(--border)] px-4 py-2.5 text-center"
               onClick={onChiudiMenu}
             >
               Accedi
             </Link>
             <Link
-              href="/campagne"
+              href="/login"
               className="rounded-full bg-[var(--ink)] px-4 py-2.5 text-center text-white"
               onClick={onChiudiMenu}
             >

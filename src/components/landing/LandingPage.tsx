@@ -49,8 +49,8 @@ export function LandingPage() {
             Il posto in cui un professionista gestisce tutto il lavoro dietro le
             campagne Meta dei propri clienti.
           </p>
-          <Link href="/campagne" className="text-[var(--accent)] hover:underline">
-            Apri l&apos;app →
+          <Link href="/login" className="text-[var(--accent)] hover:underline">
+            Accedi →
           </Link>
         </div>
       </footer>

@@ -2,13 +2,24 @@
 
 import { Bell, ChevronDown, Menu, Plus, Search } from "lucide-react";
 import { useOnboardingCampagna } from "@/components/OnboardingCampagnaContext";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 type Props = {
   onApriMenu: () => void;
 };
 
+function inizialiDaEmail(email: string | null): string {
+  if (!email) return "?";
+  const locale = email.split("@")[0] ?? "";
+  const pulito = locale.replace(/[^a-zA-Z0-9]/g, "");
+  if (pulito.length >= 2) return pulito.slice(0, 2).toUpperCase();
+  if (pulito.length === 1) return `${pulito}X`.toUpperCase();
+  return "AF";
+}
+
 export function BarraSuperiore({ onApriMenu }: Props) {
   const { apriModaleCampagna } = useOnboardingCampagna();
+  const { email } = useAuth();
 
   return (
     <header className="flex h-16 shrink-0 items-center gap-3 bg-[var(--background)] px-4 pt-2 sm:px-6 lg:px-8">
@@ -54,20 +65,20 @@ export function BarraSuperiore({ onApriMenu }: Props) {
           Crea nuova campagna
         </button>
 
-        <button
-          type="button"
-          className="flex items-center gap-1 rounded-full hover:opacity-90"
-          aria-label="Profilo utente"
+        <div
+          className="flex items-center gap-1 rounded-full"
+          title={email ?? undefined}
+          aria-label={email ? `Account ${email}` : "Profilo utente"}
         >
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-medium text-[var(--accent)]">
-            FC
+            {inizialiDaEmail(email)}
           </span>
           <ChevronDown
             className="hidden h-4 w-4 text-[var(--ink-muted)] sm:block"
             strokeWidth={1.75}
             aria-hidden
           />
-        </button>
+        </div>
       </div>
     </header>
   );

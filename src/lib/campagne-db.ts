@@ -34,7 +34,19 @@ export type ClientRow = {
   average_ticket_value: number | null;
   closing_rate: number | null;
   website?: string | null;
+  user_id?: string | null;
 };
+
+/** Sessione Auth obbligatoria per write/list app (P3 ownership). */
+async function requireAuthUserId(): Promise<string> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) throw new Error(error.message);
+  const uid = data.user?.id;
+  if (!uid) {
+    throw new Error("Devi accedere per salvare o leggere le campagne.");
+  }
+  return uid;
+}
 
 type ClientJoin = Pick<
   ClientRow,
@@ -201,6 +213,39 @@ function colonnaMancante(message: string): string | null {
   return match?.[1] ?? null;
 }
 
+/**
+ * True SOLO se PostgREST/Postgres segnala colonna user_id assente.
+ * NON true per RLS, permission, auth, network.
+ */
+function isUserIdColumnMissingError(message: string): boolean {
+  const m = message.toLowerCase();
+  if (
+    /permission|denied|policy|row-level|rls|jwt|unauthorized|not authenticated|42501/.test(
+      m,
+    )
+  ) {
+    return false;
+  }
+  // SELECT/filter: "column clients.user_id does not exist" (42703)
+  if (/column\s+[\w.]*(user_id)[\w.]*\s+does not exist/i.test(message)) {
+    return true;
+  }
+  // INSERT/UPDATE payload: "Could not find the 'user_id' column ... schema cache" (PGRST204)
+  if (/could not find the 'user_id' column/i.test(message)) {
+    return true;
+  }
+  return false;
+}
+
+function isRpcMissingError(message: string): boolean {
+  return (
+    /PGRST202/i.test(message) ||
+    /could not find the function/i.test(message) ||
+    /function .* does not exist/i.test(message)
+  );
+}
+
+
 /** Inserisce/aggiorna rimuovendo colonne sconosciute finché PostgREST accetta. */
 async function insertConFallbackColonne(
   table: "clients" | "campaigns",
@@ -341,7 +386,10 @@ export function mappaCampagnaDaRow(row: CampaignRow): Campagna {
 }
 
 /**
- * Crea o recupera un cliente per nome (match case-insensitive).
+ * Crea o recupera un cliente per nome.
+ * POST-P3: scoped a user_id = sessione.
+ * PRE-P3: se colonna user_id assente → legacy name-only (solo column-missing).
+ * RLS/permission/auth NON attivano il path legacy.
  */
 export async function trovaOCreaCliente(input: {
   name: string;
@@ -350,18 +398,36 @@ export async function trovaOCreaCliente(input: {
   averageTicketValue?: number;
   closingRate?: number;
 }): Promise<ClientRow> {
+  const userId = await requireAuthUserId();
   const name = input.name.trim() || "Nuovo cliente";
   const website = input.website?.trim() || null;
 
-  const { data: esistenti, error: errFind } = await supabase
+  let esistente: ClientRow | undefined;
+  let ownershipSchemaReady = true;
+
+  const scoped = await supabase
     .from("clients")
     .select("*")
+    .eq("user_id", userId)
     .ilike("name", name)
     .limit(1);
 
-  if (errFind) throw new Error(errFind.message);
+  if (scoped.error) {
+    if (!isUserIdColumnMissingError(scoped.error.message)) {
+      throw new Error(scoped.error.message);
+    }
+    ownershipSchemaReady = false;
+    const legacy = await supabase
+      .from("clients")
+      .select("*")
+      .ilike("name", name)
+      .limit(1);
+    if (legacy.error) throw new Error(legacy.error.message);
+    esistente = legacy.data?.[0] as ClientRow | undefined;
+  } else {
+    esistente = scoped.data?.[0] as ClientRow | undefined;
+  }
 
-  const esistente = esistenti?.[0] as ClientRow | undefined;
   if (esistente) {
     const patch: Record<string, unknown> = {};
     if (input.elevatorPitch?.trim()) {
@@ -391,7 +457,7 @@ export async function trovaOCreaCliente(input: {
     };
   }
 
-  const creato = await insertConFallbackColonne("clients", {
+  const payload: Record<string, unknown> = {
     name,
     elevator_pitch: input.elevatorPitch?.trim() || null,
     average_ticket_value:
@@ -404,7 +470,13 @@ export async function trovaOCreaCliente(input: {
         ? input.closingRate
         : null,
     ...(website ? { website } : {}),
-  });
+  };
+  // POST-P3: include user_id. PRE-P3: insertConFallbackColonne lo strippa (PGRST204).
+  if (ownershipSchemaReady) {
+    payload.user_id = userId;
+  }
+
+  const creato = await insertConFallbackColonne("clients", payload);
 
   return {
     ...(creato as unknown as ClientRow),
@@ -653,10 +725,17 @@ async function aggiornaClienteConosciuto(
 export async function creaCampagnaLeadGen(
   input: CampagnaWriteInput & { id?: string },
 ): Promise<CampaignRow> {
-  const payload = costruisciPayloadCampagna(input, {
-    includeStatus: true,
-    id: input.id,
-  });
+  const userId = await requireAuthUserId();
+  // POST-P3: user_id obbligatorio (RLS + trigger).
+  // PRE-P3: insertConFallbackColonne rimuove user_id se colonna assente (PGRST204).
+  // Non fare fallback su errori RLS/permission.
+  const payload = {
+    ...costruisciPayloadCampagna(input, {
+      includeStatus: true,
+      id: input.id,
+    }),
+    user_id: userId,
+  };
   const data = await insertConFallbackColonne("campaigns", payload);
   return data as unknown as CampaignRow;
 }
@@ -979,4 +1058,100 @@ export async function completaRevisioneCampagnaSuSupabase(
       .eq("id", id);
     if (errStatus) throw new Error(errStatus.message);
   }
+}
+
+/**
+ * Lettura pubblica approval.
+ * Preferisce RPC (post-cutover RLS); fallback tabella se RPC assente (pre-cutover).
+ * SICUREZZA RESIDUA P1: UUID = capability fino a P4 token.
+ */
+export async function leggiCampagnaPerApprovazionePubblica(
+  id: string,
+): Promise<Campagna | null> {
+  const { data, error } = await supabase.rpc(
+    "get_campaign_for_public_approval",
+    { p_id: id },
+  );
+
+  if (!error) {
+    if (data == null) return null;
+    return mappaCampagnaDaRow(data as CampaignRow);
+  }
+
+  if (!isRpcMissingError(error.message)) {
+    throw new Error(error.message);
+  }
+
+  return leggiCampagnaDaSupabase(id);
+}
+
+/**
+ * APPROVED via RPC pubblica (fallback update diretto pre-cutover).
+ */
+export async function approvaCampagnaPubblica(id: string): Promise<string> {
+  const { data, error } = await supabase.rpc("approve_campaign_public", {
+    p_id: id,
+  });
+
+  if (!error) {
+    const approvedAt =
+      data &&
+      typeof data === "object" &&
+      "approved_at" in data &&
+      typeof (data as { approved_at?: unknown }).approved_at === "string"
+        ? (data as { approved_at: string }).approved_at
+        : new Date().toISOString();
+    salvaAssetCampagnaLocale(id, { reviewStatus: "APPROVED" });
+    return approvedAt;
+  }
+
+  if (!isRpcMissingError(error.message)) {
+    throw new Error(error.message);
+  }
+
+  return approvaCampagnaSuSupabase(id);
+}
+
+/**
+ * REVISION_REQUESTED via RPC pubblica (fallback update diretto pre-cutover).
+ */
+export async function richiediRevisioneCampagnaPubblica(
+  id: string,
+  note: string,
+): Promise<string> {
+  const revisionNotes = note.trim();
+  if (!revisionNotes) {
+    throw new Error("La nota di modifica è obbligatoria.");
+  }
+  if (revisionNotes === "Nessuna nota aggiuntiva fornita.") {
+    throw new Error("Scrivi una nota di modifica concreta.");
+  }
+
+  salvaAssetCampagnaLocale(id, {
+    revisionNotes,
+    reviewStatus: "REVISION_REQUESTED",
+  });
+
+  const { data, error } = await supabase.rpc(
+    "request_campaign_revision_public",
+    { p_id: id, p_notes: revisionNotes },
+  );
+
+  if (!error) {
+    if (
+      data &&
+      typeof data === "object" &&
+      "revision_notes" in data &&
+      typeof (data as { revision_notes?: unknown }).revision_notes === "string"
+    ) {
+      return (data as { revision_notes: string }).revision_notes;
+    }
+    return revisionNotes;
+  }
+
+  if (!isRpcMissingError(error.message)) {
+    throw new Error(error.message);
+  }
+
+  return richiediRevisioneCampagnaSuSupabase(id, revisionNotes);
 }

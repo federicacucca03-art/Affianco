@@ -10,4 +10,15 @@ function supabaseProjectUrl(raw: string | undefined): string {
 const supabaseUrl = supabaseProjectUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+/**
+ * Client browser unico (DB + Auth).
+ * Sessione Auth persistita in localStorage (default supabase-js).
+ * P2: Auth UX — non implica RLS/ownership (P3).
+ */
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});
