@@ -1,177 +1,405 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  CheckCircle2,
   ImagePlus,
   Loader2,
-  Save,
   Sparkles,
-  TrendingDown,
-  TrendingUp,
 } from "lucide-react";
 import { BENCHMARK_NAZIONALI } from "@/data/benchmarks-nazionali";
-import { leggiAssetCampagnaLocale } from "@/data/campagne-assets-store";
-import { giorniAttiviDaCampagna } from "@/data/campagne-store";
-import { getBenchmarkForNiche } from "@/lib/benchmarks";
 import { etichettaObiettivo } from "@/lib/pre-lancio-check";
-import type { CampagnaObjective } from "@/types/campagne";
-import { normalizzaObjective } from "@/types/campagne";
-import type {
-  SavedCampaignResult,
-  ScreenshotAnalysisResult,
-  VerdettoScreenshot,
-} from "@/types/screenshot-analysis";
 import {
-  getCampaigns,
-  type SavedCampaign,
-} from "@/utils/clientStorage";
+  azioniConsigliate,
+  avvisoDatiLimitati,
+  buildEconomicContext,
+  calcolaCostoDaSpesaRisultati,
+  calcolaHealthStatus,
+  diagnosticaDeterministica,
+  formatEuro,
+  healthBadgeClasses,
+  normalizzaCtrDaApi,
+  parseCtrInput,
+  parseNum,
+  priorityBadgeClasses,
+  priorityLabel,
+  resolveThresholdFromCampaign,
+  type ControlRoomKpis,
+} from "@/lib/control-room";
+import { useAuth } from "@/components/auth/AuthProvider";
 import {
-  getSavedCampaignResults,
-  saveCampaignResult,
-} from "@/utils/campaignResultsStorage";
+  leggiCampagnaDaSupabase,
+  leggiCampagneDaSupabase,
+} from "@/lib/campagne-db";
+import {
+  logErroreSupabaseDev,
+  messaggioErroreSupabase,
+} from "@/lib/supabase-errori";
 import { messaggioAiUserFacing } from "@/lib/anthropic-messaggi";
-
-const PASSI_CARICAMENTO = [
-  "Lettura metriche dallo screenshot…",
-  "Confronto con i margini del cliente…",
-  "Generazione piano d'azione…",
-];
+import type { Campagna, CampagnaObjective } from "@/types/campagne";
+import { normalizzaObjective } from "@/types/campagne";
+import type { ScreenshotAnalysisResult } from "@/types/screenshot-analysis";
+import { getCampaigns, type SavedCampaign } from "@/utils/clientStorage";
 
 const inputClass =
   "w-full rounded-xl border border-[var(--border)] bg-white px-3.5 py-2.5 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--ink-muted)] focus:border-[var(--accent)]";
 
-function stimaTargetCpl(
-  campagna: SavedCampaign | null,
-  settore: string,
-  citta: string,
-): number {
-  if (!campagna) {
-    const bench = getBenchmarkForNiche(settore, citta);
-    return bench.cplOptimal;
-  }
-  const assets = leggiAssetCampagnaLocale(campagna.id);
-  const objective = normalizzaObjective(
-    assets?.objective ?? campagna.objective,
-  );
-  const margine = assets?.targetMargin ?? 50;
+type InputMode = "kpi" | "screenshot";
 
-  if (objective === "ECOMMERCE") {
-    const salvato = assets?.maxSustainableCpa;
-    if (salvato != null && Number.isFinite(salvato) && salvato > 0) {
-      return Math.round(salvato * 100) / 100;
-    }
-    return 0;
-  }
-  if (objective === "BOOKINGS") {
-    const ticket = assets?.bookingServiceValue ?? 60;
-    const showUp = assets?.showUpRate ?? 75;
-    const valore = ticket * (showUp / 100);
-    return Math.round(valore * (1 - margine / 100) * 100) / 100;
-  }
-  const bench = getBenchmarkForNiche(
-    assets?.settore ?? campagna.settore ?? settore,
-    assets?.citta ?? campagna.citta,
-  );
-  return bench.cplOptimal;
+function inizialiDaNome(nome: string): string {
+  const parti = nome.trim().split(/\s+/).filter(Boolean);
+  if (parti.length === 0) return "??";
+  if (parti.length === 1) return parti[0].slice(0, 2).toUpperCase();
+  return `${parti[0][0]}${parti[parti.length - 1][0]}`.toUpperCase();
 }
 
-function badgeVerdetto(verdetto: VerdettoScreenshot): {
-  label: string;
-  className: string;
-} {
-  switch (verdetto) {
-    case "ottimo":
-      return {
-        label: "Ottimo — sostenibile con margine",
-        className: "bg-[#E8F5EE] text-[#2D6A4A] border-[#B7E4C7]",
-      };
-    case "in_target":
-      return {
-        label: "In target — dentro la soglia",
-        className: "bg-[#FFF6E5] text-[#9A6700] border-[#F5D78E]",
-      };
-    case "fuori_target":
-      return {
-        label: "Fuori target — azione richiesta",
-        className: "bg-[#FDEDED] text-[#B42318] border-[#F5C2C2]",
-      };
-    default:
-      return {
-        label: "Dati insufficienti — attendi apprendimento",
-        className: "bg-[#EEF0F3] text-[#5A6578] border-[#D8DCE3]",
-      };
-  }
+function campagnaDaMemoria(c: SavedCampaign): Campagna {
+  return {
+    id: c.id,
+    nomeCliente: c.nomeCliente,
+    iniziali: inizialiDaNome(c.nomeCliente),
+    stato: c.status || "Bozza",
+    giudizio: "Ancora presto",
+    objective: c.objective,
+    nomeCampagna: c.nomeCampagna,
+    settore: c.settore,
+    citta: c.citta,
+    dataLancio: c.dataCreazione,
+    status: c.status,
+    frontEndOffer: c.frontEndOffer || undefined,
+  };
 }
 
-function etichettaCosto(objective: CampagnaObjective): string {
-  return objective === "ECOMMERCE" || objective === "RETARGETING"
-    ? "CPA"
-    : "CPL/CPA";
+function fondiCampagne(
+  remote: Campagna[],
+  locali: SavedCampaign[],
+): Campagna[] {
+  const byId = new Map<string, Campagna>();
+  for (const loc of locali) {
+    byId.set(loc.id, campagnaDaMemoria(loc));
+  }
+  for (const rem of remote) {
+    const precedente = byId.get(rem.id);
+    byId.set(
+      rem.id,
+      precedente
+        ? {
+            ...precedente,
+            ...rem,
+            dataLancio: rem.dataLancio || precedente.dataLancio,
+            objective: rem.objective ?? precedente.objective,
+            status: rem.status ?? precedente.status,
+            nomeCampagna: rem.nomeCampagna || precedente.nomeCampagna,
+          }
+        : rem,
+    );
+  }
+  return [...byId.values()].sort((a, b) =>
+    (b.dataLancio ?? "").localeCompare(a.dataLancio ?? ""),
+  );
+}
+
+function emptyKpiStrings() {
+  return {
+    spend: "",
+    results: "",
+    costPerResult: "",
+    ctr: "",
+    cpm: "",
+    cpc: "",
+    frequency: "",
+    roas: "",
+  };
+}
+
+function etichettaCampagnaDropdown(c: Campagna): string {
+  const nome = (c.nomeCampagna || c.nomeCliente).trim();
+  const cliente = c.nomeCliente.trim();
+  if (nome && cliente && nome !== cliente) {
+    return `${nome} — ${cliente}`;
+  }
+  return nome || cliente || "Campagna";
+}
+
+function campiKpiPerObiettivo(
+  objective: CampagnaObjective,
+  metricLabel: string,
+): ReadonlyArray<readonly [keyof ReturnType<typeof emptyKpiStrings>, string]> {
+  const base: ReadonlyArray<
+    readonly [keyof ReturnType<typeof emptyKpiStrings>, string]
+  > = [
+    ["spend", "Spesa (€)"],
+    ["results", "Risultati"],
+  ];
+
+  if (objective === "AWARENESS") {
+    return [
+      ...base,
+      ["cpm", "CPM (€)"],
+      ["ctr", "CTR (%)"],
+      ["cpc", "CPC (€)"],
+      ["frequency", "Frequenza"],
+    ];
+  }
+
+  return [
+    ...base,
+    ["costPerResult", `${metricLabel} (€)`],
+    ["ctr", "CTR (%)"],
+    ["cpm", "CPM (€)"],
+    ["cpc", "CPC (€)"],
+    ["frequency", "Frequenza"],
+    ...(objective === "ECOMMERCE"
+      ? ([["roas", "ROAS (x)"]] as const)
+      : []),
+  ];
 }
 
 export default function RisultatiPage() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [campagne, setCampagne] = useState<SavedCampaign[]>([]);
-  const [campagnaId, setCampagnaId] = useState<string>("");
-  const [targetCpl, setTargetCpl] = useState<string>("45");
-  const [giorniAttiva, setGiorniAttiva] = useState<string>("5");
-  const [settore, setSettore] = useState("");
-  const [obiettivo, setObiettivo] = useState<CampagnaObjective>("LEADS");
+  const { user } = useAuth();
+  const userIdRef = useRef<string | null>(null);
+
+  const [campagne, setCampagne] = useState<Campagna[]>([]);
+  const [caricamentoCampagne, setCaricamentoCampagne] = useState(true);
+  const [erroreCampagne, setErroreCampagne] = useState<string | null>(null);
+  const [fallbackLocale, setFallbackLocale] = useState(false);
+
+  const [campagnaId, setCampagnaId] = useState("");
+  const [manuale, setManuale] = useState(false);
+  const [campagnaDettaglio, setCampagnaDettaglio] = useState<Campagna | null>(
+    null,
+  );
+  const [caricamentoDettaglio, setCaricamentoDettaglio] = useState(false);
+
+  // Manual fallback fields
   const [nomeCliente, setNomeCliente] = useState("");
   const [nomeCampagna, setNomeCampagna] = useState("");
+  const [settore, setSettore] = useState("");
+  const [obiettivo, setObiettivo] = useState<CampagnaObjective>("LEADS");
+  const [sogliaManuale, setSogliaManuale] = useState("");
+  const [giorniAttiva, setGiorniAttiva] = useState("5");
+
+  const [inputMode, setInputMode] = useState<InputMode>("kpi");
+  const [kpiForm, setKpiForm] = useState(emptyKpiStrings);
+
   const [anteprima, setAnteprima] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [trascinando, setTrascinando] = useState(false);
-  const [analisi, setAnalisi] = useState<ScreenshotAnalysisResult | null>(
+  const [analisiAi, setAnalisiAi] = useState<ScreenshotAnalysisResult | null>(
     null,
   );
-  const [mockInfo, setMockInfo] = useState<string | null>(null);
-  const [caricamento, setCaricamento] = useState(false);
-  const [passoCaricamento, setPassoCaricamento] = useState(0);
-  const [errore, setErrore] = useState<string | null>(null);
-  const [salvato, setSalvato] = useState(false);
-  const [storico, setStorico] = useState<SavedCampaignResult[]>([]);
+  const [caricamentoAi, setCaricamentoAi] = useState(false);
+  const [erroreAi, setErroreAi] = useState<string | null>(null);
 
-  const campagnaSelezionata = useMemo(
-    () => campagne.find((c) => c.id === campagnaId) ?? null,
-    [campagne, campagnaId],
-  );
-
-  useEffect(() => {
-    setCampagne(getCampaigns());
-    setStorico(getSavedCampaignResults());
+  const caricaLista = useCallback(async () => {
+    setCaricamentoCampagne(true);
+    setErroreCampagne(null);
+    setFallbackLocale(false);
+    try {
+      const lista = await leggiCampagneDaSupabase();
+      setCampagne(lista);
+    } catch (e) {
+      logErroreSupabaseDev("risultati_liste_campagne", e);
+      const locali = getCampaigns();
+      const daLocale = fondiCampagne([], locali);
+      setCampagne(daLocale);
+      setFallbackLocale(daLocale.length > 0);
+      if (daLocale.length === 0) {
+        setErroreCampagne(messaggioErroreSupabase(e, "lista"));
+      }
+    } finally {
+      setCaricamentoCampagne(false);
+    }
   }, []);
 
   useEffect(() => {
-    if (!campagnaSelezionata) return;
-    const assets = leggiAssetCampagnaLocale(campagnaSelezionata.id);
-    setNomeCliente(campagnaSelezionata.nomeCliente);
-    setNomeCampagna(
-      campagnaSelezionata.nomeCampagna || campagnaSelezionata.nomeCliente,
-    );
-    setSettore(assets?.settore ?? campagnaSelezionata.settore ?? "");
-    setObiettivo(
-      normalizzaObjective(
-        assets?.objective ?? campagnaSelezionata.objective,
+    const uid = user?.id ?? null;
+    if (userIdRef.current != null && userIdRef.current !== uid) {
+      setCampagnaId("");
+      setCampagnaDettaglio(null);
+      setManuale(false);
+      setKpiForm(emptyKpiStrings());
+      setGiorniAttiva("5");
+      setAnalisiAi(null);
+      setAnteprima(null);
+      setImageBase64(null);
+      setErroreAi(null);
+      setInputMode("kpi");
+    }
+    userIdRef.current = uid;
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!manuale) return;
+    setKpiForm(emptyKpiStrings());
+    setAnalisiAi(null);
+    setAnteprima(null);
+    setImageBase64(null);
+    setErroreAi(null);
+    setInputMode("kpi");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset solo all'attivazione manuale
+  }, [manuale]);
+
+  useEffect(() => {
+    void caricaLista();
+  }, [caricaLista]);
+
+  useEffect(() => {
+    if (!campagnaId || manuale) {
+      setCampagnaDettaglio(null);
+      return;
+    }
+
+    let cancelled = false;
+    setCaricamentoDettaglio(true);
+
+    void (async () => {
+      try {
+        const dettaglio = await leggiCampagnaDaSupabase(campagnaId);
+        if (cancelled) return;
+        if (!dettaglio) {
+          const fallback = campagne.find((c) => c.id === campagnaId) ?? null;
+          setCampagnaDettaglio(fallback);
+          if (fallback) {
+            const obj = normalizzaObjective(fallback.objective);
+            setObiettivo(obj);
+            setNomeCliente(fallback.nomeCliente);
+            setNomeCampagna(fallback.nomeCampagna || fallback.nomeCliente);
+            setSettore(fallback.settore ?? "");
+            const { threshold } = resolveThresholdFromCampaign(fallback, obj);
+            setSogliaManuale(threshold != null ? String(threshold) : "");
+          }
+          return;
+        }
+        setCampagnaDettaglio(dettaglio);
+        const obj = normalizzaObjective(dettaglio.objective);
+        setObiettivo(obj);
+        setNomeCliente(dettaglio.nomeCliente);
+        setNomeCampagna(dettaglio.nomeCampagna || dettaglio.nomeCliente);
+        setSettore(dettaglio.settore ?? "");
+        const { threshold } = resolveThresholdFromCampaign(dettaglio, obj);
+        setSogliaManuale(threshold != null ? String(threshold) : "");
+      } catch (e) {
+        logErroreSupabaseDev("risultati_dettaglio_campagna", e);
+        if (cancelled) return;
+        const fallback = campagne.find((c) => c.id === campagnaId) ?? null;
+        setCampagnaDettaglio(fallback);
+        if (fallback) {
+          const obj = normalizzaObjective(fallback.objective);
+          setObiettivo(obj);
+          setNomeCliente(fallback.nomeCliente);
+          setNomeCampagna(fallback.nomeCampagna || fallback.nomeCliente);
+          setSettore(fallback.settore ?? "");
+          const { threshold } = resolveThresholdFromCampaign(fallback, obj);
+          setSogliaManuale(threshold != null ? String(threshold) : "");
+        }
+      } finally {
+        if (!cancelled) setCaricamentoDettaglio(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [campagnaId, manuale, campagne]);
+
+  const campagnaAttiva = manuale ? null : campagnaDettaglio;
+
+  const kpis: ControlRoomKpis = useMemo(() => {
+    const spend = parseNum(kpiForm.spend);
+    const results = parseNum(kpiForm.results);
+    const costManual = parseNum(kpiForm.costPerResult);
+    const costAuto = calcolaCostoDaSpesaRisultati(spend, results);
+    const roasManual = parseNum(kpiForm.roas);
+    return {
+      spend,
+      results,
+      costPerResult: costManual ?? costAuto,
+      ctr: parseCtrInput(kpiForm.ctr),
+      cpm: parseNum(kpiForm.cpm),
+      cpc: parseNum(kpiForm.cpc),
+      frequency: parseNum(kpiForm.frequency),
+      roas: roasManual ?? analisiAi?.roas ?? null,
+    };
+  }, [kpiForm, analisiAi]);
+
+  const sogliaOverride = parseNum(sogliaManuale);
+
+  const economic = useMemo(
+    () =>
+      buildEconomicContext(
+        campagnaAttiva,
+        kpis,
+        sogliaOverride,
+        manuale ? obiettivo : undefined,
       ),
-    );
-    const stimato = stimaTargetCpl(
-      campagnaSelezionata,
-      assets?.settore ?? campagnaSelezionata.settore ?? "",
-      assets?.citta ?? campagnaSelezionata.citta,
-    );
-    setTargetCpl(stimato > 0 ? String(stimato) : "");
-    const giorni = giorniAttiviDaCampagna({
-      id: campagnaSelezionata.id,
-      nomeCliente: campagnaSelezionata.nomeCliente,
-      iniziali: "??",
-      stato: "",
-      giudizio: "Ancora presto",
-      dataLancio: campagnaSelezionata.dataCreazione,
-    });
-    setGiorniAttiva(String(Math.max(giorni, 1)));
-  }, [campagnaSelezionata]);
+    [campagnaAttiva, kpis, sogliaOverride, manuale, obiettivo],
+  );
+
+  const health = useMemo(
+    () =>
+      calcolaHealthStatus(
+        economic.actual,
+        economic.threshold,
+        economic.healthMode,
+      ),
+    [economic.actual, economic.threshold, economic.healthMode],
+  );
+
+  const datiLimitati = useMemo(
+    () =>
+      avvisoDatiLimitati(
+        parseNum(giorniAttiva),
+        kpis.results,
+      ),
+    [giorniAttiva, kpis.results],
+  );
+
+  const diagnosis = useMemo(
+    () =>
+      diagnosticaDeterministica(kpis, health, economic, {
+        datiLimitati: datiLimitati.show,
+      }),
+    [kpis, health, economic, datiLimitati.show],
+  );
+
+  const actions = useMemo(
+    () => azioniConsigliate(diagnosis, health),
+    [diagnosis, health],
+  );
+
+  const costoCalcolato = useMemo(
+    () =>
+      calcolaCostoDaSpesaRisultati(
+        parseNum(kpiForm.spend),
+        parseNum(kpiForm.results),
+      ),
+    [kpiForm.spend, kpiForm.results],
+  );
+
+  const resetSessioneKpi = useCallback(() => {
+    setKpiForm(emptyKpiStrings());
+    setGiorniAttiva("5");
+    setAnalisiAi(null);
+    setAnteprima(null);
+    setImageBase64(null);
+    setErroreAi(null);
+    setInputMode("kpi");
+    setTrascinando(false);
+  }, []);
+
+  function selezionaCampagna(id: string) {
+    setManuale(false);
+    setCampagnaId(id);
+    resetSessioneKpi();
+  }
+
+  function attivaManuale() {
+    setManuale(true);
+    setCampagnaId("");
+    setCampagnaDettaglio(null);
+    resetSessioneKpi();
+  }
 
   function gestisciFile(file: File | undefined) {
     if (!file) return;
@@ -180,43 +408,54 @@ export default function RisultatiPage() {
       file.type === "image/png" ||
       file.type === "image/webp";
     if (!ok) {
-      setErrore("Carica un file JPG, PNG o WebP.");
+      setErroreAi("Carica un file JPG, PNG o WebP.");
       return;
     }
-    setErrore(null);
-    setSalvato(false);
+    setErroreAi(null);
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = String(reader.result ?? "");
       setAnteprima(dataUrl);
       setImageBase64(dataUrl);
-      setAnalisi(null);
-      setMockInfo(null);
+      setAnalisiAi(null);
     };
     reader.readAsDataURL(file);
   }
 
-  async function analizza() {
+  function applicaKpiDaScreenshot(analisi: ScreenshotAnalysisResult) {
+    const ctrNorm = normalizzaCtrDaApi(analisi.ctr);
+    setKpiForm({
+      spend: analisi.spesaTotale > 0 ? String(analisi.spesaTotale) : "",
+      results: analisi.risultati > 0 ? String(analisi.risultati) : "",
+      costPerResult:
+        analisi.costoPerRisultato > 0
+          ? String(analisi.costoPerRisultato)
+          : "",
+      ctr: ctrNorm != null && ctrNorm > 0 ? String(ctrNorm) : "",
+      cpm: analisi.cpm > 0 ? String(analisi.cpm) : "",
+      cpc: "",
+      frequency: analisi.frequenza > 0 ? String(analisi.frequenza) : "",
+      roas:
+        analisi.roas != null && analisi.roas > 0 ? String(analisi.roas) : "",
+    });
+  }
+
+  async function analizzaScreenshot() {
     if (!imageBase64) {
-      setErrore("Carica uno screenshot prima di analizzare.");
+      setErroreAi("Carica uno screenshot prima di analizzare.");
       return;
     }
-    const target = Number(targetCpl);
-    if (!Number.isFinite(target) || target <= 0) {
-      setErrore("Inserisci un CPL/CPA massimo sostenibile valido.");
+    const target = economic.threshold ?? sogliaOverride;
+    if (target == null || !(target > 0)) {
+      setErroreAi(
+        "Serve una soglia economica (dalla campagna o inserimento manuale) per contestualizzare lo screenshot.",
+      );
       return;
     }
 
-    setCaricamento(true);
-    setErrore(null);
-    setSalvato(false);
-    setAnalisi(null);
-    setMockInfo(null);
-    setPassoCaricamento(0);
-
-    const timer = window.setInterval(() => {
-      setPassoCaricamento((p) => Math.min(p + 1, PASSI_CARICAMENTO.length - 1));
-    }, 900);
+    setCaricamentoAi(true);
+    setErroreAi(null);
+    setAnalisiAi(null);
 
     try {
       const res = await fetch("/api/analyze-screenshot", {
@@ -225,423 +464,657 @@ export default function RisultatiPage() {
         body: JSON.stringify({
           image: imageBase64,
           targetCpl: target,
-          obiettivo,
-          settore,
+          obiettivo: economic.objective,
+          settore: economic.settore || settore,
           giorniAttiva: Number(giorniAttiva) || 5,
-          nomeCampagna,
-          nomeCliente,
+          nomeCampagna:
+            campagnaAttiva?.nomeCampagna || nomeCampagna || "Campagna",
+          nomeCliente: campagnaAttiva?.nomeCliente || nomeCliente || "Cliente",
         }),
       });
 
       const data = (await res.json()) as ScreenshotAnalysisResult & {
         error?: string;
-        _mock?: boolean;
-        _motivo?: string;
       };
 
       if (!res.ok) {
         throw new Error(
           messaggioAiUserFacing(
             data.error,
-            "Non siamo riusciti a generare il contenuto. Riprova.",
+            "Non siamo riusciti a leggere lo screenshot. Riprova.",
           ),
         );
       }
 
-      const { _mock, _motivo, error: _err, ...analisiPulita } = data;
-      setAnalisi(analisiPulita as ScreenshotAnalysisResult);
-      if (_mock && _motivo) setMockInfo(_motivo);
+      const { error: _err, ...analisiPulita } = data;
+      const analisi = analisiPulita as ScreenshotAnalysisResult;
+      setAnalisiAi(analisi);
+      applicaKpiDaScreenshot(analisi);
+      setInputMode("kpi");
     } catch (e) {
-      setErrore(
+      setErroreAi(
         messaggioAiUserFacing(
           e instanceof Error ? e.message : null,
-          "Analisi non riuscita. Riprova.",
+          "Analisi non riuscita. Puoi inserire i KPI a mano.",
         ),
       );
     } finally {
-      window.clearInterval(timer);
-      setCaricamento(false);
-      setPassoCaricamento(0);
+      setCaricamentoAi(false);
     }
   }
 
-  function salvaDiagnosi() {
-    if (!analisi) return;
-    const record = saveCampaignResult({
-      campagnaId: campagnaId || null,
-      nomeCampagna: nomeCampagna || "Campagna senza nome",
-      nomeCliente: nomeCliente || "Cliente",
-      obiettivo,
-      settore,
-      targetCpl: Number(targetCpl) || 45,
-      giorniAttiva: Number(giorniAttiva) || 5,
-      analisi,
-    });
-    setStorico(getSavedCampaignResults());
-    setSalvato(true);
-    window.setTimeout(() => setSalvato(false), 2500);
-    return record;
-  }
-
-  const badge = analisi ? badgeVerdetto(analisi.verdetto) : null;
-  const targetNum = Number(targetCpl) || 0;
-  const sottoSoglia =
-    analisi && targetNum > 0 && analisi.costoPerRisultato <= targetNum;
+  const haSelezione = Boolean(campagnaAttiva) || manuale;
+  const metricLabel = economic.metricLabel;
 
   return (
     <main className="mx-auto w-full max-w-[1400px] px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
       <header className="max-w-3xl">
         <p className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
-          Post-lancio
+          Control Room
         </p>
         <h1 className="mt-1 text-2xl font-medium tracking-tight text-[var(--ink)] sm:text-3xl">
-          Diagnosi Post-Lancio &amp; Scanner Risultati
+          Controlla come sta andando la campagna
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-[var(--ink-muted)]">
-          Carica lo screenshot del tuo Meta Ads Manager per verificare la
-          sostenibilità reale e ricevere le azioni correttive dall&apos;AI.
+          Confronta i risultati reali con la soglia economica definita prima del
+          lancio e capisci cosa fare dopo.
+        </p>
+        <p className="mt-3 text-sm font-medium text-[var(--ink)]">
+          Non guardare solo i numeri. Capisci cosa fare dopo.
         </p>
       </header>
 
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <section className="space-y-5 lg:col-span-5">
-          <div className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">
-            <h2 className="text-sm font-medium text-[var(--ink)]">
-              Campagna di riferimento
-            </h2>
-            <div className="mt-4 space-y-3.5">
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
-                  Seleziona campagna salvata
-                </span>
-                <select
-                  value={campagnaId}
-                  onChange={(e) => setCampagnaId(e.target.value)}
-                  className={inputClass}
-                >
-                  <option value="">— Inserimento manuale —</option>
-                  {campagne.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nomeCampagna || c.nomeCliente} ·{" "}
-                      {etichettaObiettivo(c.objective)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+      {/* TOP: campagna */}
+      <section className="mt-8 rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">
+        <h2 className="text-sm font-medium text-[var(--ink)]">
+          Campagna da analizzare
+        </h2>
 
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
-                  {obiettivo === "ECOMMERCE"
-                    ? "CPA Max (Break-Even) (€)"
-                    : "CPL / CPA massimo sostenibile (€)"}
-                </span>
-                <input
-                  type="number"
-                  min={1}
-                  step={0.5}
-                  value={targetCpl}
-                  onChange={(e) => setTargetCpl(e.target.value)}
-                  className={inputClass}
-                  placeholder={
-                    obiettivo === "ECOMMERCE"
-                      ? "Soglia salvata al lancio"
-                      : undefined
-                  }
-                />
-                {obiettivo === "ECOMMERCE" &&
-                campagnaSelezionata &&
-                !(Number(targetCpl) > 0) ? (
-                  <p className="mt-1.5 text-xs text-[#C26A0A]">
-                    CPA Max non disponibile per questa campagna. Dati economici
-                    incompleti — usa la soglia salvata al lancio oppure
-                    inseriscila manualmente solo se la conosci.
-                  </p>
-                ) : null}
-              </label>
-
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
-                    Giorni attiva
-                  </span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={giorniAttiva}
-                    onChange={(e) => setGiorniAttiva(e.target.value)}
-                    className={inputClass}
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
-                    Settore
-                  </span>
-                  <input
-                    type="text"
-                    value={settore}
-                    onChange={(e) => setSettore(e.target.value)}
-                    placeholder="Es. Dentista"
-                    className={inputClass}
-                  />
-                </label>
-              </div>
-            </div>
+        {caricamentoCampagne ? (
+          <div className="mt-4 h-11 animate-pulse rounded-xl bg-[var(--surface-hover)]" />
+        ) : erroreCampagne && campagne.length === 0 ? (
+          <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--ink-muted)]">
+            <p>{erroreCampagne}</p>
+            <button
+              type="button"
+              onClick={() => void caricaLista()}
+              className="mt-2 text-sm font-medium text-[var(--accent)]"
+            >
+              Riprova
+            </button>
           </div>
-
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => inputRef.current?.click()}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                inputRef.current?.click();
-              }
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setTrascinando(true);
-            }}
-            onDragLeave={() => setTrascinando(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setTrascinando(false);
-              gestisciFile(e.dataTransfer.files[0]);
-            }}
-            className={`flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[var(--radius)] border-2 border-dashed p-6 text-center transition-colors ${
-              trascinando
-                ? "border-[var(--accent)] bg-[var(--accent-soft)]"
-                : "border-[var(--border)] bg-white shadow-[var(--shadow-soft)] hover:border-[var(--accent-muted)]"
-            }`}
-          >
-            {anteprima ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={anteprima}
-                alt="Anteprima screenshot Meta Ads Manager"
-                className="max-h-64 w-full rounded-xl object-contain"
-              />
-            ) : (
-              <>
-                <ImagePlus
-                  className="h-10 w-10 text-[var(--accent)]"
-                  strokeWidth={1.5}
-                />
-                <p className="mt-3 text-sm font-medium text-[var(--ink)]">
-                  Trascina lo screenshot di Ads Manager
-                </p>
-                <p className="mt-1 text-xs text-[var(--ink-muted)]">
-                  JPG, PNG o WebP · vista campagna o ad set
-                </p>
-              </>
-            )}
-            <input
-              ref={inputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={(e) => {
-                gestisciFile(e.target.files?.[0]);
-                e.target.value = "";
-              }}
-            />
-          </div>
-
-          <button
-            type="button"
-            onClick={() => void analizza()}
-            disabled={caricamento || !imageBase64}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {caricamento ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4" strokeWidth={1.75} />
-            )}
-            {caricamento ? "Analisi in corso…" : "Analizza con AI"}
-          </button>
-
-          {caricamento ? (
-            <div className="rounded-xl border border-[var(--accent)]/20 bg-[var(--accent-soft)] px-4 py-3">
-              <p className="text-sm font-medium text-[var(--accent)]">
-                {PASSI_CARICAMENTO[passoCaricamento]}
-              </p>
-              <div className="mt-2 flex gap-1">
-                {PASSI_CARICAMENTO.map((_, i) => (
-                  <span
-                    key={i}
-                    className={`h-1 flex-1 rounded-full ${
-                      i <= passoCaricamento
-                        ? "bg-[var(--accent)]"
-                        : "bg-[var(--accent)]/25"
-                    }`}
-                  />
+        ) : (
+          <div className="mt-4 space-y-3">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
+                Seleziona campagna salvata
+              </span>
+              <select
+                value={manuale ? "" : campagnaId}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!v) return;
+                  selezionaCampagna(v);
+                }}
+                disabled={campagne.length === 0}
+                className={inputClass}
+              >
+                <option value="">
+                  {campagne.length === 0
+                    ? "Nessuna campagna salvata"
+                    : "— Scegli una campagna —"}
+                </option>
+                {campagne.map((c) => (
+                  <option
+                    key={c.id}
+                    value={c.id}
+                    title={`${etichettaCampagnaDropdown(c)} · ${etichettaObiettivo(c.objective)}`}
+                  >
+                    {etichettaCampagnaDropdown(c)}
+                  </option>
                 ))}
+              </select>
+            </label>
+
+            <button
+              type="button"
+              onClick={attivaManuale}
+              className={`text-sm ${
+                manuale
+                  ? "font-medium text-[var(--accent)]"
+                  : "text-[var(--ink-muted)] underline-offset-2 hover:underline"
+              }`}
+            >
+              Inserimento manuale
+              {manuale ? " (attivo)" : " — fallback se non selezioni una campagna"}
+            </button>
+
+            {campagne.length === 0 && !manuale ? (
+              <p className="text-xs text-[var(--ink-muted)]">
+                Non hai ancora campagne salvate. Usa l&apos;inserimento manuale
+                oppure crea una campagna dal wizard.
+              </p>
+            ) : null}
+          </div>
+        )}
+
+        {fallbackLocale ? (
+          <p className="mt-3 rounded-xl border border-[#F5D78E] bg-[#FFF6E5] px-4 py-3 text-xs text-[#9A6700]">
+            Connessione al database non disponibile: mostrando solo campagne
+            salvate in questo browser. Accedi con lo stesso account e riprova.
+          </p>
+        ) : null}
+
+        {manuale ? (
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <label className="block sm:col-span-1">
+              <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
+                Cliente
+              </span>
+              <input
+                value={nomeCliente}
+                onChange={(e) => setNomeCliente(e.target.value)}
+                className={inputClass}
+                placeholder="Nome cliente"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
+                Campagna
+              </span>
+              <input
+                value={nomeCampagna}
+                onChange={(e) => setNomeCampagna(e.target.value)}
+                className={inputClass}
+                placeholder="Nome campagna"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
+                Obiettivo
+              </span>
+              <select
+                value={obiettivo}
+                onChange={(e) => {
+                  const next = e.target.value as CampagnaObjective;
+                  if (next !== obiettivo) {
+                    resetSessioneKpi();
+                  }
+                  setObiettivo(next);
+                }}
+                className={inputClass}
+              >
+                <option value="LEADS">Lead Generation</option>
+                <option value="BOOKINGS">Prenotazioni</option>
+                <option value="ECOMMERCE">Vendite online</option>
+                <option value="IN_STORE">Traffico in negozio</option>
+                <option value="RETARGETING">Retargeting</option>
+                <option value="AWARENESS">Awareness / Apertura</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
+                Settore
+              </span>
+              <input
+                value={settore}
+                onChange={(e) => setSettore(e.target.value)}
+                className={inputClass}
+                placeholder="Es. Dentista"
+              />
+            </label>
+            <label className="block sm:col-span-2">
+              <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
+                {obiettivo === "AWARENESS"
+                  ? "CPM di riferimento (piano) (€)"
+                  : `${metricLabel} massimo sostenibile (€)`}
+              </span>
+              <input
+                type="number"
+                min={0}
+                step={0.5}
+                value={sogliaManuale}
+                onChange={(e) => setSogliaManuale(e.target.value)}
+                className={inputClass}
+                placeholder="Soglia economica"
+              />
+            </label>
+          </div>
+        ) : null}
+
+        {caricamentoDettaglio ? (
+          <p className="mt-4 text-xs text-[var(--ink-muted)]">
+            Caricamento dati campagna…
+          </p>
+        ) : null}
+
+        {campagnaAttiva ? (
+          <dl className="mt-5 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+            <div>
+              <dt className="text-xs text-[var(--ink-muted)]">Cliente</dt>
+              <dd className="mt-0.5 font-medium text-[var(--ink)]">
+                {campagnaAttiva.nomeCliente}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-[var(--ink-muted)]">Obiettivo</dt>
+              <dd className="mt-0.5 font-medium text-[var(--ink)]">
+                {etichettaObiettivo(campagnaAttiva.objective)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-[var(--ink-muted)]">Budget giornaliero</dt>
+              <dd className="mt-0.5 font-medium text-[var(--ink)]">
+                {formatEuro(campagnaAttiva.budgetGiornaliero ?? null)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-[var(--ink-muted)]">
+                {economic.objective === "AWARENESS"
+                  ? "CPM di riferimento (piano)"
+                  : `Soglia ${metricLabel}`}
+              </dt>
+              <dd className="mt-0.5 font-medium text-[var(--ink)]">
+                {formatEuro(economic.threshold)}
+              </dd>
+            </div>
+            {campagnaAttiva.settore ? (
+              <div>
+                <dt className="text-xs text-[var(--ink-muted)]">Settore</dt>
+                <dd className="mt-0.5 font-medium text-[var(--ink)]">
+                  {campagnaAttiva.settore}
+                </dd>
               </div>
+            ) : null}
+            {campagnaAttiva.targetMargin != null ? (
+              <div>
+                <dt className="text-xs text-[var(--ink-muted)]">Margine target</dt>
+                <dd className="mt-0.5 font-medium text-[var(--ink)]">
+                  {campagnaAttiva.targetMargin}%
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+        ) : null}
+
+        {!manuale &&
+        campagnaAttiva &&
+        economic.threshold == null ? (
+          <p className="mt-4 rounded-xl border border-[#F5D78E] bg-[#FFF6E5] px-4 py-3 text-sm text-[#9A6700]">
+            Dati insufficienti per lo stato economico. Inserisci la soglia solo se
+            la conosci.
+            <label className="mt-3 block">
+              <span className="mb-1.5 block text-xs font-medium">
+                {economic.objective === "AWARENESS"
+                  ? "CPM di riferimento (piano) (€)"
+                  : `${metricLabel} massimo sostenibile (€)`}
+              </span>
+              <input
+                type="number"
+                min={0}
+                step={0.5}
+                value={sogliaManuale}
+                onChange={(e) => setSogliaManuale(e.target.value)}
+                className={inputClass}
+              />
+            </label>
+          </p>
+        ) : null}
+      </section>
+
+      {/* Stato economico — dopo selezione */}
+      {haSelezione ? (
+        <section
+          className={`mt-6 rounded-[var(--radius)] border px-5 py-5 shadow-[var(--shadow-soft)] ${healthBadgeClasses(health.status)}`}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide opacity-80">
+                {health.mode === "efficiency"
+                  ? "Controllo di efficienza"
+                  : "Stato campagna"}
+              </p>
+              <p className="mt-1 text-xl font-medium">{health.label}</p>
+              <p className="mt-2 max-w-xl text-sm leading-relaxed">
+                {health.explanation}
+              </p>
+              {health.efficiencyNote ? (
+                <p className="mt-2 max-w-xl text-xs leading-relaxed opacity-90">
+                  {health.efficiencyNote}
+                </p>
+              ) : null}
+            </div>
+            {health.deltaLabel ? (
+              <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-medium">
+                {health.deltaLabel}
+              </span>
+            ) : null}
+          </div>
+
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-xl bg-white/70 px-4 py-3">
+              <p className="text-xs text-[var(--ink-muted)]">
+                {health.mode === "efficiency"
+                  ? "CPM attuale"
+                  : `${metricLabel} attuale`}
+              </p>
+              <p className="mt-1 text-2xl font-medium text-[var(--ink)]">
+                {formatEuro(economic.actual)}
+              </p>
+            </div>
+            <div className="rounded-xl bg-white/70 px-4 py-3">
+              <p className="text-xs text-[var(--ink-muted)]">
+                {health.mode === "efficiency"
+                  ? "CPM di riferimento (piano)"
+                  : `${metricLabel} massimo sostenibile`}
+              </p>
+              <p className="mt-1 text-2xl font-medium text-[var(--ink)]">
+                {formatEuro(economic.threshold)}
+              </p>
+            </div>
+          </div>
+
+          {economic.objective === "ECOMMERCE" &&
+          economic.roasAttuale != null &&
+          economic.roasBreakEvenHint != null ? (
+            <div className="mt-4 rounded-xl bg-white/70 px-4 py-3 text-sm">
+              <p className="text-xs text-[var(--ink-muted)]">
+                ROAS attuale vs break-even (da campagna)
+              </p>
+              <p className="mt-1 font-medium text-[var(--ink)]">
+                {economic.roasAttuale}x attuale · {economic.roasBreakEvenHint}x
+                break-even stimato
+              </p>
             </div>
           ) : null}
 
-          {errore ? (
-            <p className="text-sm text-[#B42318]">{errore}</p>
-          ) : null}
-          {mockInfo ? (
-            <p className="text-xs text-[var(--ink-muted)]">
-              Modalità demo: {mockInfo}
+          {datiLimitati.show ? (
+            <p className="mt-4 rounded-xl bg-white/80 px-4 py-3 text-sm">
+              {datiLimitati.message}
             </p>
           ) : null}
         </section>
-
-        <section className="lg:col-span-7">
-          {!analisi ? (
-            <div className="flex h-full min-h-[320px] items-center justify-center rounded-[var(--radius)] border border-dashed border-[var(--border)] bg-white p-8 text-center shadow-[var(--shadow-soft)]">
-              <p className="max-w-sm text-sm text-[var(--ink-muted)]">
-                Carica uno screenshot e avvia l&apos;analisi: qui compariranno
-                KPI, verdetto economico e le 3 azioni da fare su Meta Ads.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {[
-                  {
-                    label: "Spesa totale",
-                    valore: `${analisi.spesaTotale.toFixed(2)}€`,
-                  },
-                  {
-                    label: "Risultati",
-                    valore: `${analisi.risultati} · ${analisi.tipoRisultato}`,
-                  },
-                  {
-                    label: `${etichettaCosto(obiettivo)} reale vs soglia`,
-                    valore: `${analisi.costoPerRisultato.toFixed(2)}€ / ${targetNum.toFixed(2)}€`,
-                    accent: sottoSoglia,
-                  },
-                  {
-                    label: "CTR · Frequenza",
-                    valore: `${analisi.ctr}% · ${analisi.frequenza}x`,
-                  },
-                ].map((kpi) => (
-                  <div
-                    key={kpi.label}
-                    className="rounded-[var(--radius)] bg-white p-4 shadow-[var(--shadow-soft)]"
-                  >
-                    <p className="text-xs text-[var(--ink-muted)]">
-                      {kpi.label}
-                    </p>
-                    <p
-                      className={`mt-1 text-sm font-medium leading-snug text-[var(--ink)] ${
-                        kpi.accent ? "text-[#2D6A4A]" : ""
-                      }`}
-                    >
-                      {kpi.valore}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              {badge ? (
-                <div
-                  className={`rounded-[var(--radius)] border px-5 py-4 ${badge.className}`}
-                >
-                  <div className="flex items-start gap-3">
-                    {analisi.verdetto === "fuori_target" ? (
-                      <TrendingDown className="mt-0.5 h-5 w-5 shrink-0" />
-                    ) : (
-                      <TrendingUp className="mt-0.5 h-5 w-5 shrink-0" />
-                    )}
-                    <div>
-                      <p className="text-sm font-medium">{badge.label}</p>
-                      <p className="mt-2 text-sm leading-relaxed">
-                        {analisi.spiegazioneSostenibilita}
-                      </p>
-                      <p className="mt-2 text-xs opacity-80">
-                        Fase apprendimento:{" "}
-                        {analisi.faseApprendimento === "in_corso"
-                          ? "In corso"
-                          : analisi.faseApprendimento === "limitata"
-                            ? "Limitata (frequenza alta)"
-                            : "Completata"}
-                        {analisi.roas != null
-                          ? ` · ROAS ${analisi.roas}x`
-                          : ""}
-                        {` · CPM ${analisi.cpm.toFixed(2)}€`}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">
-                <h3 className="text-sm font-medium text-[var(--ink)]">
-                  Cosa fare adesso su Meta Ads
-                </h3>
-                <ol className="mt-4 space-y-3">
-                  {analisi.azioniConsigliate.map((azione, i) => (
-                    <li
-                      key={i}
-                      className="flex gap-3 text-sm leading-relaxed text-[var(--ink)]"
-                    >
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-medium text-[var(--accent)]">
-                        {i + 1}
-                      </span>
-                      {azione}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => salvaDiagnosi()}
-                className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--ink)] shadow-[var(--shadow-soft)] transition-colors hover:bg-[var(--surface-hover)]"
-              >
-                {salvato ? (
-                  <CheckCircle2 className="h-4 w-4 text-[#3D8B57]" />
-                ) : (
-                  <Save className="h-4 w-4" strokeWidth={1.75} />
-                )}
-                {salvato
-                  ? "Diagnosi salvata nello storico"
-                  : "Salva Diagnosi nello Storico Cliente"}
-              </button>
-            </div>
-          )}
-        </section>
-      </div>
-
-      {storico.length > 0 ? (
-        <section className="mt-10">
-          <h2 className="text-lg font-medium text-[var(--ink)]">
-            Diagnosi recenti
-          </h2>
-          <ul className="mt-4 flex flex-col gap-2">
-            {storico.slice(0, 5).map((item) => (
-              <li
-                key={item.id}
-                className="rounded-[var(--radius)] bg-white px-4 py-3 text-sm shadow-[var(--shadow-soft)]"
-              >
-                <span className="font-medium text-[var(--ink)]">
-                  {item.nomeCampagna}
-                </span>
-                <span className="text-[var(--ink-muted)]">
-                  {" "}
-                  · {item.analisi.costoPerRisultato.toFixed(2)}€ vs soglia{" "}
-                  {item.targetCpl}€ ·{" "}
-                  {new Date(item.salvatoIl).toLocaleDateString("it-IT")}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
       ) : null}
 
-      <section className="mt-12">
+      {/* Main 2-col */}
+      {haSelezione ? (
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12">
+          {/* LEFT: KPI + screenshot */}
+          <div className="space-y-5 lg:col-span-6">
+            <section className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setInputMode("kpi")}
+                  className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                    inputMode === "kpi"
+                      ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                      : "bg-[var(--surface-hover)] text-[var(--ink-muted)]"
+                  }`}
+                >
+                  Inserisci KPI
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInputMode("screenshot")}
+                  className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                    inputMode === "screenshot"
+                      ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                      : "bg-[var(--surface-hover)] text-[var(--ink-muted)]"
+                  }`}
+                >
+                  Analizza screenshot Ads Manager
+                </button>
+              </div>
+
+              {inputMode === "kpi" ? (
+                <div className="mt-5">
+                  <h3 className="text-sm font-medium text-[var(--ink)]">
+                    Risultati reali
+                  </h3>
+                  <p className="mt-1 text-xs text-[var(--ink-muted)]">
+                    Non tutti i campi sono obbligatori. Se inserisci spesa e
+                    risultati, il {metricLabel} si calcola automaticamente.
+                  </p>
+                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className="block sm:col-span-2">
+                      <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
+                        Giorni attiva (opzionale)
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={giorniAttiva}
+                        onChange={(e) => setGiorniAttiva(e.target.value)}
+                        className={inputClass}
+                        placeholder="Es. 5"
+                      />
+                    </label>
+                    {campiKpiPerObiettivo(economic.objective, metricLabel).map(
+                      ([key, label]) => (
+                      <label key={key} className="block">
+                        <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
+                          {label}
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          step="any"
+                          value={
+                            key === "costPerResult" &&
+                            kpiForm.costPerResult === "" &&
+                            costoCalcolato != null
+                              ? String(costoCalcolato)
+                              : kpiForm[key]
+                          }
+                          onChange={(e) =>
+                            setKpiForm((prev) => ({
+                              ...prev,
+                              [key]: e.target.value,
+                            }))
+                          }
+                          className={inputClass}
+                          placeholder={
+                            key === "costPerResult" && costoCalcolato != null
+                              ? `Auto: ${costoCalcolato}`
+                              : undefined
+                          }
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-5">
+                  <p className="text-sm text-[var(--ink-muted)]">
+                    Non vuoi compilare i KPI? Carica uno screenshot di Ads
+                    Manager e Affianco prova a leggerli per te.
+                  </p>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => inputRef.current?.click()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        inputRef.current?.click();
+                      }
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setTrascinando(true);
+                    }}
+                    onDragLeave={() => setTrascinando(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setTrascinando(false);
+                      gestisciFile(e.dataTransfer.files[0]);
+                    }}
+                    className={`mt-4 flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
+                      trascinando
+                        ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+                        : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent-muted)]"
+                    }`}
+                  >
+                    {anteprima ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={anteprima}
+                        alt="Anteprima screenshot Meta Ads Manager"
+                        className="max-h-56 w-full rounded-xl object-contain"
+                      />
+                    ) : (
+                      <>
+                        <ImagePlus
+                          className="h-9 w-9 text-[var(--accent)]"
+                          strokeWidth={1.5}
+                        />
+                        <p className="mt-3 text-sm font-medium text-[var(--ink)]">
+                          Trascina lo screenshot di Ads Manager
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--ink-muted)]">
+                          JPG, PNG o WebP
+                        </p>
+                      </>
+                    )}
+                    <input
+                      ref={inputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        gestisciFile(e.target.files?.[0]);
+                        e.target.value = "";
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void analizzaScreenshot()}
+                    disabled={caricamentoAi || !imageBase64}
+                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {caricamentoAi ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" strokeWidth={1.75} />
+                    )}
+                    {caricamentoAi
+                      ? "Lettura screenshot…"
+                      : "Leggi KPI dallo screenshot"}
+                  </button>
+
+                  {caricamentoAi ? (
+                    <p className="mt-3 text-xs text-[var(--ink-muted)]">
+                      Lettura metriche dallo screenshot…
+                    </p>
+                  ) : null}
+                  {erroreAi ? (
+                    <p className="mt-3 text-sm text-[#B42318]">{erroreAi}</p>
+                  ) : null}
+                  {analisiAi ? (
+                    <p className="mt-3 text-xs text-[var(--ink-muted)]">
+                      KPI letti e copiati nei campi. Puoi correggerli nella
+                      modalità «Inserisci KPI». Lo stato economico resta
+                      calcolato dalle regole Affianco, non dall&apos;AI.
+                    </p>
+                  ) : null}
+                </div>
+              )}
+            </section>
+          </div>
+
+          {/* RIGHT: Diagnosi + azioni */}
+          <div className="space-y-5 lg:col-span-6">
+            <section className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">
+              <h3 className="text-sm font-medium text-[var(--ink)]">Diagnosi</h3>
+              <p className="mt-1 text-xs text-[var(--ink-muted)]">
+                Diagnosi indicativa basata sui KPI disponibili. Verifica sempre
+                il contesto della campagna. Segnali indicativi, da interpretare
+                nel contesto della campagna.
+              </p>
+
+              {diagnosis.canDiagnose || diagnosis.signal === "dati_insufficienti" ? (
+                <div className="mt-4">
+                  <p className="text-sm font-medium text-[var(--ink)]">
+                    {diagnosis.title}
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-[var(--ink-muted)]">
+                    {diagnosis.body}
+                  </p>
+                  {diagnosis.hint ? (
+                    <p className="mt-3 rounded-xl bg-[var(--surface-hover)] px-3 py-2 text-xs text-[var(--ink-muted)]">
+                      {diagnosis.hint}
+                    </p>
+                  ) : null}
+                  <p className="mt-3 text-xs text-[var(--ink-muted)]">
+                    Segnale: {diagnosis.signal.replace(/_/g, " ")}
+                  </p>
+                </div>
+              ) : null}
+            </section>
+
+            <section className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">
+              <h3 className="text-sm font-medium text-[var(--ink)]">
+                Cosa fare adesso
+              </h3>
+              <ol className="mt-4 space-y-3">
+                {actions.map((azione, i) => (
+                  <li
+                    key={`${i}-${azione.text}`}
+                    className="flex gap-3 text-sm leading-relaxed text-[var(--ink)]"
+                  >
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-medium text-[var(--accent)]">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p>{azione.text}</p>
+                      <span
+                        className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${priorityBadgeClasses(azione.priority)}`}
+                      >
+                        {priorityLabel(azione.priority)}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 rounded-[var(--radius)] border border-dashed border-[var(--border)] bg-white px-6 py-6 text-center shadow-[var(--shadow-soft)]">
+          <p className="text-sm text-[var(--ink-muted)]">
+            Seleziona una campagna salvata (o usa l&apos;inserimento manuale)
+            per vedere stato economico, KPI e diagnosi.
+          </p>
+        </div>
+      )}
+
+      {/* BOTTOM: storico + benchmark */}
+      <section
+        className={`rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)] ${haSelezione ? "mt-10" : "mt-6"}`}
+      >
         <h2 className="text-lg font-medium text-[var(--ink)]">
-          Benchmark di settore — mercato italiano
+          Storico controlli
+        </h2>
+        <p className="mt-2 text-sm text-[var(--ink-muted)]">
+          Lo storico dei controlli sarà disponibile dopo il primo check salvato.
+        </p>
+        <p className="mt-1 text-xs text-[var(--ink-muted)]">
+          Persistenza su database in arrivo (tabella dedicata). Nessun dato
+          fittizio mostrato qui.
+        </p>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="text-lg font-medium text-[var(--ink)]">
+          Riferimenti di mercato
         </h2>
         <p className="mt-1 max-w-2xl text-sm text-[var(--ink-muted)]">
-          Range storici di riferimento su Meta Ads in Italia. Non sono promesse
-          di performance: servono a contestualizzare CPL/CPA reali.
+          Range indicativi utili come contesto. La soglia economica del cliente
+          resta il riferimento principale.
         </p>
         <div className="mt-4 overflow-x-auto rounded-[var(--radius)] bg-white shadow-[var(--shadow-soft)]">
           <table className="w-full min-w-[640px] text-left text-sm">

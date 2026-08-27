@@ -6,6 +6,7 @@ import type {
   ScreenshotAnalysisResult,
 } from "@/types/screenshot-analysis";
 import { anthropicModelId } from "@/lib/anthropic-config";
+import { normalizzaCtrDaApi } from "@/lib/control-room";
 import {
   anthropicConfigMissingResponse,
   anthropicErrorResponse,
@@ -23,7 +24,7 @@ Schema esatto:
   "risultati": number,
   "tipoRisultato": string,
   "costoPerRisultato": number,
-  "ctr": number,
+  "ctr": number (percentuale numerica: 1.2 = 1.2%, NON 0.012),
   "frequenza": number,
   "cpm": number,
   "roas": number | null,
@@ -85,7 +86,7 @@ function normalizzaAnalisi(
     tipoRisultato: String(raw.tipoRisultato ?? fallback.tipoRisultato),
     costoPerRisultato:
       Number(raw.costoPerRisultato) || fallback.costoPerRisultato,
-    ctr: Number(raw.ctr) || fallback.ctr,
+    ctr: normalizzaCtrDaApi(Number(raw.ctr) || fallback.ctr) ?? fallback.ctr,
     frequenza: Number(raw.frequenza) || fallback.frequenza,
     cpm: Number(raw.cpm) || fallback.cpm,
     roas:
