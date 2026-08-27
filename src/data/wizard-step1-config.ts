@@ -48,7 +48,7 @@ export const WIZARD_CONFIG: Record<WizardStep1Slug, WizardStep1Texts> = {
     briefPlaceholder:
       "Es. Studio dentistico a Roma che vuole più richieste per implantologia. Il servizio medio vale circa 2.000€ e vuole rivolgersi soprattutto a persone tra 35 e 60 anni.",
     siteLabel: "Sito Web del cliente (opzionale)",
-    sitePlaceholder: "es. https://www.abatecs.com",
+    sitePlaceholder: "es. https://www.esempio.it",
     briefHint:
       "Non sai cosa inserire? Scrivi quello che sai: potrai correggerlo più avanti.",
     headlinePlaceholder: "Es. Prima consulenza a Milano",
@@ -72,7 +72,7 @@ export const WIZARD_CONFIG: Record<WizardStep1Slug, WizardStep1Texts> = {
     briefPlaceholder:
       "Es. Salone specializzato in schiariture naturali in centro città, target donne 25–45.",
     siteLabel: "Sito Web del cliente (opzionale)",
-    sitePlaceholder: "es. https://www.abatecs.com",
+    sitePlaceholder: "es. https://www.esempio.it",
     briefHint:
       "Non sai cosa inserire? Scrivi quello che sai: potrai correggerlo più avanti.",
     headlinePlaceholder: "Es. Prenota il tuo appuntamento a Torino",

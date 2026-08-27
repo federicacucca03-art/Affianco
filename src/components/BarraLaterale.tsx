@@ -124,9 +124,15 @@ export function BarraLaterale({ aperta, onChiudi }: Props) {
                 key={voce.etichetta}
                 className={`${classi} cursor-default opacity-55`}
                 aria-disabled
+                title="Presto disponibile"
               >
                 <Icona className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-                {voce.etichetta}
+                <span className="flex min-w-0 flex-col leading-tight">
+                  <span>{voce.etichetta}</span>
+                  <span className="text-[10px] font-normal text-[var(--ink-muted)]">
+                    Presto disponibile
+                  </span>
+                </span>
               </span>
             );
           })}

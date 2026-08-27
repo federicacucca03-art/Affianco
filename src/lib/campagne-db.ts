@@ -238,15 +238,6 @@ function isUserIdColumnMissingError(message: string): boolean {
   return false;
 }
 
-function isRpcMissingError(message: string): boolean {
-  return (
-    /PGRST202/i.test(message) ||
-    /could not find the function/i.test(message) ||
-    /function .* does not exist/i.test(message)
-  );
-}
-
-
 /** Inserisce/aggiorna rimuovendo colonne sconosciute finché PostgREST accetta. */
 async function insertConFallbackColonne(
   table: "clients" | "campaigns",
@@ -1108,7 +1099,6 @@ function campaignIdDaRpc(data: unknown): string | undefined {
  * Assicura un approval_token per link pubblico (owner).
  * - Se già presente → riusa
  * - Altrimenti RPC regenerate (crea/ruota)
- * - Se schema P4 assente → ritorna campaignId (capability UUID pre-cutover)
  */
 export async function assicuratiTokenApprovazione(
   campaignId: string,
@@ -1128,8 +1118,9 @@ export async function assicuratiTokenApprovazione(
       ?.approval_token?.trim();
     if (fromDb) return fromDb;
   } else if (isApprovalTokenColumnMissingError(error.message)) {
-    // P4 code + P3 schema: UUID ancora capability.
-    return campaignId;
+    throw new Error(
+      "Token di approvazione non disponibile. Aggiorna lo schema o riprova.",
+    );
   }
 
   const { data: nuovo, error: regenErr } = await supabase.rpc(
@@ -1141,10 +1132,6 @@ export async function assicuratiTokenApprovazione(
     return nuovo.trim();
   }
 
-  if (regenErr && isRpcMissingError(regenErr.message)) {
-    return campaignId;
-  }
-
   if (regenErr) {
     throw new Error(regenErr.message);
   }
@@ -1154,7 +1141,7 @@ export async function assicuratiTokenApprovazione(
   );
 }
 
-/** URL assoluto pagina pubblica approval (token o id pre-P4). */
+/** URL assoluto pagina pubblica approval (token). */
 export function urlApprovazioneDaToken(token: string): string {
   const origin =
     typeof window !== "undefined" ? window.location.origin : "";
@@ -1180,9 +1167,7 @@ export async function rigeneraTokenApprovazione(
 }
 
 /**
- * Lettura pubblica approval.
- * Preferisce RPC token (P4). Fallback UUID RPC SOLO se RPC token assente
- * (cutover: codice P4 + schema P3). Mai fallback su "not found".
+ * Lettura pubblica approval tramite token RPC.
  */
 export async function leggiCampagnaPerApprovazionePubblica(
   capability: string,
@@ -1190,39 +1175,21 @@ export async function leggiCampagnaPerApprovazionePubblica(
   const token = capability?.trim();
   if (!token) return null;
 
-  const tokenRpc = await supabase.rpc(
+  const { data, error } = await supabase.rpc(
     "get_campaign_for_public_approval_token",
     { p_token: token },
   );
 
-  if (!tokenRpc.error) {
-    if (tokenRpc.data == null) return null;
-    return mappaCampagnaDaRow(tokenRpc.data as CampaignRow);
+  if (error) {
+    throw new Error(error.message);
   }
 
-  if (!isRpcMissingError(tokenRpc.error.message)) {
-    throw new Error(tokenRpc.error.message);
-  }
-
-  // Dual-path cutover: UUID capability ancora attiva finché RPC id esistono.
-  const idRpc = await supabase.rpc("get_campaign_for_public_approval", {
-    p_id: token,
-  });
-
-  if (!idRpc.error) {
-    if (idRpc.data == null) return null;
-    return mappaCampagnaDaRow(idRpc.data as CampaignRow);
-  }
-
-  if (!isRpcMissingError(idRpc.error.message)) {
-    throw new Error(idRpc.error.message);
-  }
-
-  return leggiCampagnaDaSupabase(token);
+  if (data == null) return null;
+  return mappaCampagnaDaRow(data as CampaignRow);
 }
 
 /**
- * APPROVED via RPC pubblica token (fallback UUID RPC solo se token RPC assente).
+ * APPROVED via RPC pubblica token.
  */
 export async function approvaCampagnaPubblica(
   capability: string,
@@ -1230,39 +1197,21 @@ export async function approvaCampagnaPubblica(
   const token = capability.trim();
   if (!token) throw new Error("Token di approvazione mancante.");
 
-  const tokenRpc = await supabase.rpc("approve_campaign_public_token", {
+  const { data, error } = await supabase.rpc("approve_campaign_public_token", {
     p_token: token,
   });
 
-  if (!tokenRpc.error) {
-    const campaignId = campaignIdDaRpc(tokenRpc.data) ?? token;
-    salvaAssetCampagnaLocale(campaignId, { reviewStatus: "APPROVED" });
-    return approvedAtDaRpc(tokenRpc.data);
+  if (error) {
+    throw new Error(error.message);
   }
 
-  if (!isRpcMissingError(tokenRpc.error.message)) {
-    throw new Error(tokenRpc.error.message);
-  }
-
-  const idRpc = await supabase.rpc("approve_campaign_public", {
-    p_id: token,
-  });
-
-  if (!idRpc.error) {
-    salvaAssetCampagnaLocale(token, { reviewStatus: "APPROVED" });
-    return approvedAtDaRpc(idRpc.data);
-  }
-
-  if (!isRpcMissingError(idRpc.error.message)) {
-    throw new Error(idRpc.error.message);
-  }
-
-  return approvaCampagnaSuSupabase(token);
+  const campaignId = campaignIdDaRpc(data) ?? token;
+  salvaAssetCampagnaLocale(campaignId, { reviewStatus: "APPROVED" });
+  return approvedAtDaRpc(data);
 }
 
 /**
- * REVISION_REQUESTED via RPC pubblica token
- * (fallback UUID RPC solo se token RPC assente).
+ * REVISION_REQUESTED via RPC pubblica token.
  */
 export async function richiediRevisioneCampagnaPubblica(
   capability: string,
@@ -1279,59 +1228,28 @@ export async function richiediRevisioneCampagnaPubblica(
   const token = capability.trim();
   if (!token) throw new Error("Token di approvazione mancante.");
 
-  const tokenRpc = await supabase.rpc(
+  const { data, error } = await supabase.rpc(
     "request_campaign_revision_public_token",
     { p_token: token, p_notes: revisionNotes },
   );
 
-  if (!tokenRpc.error) {
-    const campaignId = campaignIdDaRpc(tokenRpc.data) ?? token;
-    salvaAssetCampagnaLocale(campaignId, {
-      revisionNotes,
-      reviewStatus: "REVISION_REQUESTED",
-    });
-    if (
-      tokenRpc.data &&
-      typeof tokenRpc.data === "object" &&
-      "revision_notes" in tokenRpc.data &&
-      typeof (tokenRpc.data as { revision_notes?: unknown }).revision_notes ===
-        "string"
-    ) {
-      return (tokenRpc.data as { revision_notes: string }).revision_notes;
-    }
-    return revisionNotes;
+  if (error) {
+    throw new Error(error.message);
   }
 
-  if (!isRpcMissingError(tokenRpc.error.message)) {
-    throw new Error(tokenRpc.error.message);
-  }
-
-  salvaAssetCampagnaLocale(token, {
+  const campaignId = campaignIdDaRpc(data) ?? token;
+  salvaAssetCampagnaLocale(campaignId, {
     revisionNotes,
     reviewStatus: "REVISION_REQUESTED",
   });
 
-  const idRpc = await supabase.rpc("request_campaign_revision_public", {
-    p_id: token,
-    p_notes: revisionNotes,
-  });
-
-  if (!idRpc.error) {
-    if (
-      idRpc.data &&
-      typeof idRpc.data === "object" &&
-      "revision_notes" in idRpc.data &&
-      typeof (idRpc.data as { revision_notes?: unknown }).revision_notes ===
-        "string"
-    ) {
-      return (idRpc.data as { revision_notes: string }).revision_notes;
-    }
-    return revisionNotes;
+  if (
+    data &&
+    typeof data === "object" &&
+    "revision_notes" in data &&
+    typeof (data as { revision_notes?: unknown }).revision_notes === "string"
+  ) {
+    return (data as { revision_notes: string }).revision_notes;
   }
-
-  if (!isRpcMissingError(idRpc.error.message)) {
-    throw new Error(idRpc.error.message);
-  }
-
-  return richiediRevisioneCampagnaSuSupabase(token, revisionNotes);
+  return revisionNotes;
 }
