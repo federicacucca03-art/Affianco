@@ -50,6 +50,7 @@ import {
   type EcommerceCreativoFormato,
 } from "@/lib/creativita";
 import { salvaCampagnaCompleta, leggiCampagnaDaSupabase, assicuratiTokenApprovazione, urlApprovazioneDaToken } from "@/lib/campagne-db";
+import { messaggioAiUserFacing } from "@/lib/anthropic-messaggi";
 import {
   logErroreSupabaseDev,
   messaggioErroreSupabase,
@@ -902,7 +903,12 @@ export function PercorsoContatti({
       };
 
       if (!res.ok || !data.varianteA || !data.varianteB || !data.varianteC) {
-        throw new Error(data.error || "Generazione AI non riuscita");
+        throw new Error(
+          messaggioAiUserFacing(
+            data.error,
+            "Non siamo riusciti a generare il contenuto. Riprova.",
+          ),
+        );
       }
 
       setVariantiManuali(true);
@@ -918,22 +924,14 @@ export function PercorsoContatti({
       }));
       setCopyAiErrore(null);
     } catch (err) {
-      if (controller.signal.aborted && (err as Error)?.name === "AbortError") {
-        // Navigazione via / unmount: non sovrascrivere con fallback se abort volontario
-        const abortedByTimeout = !copyAiAbortRef.current
-          ? false
-          : copyAiAbortRef.current.signal.aborted;
-        // Se timeout o errore rete → fallback statico
-        if (abortedByTimeout || (err as Error)?.name === "AbortError") {
-          // distinzione: se ancora sullo step 3 e timeout, applica fallback
-        }
-      }
       if (controller.signal.reason === "navigate") {
         return;
       }
-      applicaCopyFallbackStatico();
       setCopyAiErrore(
-        "AI non disponibile: applicati i testi di fallback Affianco.",
+        messaggioAiUserFacing(
+          err instanceof Error ? err.message : null,
+          "Non siamo riusciti a generare il contenuto. Riprova.",
+        ),
       );
     } finally {
       window.clearTimeout(timeoutId);

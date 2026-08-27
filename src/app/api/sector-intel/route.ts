@@ -6,6 +6,11 @@ import {
   risolviSettoreIntel,
   type SettoreIntel,
 } from "@/lib/sector-intel";
+import { anthropicModelId } from "@/lib/anthropic-config";
+import {
+  anthropicConfigMissingResponse,
+  anthropicErrorResponse,
+} from "@/lib/anthropic-errori";
 
 export const runtime = "nodejs";
 
@@ -137,18 +142,14 @@ export async function POST(request: Request) {
 
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
-    return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY non configurata" },
-      { status: 500 },
-    );
+    return anthropicConfigMissingResponse();
   }
 
   try {
     const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
-      model: "claude-3-5-sonnet-20241022",
+      model: anthropicModelId(),
       max_tokens: 800,
-      temperature: 0.3,
       system: SYSTEM_PROMPT,
       messages: [
         {
@@ -168,7 +169,13 @@ JSON only.`,
     const inizio = testo.indexOf("{");
     const fine = testo.lastIndexOf("}");
     if (inizio < 0 || fine <= inizio) {
-      throw new Error("Risposta AI senza JSON");
+      return NextResponse.json(
+        {
+          error: "Non siamo riusciti a generare il contenuto. Riprova.",
+          code: "PROVIDER",
+        },
+        { status: 502 },
+      );
     }
     const parsed = JSON.parse(testo.slice(inizio, fine + 1)) as Record<
       string,
@@ -176,11 +183,16 @@ JSON only.`,
     >;
     const intel = normalizzaIntel(parsed, niche);
     if (!isSettoreIntelPayload(intel)) {
-      throw new Error("JSON nicchia incompleto");
+      return NextResponse.json(
+        {
+          error: "Non siamo riusciti a generare il contenuto. Riprova.",
+          code: "PROVIDER",
+        },
+        { status: 502 },
+      );
     }
     return NextResponse.json(intel);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Errore sector intel";
-    return NextResponse.json({ error: msg }, { status: 502 });
+    return anthropicErrorResponse(err);
   }
 }

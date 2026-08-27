@@ -6,6 +6,7 @@ import {
   risolviSettoreIntel,
   type SettoreIntel,
 } from "@/lib/sector-intel";
+import { messaggioAiUserFacing } from "@/lib/anthropic-messaggi";
 
 const cache = new Map<string, SettoreIntel>();
 
@@ -61,7 +62,9 @@ export function useSettoreIntel(settore: string | undefined) {
         });
         const data = (await res.json()) as SettoreIntel & { error?: string };
         if (!res.ok || !isSettoreIntelPayload(data)) {
-          throw new Error(data.error || "Intel non disponibile");
+          throw new Error(
+            messaggioAiUserFacing(data.error, "Intel non disponibile"),
+          );
         }
         const intelAi: SettoreIntel = { ...data, source: data.source ?? "ai" };
         cache.set(chiaveCache(q), intelAi);

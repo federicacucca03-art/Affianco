@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { CampagnaObjective, TargetType } from "@/types/campagne";
 import type { DeconstructAdResult } from "@/types/deconstruct-ad";
+import { messaggioAiUserFacing } from "@/lib/anthropic-messaggi";
 import type {
   CreativitaAsset,
   EcommerceCreativoFormato,
@@ -249,14 +250,24 @@ export function StudioCreativo({
         _motivo?: string;
       };
 
-      if (!res.ok && data.error) throw new Error(data.error);
+      if (!res.ok) {
+        throw new Error(
+          messaggioAiUserFacing(
+            data.error,
+            "Non siamo riusciti a generare il contenuto. Riprova.",
+          ),
+        );
+      }
 
       const { _mock, _motivo, error: _err, ...pulito } = data;
       onDeconstructResult?.(pulito as DeconstructAdResult);
       if (_mock && _motivo) setMockInfo(_motivo);
     } catch (e) {
       setErrore(
-        e instanceof Error ? e.message : "Analisi non riuscita. Riprova.",
+        messaggioAiUserFacing(
+          e instanceof Error ? e.message : null,
+          "Analisi non riuscita. Riprova.",
+        ),
       );
     } finally {
       window.clearInterval(timer);

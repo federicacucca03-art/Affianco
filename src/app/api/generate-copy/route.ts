@@ -5,6 +5,11 @@ import {
   pulisciNomeAttivitaPubblico,
   sanificaCopyDaMetadati,
 } from "@/lib/copy-pubblico";
+import { anthropicModelId } from "@/lib/anthropic-config";
+import {
+  anthropicConfigMissingResponse,
+  anthropicErrorResponse,
+} from "@/lib/anthropic-errori";
 
 export const runtime = "nodejs";
 
@@ -147,10 +152,7 @@ function estraiJson(
 export async function POST(request: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
-    return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY non configurata" },
-      { status: 500 },
-    );
+    return anthropicConfigMissingResponse();
   }
 
   let body: GenerateCopyBody;
@@ -193,9 +195,8 @@ Restituisci solo il JSON richiesto.`;
   try {
     const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
-      model: "claude-3-5-sonnet-20241022",
+      model: anthropicModelId(),
       max_tokens: 1200,
-      temperature: 0.7,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userPrompt }],
     });
@@ -208,7 +209,10 @@ Restituisci solo il JSON richiesto.`;
 
     if (!testo) {
       return NextResponse.json(
-        { error: "Risposta AI vuota" },
+        {
+          error: "Non siamo riusciti a generare il contenuto. Riprova.",
+          code: "PROVIDER",
+        },
         { status: 502 },
       );
     }
@@ -216,7 +220,6 @@ Restituisci solo il JSON richiesto.`;
     const result = estraiJson(testo, clientName);
     return NextResponse.json(result);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Errore generazione copy";
-    return NextResponse.json({ error: msg }, { status: 502 });
+    return anthropicErrorResponse(err);
   }
 }

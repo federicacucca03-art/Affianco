@@ -6,6 +6,11 @@ import type {
   DeconstructAdResult,
   CopioneAdattato,
 } from "@/types/deconstruct-ad";
+import { anthropicModelId } from "@/lib/anthropic-config";
+import {
+  anthropicConfigMissingResponse,
+  anthropicErrorResponse,
+} from "@/lib/anthropic-errori";
 
 export const runtime = "nodejs";
 
@@ -118,11 +123,7 @@ export async function POST(request: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
 
   if (!apiKey) {
-    return NextResponse.json({
-      ...fallback,
-      _mock: true,
-      _motivo: "ANTHROPIC_API_KEY non configurata — dati demo",
-    });
+    return anthropicConfigMissingResponse();
   }
 
   const base64 = pulisciBase64(imageRaw);
@@ -139,9 +140,8 @@ Analizza l'inserzione nello screenshot e restituisci il JSON con copione adattat
   try {
     const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
-      model: "claude-3-5-sonnet-20241022",
+      model: anthropicModelId(),
       max_tokens: 1400,
-      temperature: 0.35,
       system: SYSTEM_PROMPT,
       messages: [
         {
@@ -168,20 +168,17 @@ Analizza l'inserzione nello screenshot e restituisci il JSON con copione adattat
       .trim();
 
     if (!testo) {
-      return NextResponse.json({
-        ...fallback,
-        _mock: true,
-        _motivo: "Risposta Vision vuota — dati demo",
-      });
+      return NextResponse.json(
+        {
+          error: "Non siamo riusciti a generare il contenuto. Riprova.",
+          code: "PROVIDER",
+        },
+        { status: 502 },
+      );
     }
 
     return NextResponse.json(estraiJson(testo, fallback));
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Errore deconstruct ad";
-    return NextResponse.json({
-      ...fallback,
-      _mock: true,
-      _motivo: msg,
-    });
+    return anthropicErrorResponse(err);
   }
 }

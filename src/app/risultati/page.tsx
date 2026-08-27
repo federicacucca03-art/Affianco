@@ -30,6 +30,7 @@ import {
   getSavedCampaignResults,
   saveCampaignResult,
 } from "@/utils/campaignResultsStorage";
+import { messaggioAiUserFacing } from "@/lib/anthropic-messaggi";
 
 const PASSI_CARICAMENTO = [
   "Lettura metriche dallo screenshot…",
@@ -238,8 +239,13 @@ export default function RisultatiPage() {
         _motivo?: string;
       };
 
-      if (!res.ok && data.error) {
-        throw new Error(data.error);
+      if (!res.ok) {
+        throw new Error(
+          messaggioAiUserFacing(
+            data.error,
+            "Non siamo riusciti a generare il contenuto. Riprova.",
+          ),
+        );
       }
 
       const { _mock, _motivo, error: _err, ...analisiPulita } = data;
@@ -247,7 +253,10 @@ export default function RisultatiPage() {
       if (_mock && _motivo) setMockInfo(_motivo);
     } catch (e) {
       setErrore(
-        e instanceof Error ? e.message : "Analisi non riuscita. Riprova.",
+        messaggioAiUserFacing(
+          e instanceof Error ? e.message : null,
+          "Analisi non riuscita. Riprova.",
+        ),
       );
     } finally {
       window.clearInterval(timer);

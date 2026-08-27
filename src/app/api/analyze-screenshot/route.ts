@@ -5,6 +5,11 @@ import type {
   AnalyzeScreenshotBody,
   ScreenshotAnalysisResult,
 } from "@/types/screenshot-analysis";
+import { anthropicModelId } from "@/lib/anthropic-config";
+import {
+  anthropicConfigMissingResponse,
+  anthropicErrorResponse,
+} from "@/lib/anthropic-errori";
 
 export const runtime = "nodejs";
 
@@ -147,11 +152,7 @@ export async function POST(request: Request) {
 
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
-    return NextResponse.json({
-      ...fallback,
-      _mock: true,
-      _motivo: "ANTHROPIC_API_KEY non configurata — dati demo",
-    });
+    return anthropicConfigMissingResponse();
   }
 
   const base64 = pulisciBase64(imageRaw);
@@ -169,9 +170,8 @@ Analizza lo screenshot allegato ed estrai le metriche in JSON come da schema.`;
   try {
     const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
-      model: "claude-3-5-sonnet-20241022",
+      model: anthropicModelId(),
       max_tokens: 1200,
-      temperature: 0.2,
       system: SYSTEM_PROMPT,
       messages: [
         {
@@ -198,22 +198,18 @@ Analizza lo screenshot allegato ed estrai le metriche in JSON come da schema.`;
       .trim();
 
     if (!testo) {
-      return NextResponse.json({
-        ...fallback,
-        _mock: true,
-        _motivo: "Risposta Vision vuota — dati demo",
-      });
+      return NextResponse.json(
+        {
+          error: "Non siamo riusciti a generare il contenuto. Riprova.",
+          code: "PROVIDER",
+        },
+        { status: 502 },
+      );
     }
 
     const analisi = estraiJsonAnalisi(testo, fallback);
     return NextResponse.json(analisi);
   } catch (err) {
-    const msg =
-      err instanceof Error ? err.message : "Errore analisi screenshot";
-    return NextResponse.json({
-      ...fallback,
-      _mock: true,
-      _motivo: msg,
-    });
+    return anthropicErrorResponse(err);
   }
 }
