@@ -27,7 +27,8 @@ import {
 import { AnteprimaFeedApprovazione } from "@/components/campagne/AnteprimaFeedApprovazione";
 
 export default function ApprovazioneCampagnaPage() {
-  const params = useParams<{ id: string }>();
+  const params = useParams<{ token: string }>();
+  const approvalCapability = params.token;
   const [campagna, setCampagna] = useState<Campagna | null | undefined>(
     undefined,
   );
@@ -54,7 +55,9 @@ export default function ApprovazioneCampagnaPage() {
 
     (async () => {
       try {
-        const trovata = await leggiCampagnaPerApprovazionePubblica(params.id);
+        const trovata = await leggiCampagnaPerApprovazionePubblica(
+          approvalCapability,
+        );
         if (!attivo) return;
         if (!trovata) {
           setCampagna(null);
@@ -82,7 +85,7 @@ export default function ApprovazioneCampagnaPage() {
     return () => {
       attivo = false;
     };
-  }, [params.id]);
+  }, [approvalCapability]);
 
   const budget = useMemo(
     () => campagna?.budgetGiornaliero ?? 20,
@@ -205,7 +208,7 @@ export default function ApprovazioneCampagnaPage() {
     setAzioneInCorso(true);
     setErrore(null);
     try {
-      const approvedAt = await approvaCampagnaPubblica(campagna.id);
+      const approvedAt = await approvaCampagnaPubblica(approvalCapability);
       setApprovata(true);
       setMostraModifica(false);
       setCampagna((c) =>
@@ -243,7 +246,7 @@ export default function ApprovazioneCampagnaPage() {
     setErrore(null);
     try {
       const salvata = await richiediRevisioneCampagnaPubblica(
-        campagna.id,
+        approvalCapability,
         notesText,
       );
       setRevisioneInviata(true);

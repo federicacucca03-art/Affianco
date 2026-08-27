@@ -311,7 +311,7 @@ export async function logCampagnaApprovata(campaignId: string) {
     eventType: "APPROVED",
     title: "Approvazione ricevuta",
     description:
-      "Approvazione ricevuta dal cliente via link /approvazione/[id]",
+      "Approvazione ricevuta dal cliente via link /approvazione/[token]",
   });
 }
 

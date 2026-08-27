@@ -49,7 +49,7 @@ import {
   type CreativitaAsset,
   type EcommerceCreativoFormato,
 } from "@/lib/creativita";
-import { salvaCampagnaCompleta, leggiCampagnaDaSupabase } from "@/lib/campagne-db";
+import { salvaCampagnaCompleta, leggiCampagnaDaSupabase, assicuratiTokenApprovazione, urlApprovazioneDaToken } from "@/lib/campagne-db";
 import {
   logErroreSupabaseDev,
   messaggioErroreSupabase,
@@ -1671,7 +1671,12 @@ export function PercorsoContatti({
     setErroreLinkApprovazione(null);
     try {
       const id = await assicuraCampagnaSalvata();
-      const url = `${window.location.origin}/approvazione/${id}`;
+      const salvata = await leggiCampagnaDaSupabase(id);
+      const token = await assicuratiTokenApprovazione(
+        id,
+        salvata?.approvalToken,
+      );
+      const url = urlApprovazioneDaToken(token);
       await navigator.clipboard.writeText(url);
       setLinkApprovazioneCopiato(true);
       window.setTimeout(() => setLinkApprovazioneCopiato(false), 2500);

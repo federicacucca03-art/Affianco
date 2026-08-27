@@ -229,6 +229,11 @@ export type Campagna = {
   approvedAt?: string;
   /** Note di revisione richieste dal cliente. */
   revisionNotes?: string;
+  /**
+   * Token pubblico approval (owner-only in select app).
+   * NON è la capability esposta dalle RPC pubbliche (non restituito).
+   */
+  approvalToken?: string;
   /** Offerta d'ingresso / gancio (front-end offer). */
   frontEndOffer?: string;
   /** Tipo cliente: B2C o B2B. */

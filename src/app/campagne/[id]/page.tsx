@@ -10,6 +10,8 @@ import { giorniAttiviDaCampagna } from "@/data/campagne-store";
 import {
   completaRevisioneCampagnaSuSupabase,
   leggiCampagnaDaSupabase,
+  assicuratiTokenApprovazione,
+  urlApprovazioneDaToken,
 } from "@/lib/campagne-db";
 import { assicuraVariantiCampagna } from "@/lib/assicura-varianti";
 import {
@@ -171,6 +173,9 @@ export default function DettaglioCampagnaPage() {
   const [copiato, setCopiato] = useState(false);
   const [tabAttivo, setTabAttivo] = useState<TabDettaglio>("diagnosi");
   const [linkCopiato, setLinkCopiato] = useState(false);
+  const [erroreLinkApprovazione, setErroreLinkApprovazione] = useState<
+    string | null
+  >(null);
   const [revisioneInChiusura, setRevisioneInChiusura] = useState(false);
   const [erroreRevisione, setErroreRevisione] = useState<string | null>(null);
   /** Errore rete/API distinto da record assente. */
@@ -513,13 +518,25 @@ export default function DettaglioCampagnaPage() {
   }
 
   async function copiaLinkApprovazione() {
-    const url = `${window.location.origin}/approvazione/${params.id}`;
+    if (!campagna) return;
+    setErroreLinkApprovazione(null);
     try {
+      const token = await assicuratiTokenApprovazione(
+        campagna.id,
+        campagna.approvalToken,
+      );
+      const url = urlApprovazioneDaToken(token);
+      if (token !== campagna.approvalToken) {
+        setCampagna({ ...campagna, approvalToken: token });
+      }
       await navigator.clipboard.writeText(url);
       setLinkCopiato(true);
       window.setTimeout(() => setLinkCopiato(false), 2200);
-    } catch {
-      // Ignora se clipboard non disponibile.
+    } catch (e) {
+      logErroreSupabaseDev("copia_link_approvazione", e);
+      setErroreLinkApprovazione(
+        messaggioErroreSupabase(e, "copia_link"),
+      );
     }
   }
 
@@ -758,6 +775,11 @@ export default function DettaglioCampagnaPage() {
             : "🔗 Copia Link Cliente per Approvazione"}
         </button>
       </div>
+      {erroreLinkApprovazione ? (
+        <p className="mt-2 text-sm text-red-600" role="alert">
+          {erroreLinkApprovazione}
+        </p>
+      ) : null}
 
       <nav
         className="mt-4 flex gap-1 border-b border-[var(--border)]"

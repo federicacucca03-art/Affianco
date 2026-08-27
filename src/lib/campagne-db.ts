@@ -95,6 +95,7 @@ export type CampaignRow = {
   estimated_cpm?: number | null;
   approved_at?: string | null;
   revision_notes?: string | null;
+  approval_token?: string | null;
   front_end_offer?: string | null;
   target_type?: string | null;
   target_age?: string | null;
@@ -380,6 +381,7 @@ export function mappaCampagnaDaRow(row: CampaignRow): Campagna {
       if (!n || n === "Nessuna nota aggiuntiva fornita.") return undefined;
       return n;
     })(),
+    approvalToken: row.approval_token?.trim() || undefined,
   };
 
   return fondiCampagnaConAssetLocali(base);
@@ -905,10 +907,10 @@ export async function salvaCampagnaCompleta(
 }
 
 const SELECT_LISTA =
-  "id, created_at, client_id, name, objective, status, daily_budget, max_sustainable_cpa, booking_service_value, show_up_rate, booking_channel, average_order_value, product_margin, average_receipt, store_margin, recovery_value, recovery_margin, recovery_discount, launch_budget, awareness_radius_km, estimated_cpm, approved_at, revision_notes, clients(id, name, elevator_pitch, average_ticket_value, closing_rate)";
+  "id, created_at, client_id, name, objective, status, daily_budget, max_sustainable_cpa, booking_service_value, show_up_rate, booking_channel, average_order_value, product_margin, average_receipt, store_margin, recovery_value, recovery_margin, recovery_discount, launch_budget, awareness_radius_km, estimated_cpm, approved_at, revision_notes, approval_token, clients(id, name, elevator_pitch, average_ticket_value, closing_rate)";
 
 const SELECT_DETTAGLIO =
-  "id, created_at, client_id, name, objective, status, daily_budget, max_sustainable_cpa, variante_a, variante_b, variante_c, page_id, form_id, settore, citta, raggio_km, eta_min, eta_max, titolo_annuncio, target_margin, booking_service_value, show_up_rate, booking_channel, booking_confirmation_policy, average_order_value, product_margin, average_receipt, store_margin, recovery_value, recovery_margin, recovery_discount, launch_budget, awareness_radius_km, estimated_cpm, front_end_offer, target_type, target_age, shipping_market, hero_product, approved_at, revision_notes, clients(id, name, elevator_pitch, average_ticket_value, closing_rate, website)";
+  "id, created_at, client_id, name, objective, status, daily_budget, max_sustainable_cpa, variante_a, variante_b, variante_c, page_id, form_id, settore, citta, raggio_km, eta_min, eta_max, titolo_annuncio, target_margin, booking_service_value, show_up_rate, booking_channel, booking_confirmation_policy, average_order_value, product_margin, average_receipt, store_margin, recovery_value, recovery_margin, recovery_discount, launch_budget, awareness_radius_km, estimated_cpm, front_end_offer, target_type, target_age, shipping_market, hero_product, approved_at, revision_notes, approval_token, clients(id, name, elevator_pitch, average_ticket_value, closing_rate, website)";
 
 /** Elenco campagne con join sul cliente, dalla più recente. */
 export async function leggiCampagneDaSupabase(): Promise<Campagna[]> {
@@ -1060,63 +1062,210 @@ export async function completaRevisioneCampagnaSuSupabase(
   }
 }
 
+function isApprovalTokenColumnMissingError(message: string): boolean {
+  const m = message.toLowerCase();
+  if (
+    /permission|denied|policy|row-level|rls|jwt|unauthorized|not authenticated|42501/.test(
+      m,
+    )
+  ) {
+    return false;
+  }
+  if (/column\s+[\w.]*(approval_token)[\w.]*\s+does not exist/i.test(message)) {
+    return true;
+  }
+  if (/could not find the 'approval_token' column/i.test(message)) {
+    return true;
+  }
+  return false;
+}
+
+function approvedAtDaRpc(data: unknown): string {
+  if (
+    data &&
+    typeof data === "object" &&
+    "approved_at" in data &&
+    typeof (data as { approved_at?: unknown }).approved_at === "string"
+  ) {
+    return (data as { approved_at: string }).approved_at;
+  }
+  return new Date().toISOString();
+}
+
+function campaignIdDaRpc(data: unknown): string | undefined {
+  if (
+    data &&
+    typeof data === "object" &&
+    "id" in data &&
+    typeof (data as { id?: unknown }).id === "string"
+  ) {
+    return (data as { id: string }).id;
+  }
+  return undefined;
+}
+
 /**
- * Lettura pubblica approval.
- * Preferisce RPC (post-cutover RLS); fallback tabella se RPC assente (pre-cutover).
- * SICUREZZA RESIDUA P1: UUID = capability fino a P4 token.
+ * Assicura un approval_token per link pubblico (owner).
+ * - Se già presente → riusa
+ * - Altrimenti RPC regenerate (crea/ruota)
+ * - Se schema P4 assente → ritorna campaignId (capability UUID pre-cutover)
  */
-export async function leggiCampagnaPerApprovazionePubblica(
-  id: string,
-): Promise<Campagna | null> {
-  const { data, error } = await supabase.rpc(
-    "get_campaign_for_public_approval",
-    { p_id: id },
+export async function assicuratiTokenApprovazione(
+  campaignId: string,
+  tokenEsistente?: string | null,
+): Promise<string> {
+  const existing = tokenEsistente?.trim();
+  if (existing) return existing;
+
+  const { data, error } = await supabase
+    .from("campaigns")
+    .select("approval_token")
+    .eq("id", campaignId)
+    .maybeSingle();
+
+  if (!error) {
+    const fromDb = (data as { approval_token?: string | null } | null)
+      ?.approval_token?.trim();
+    if (fromDb) return fromDb;
+  } else if (isApprovalTokenColumnMissingError(error.message)) {
+    // P4 code + P3 schema: UUID ancora capability.
+    return campaignId;
+  }
+
+  const { data: nuovo, error: regenErr } = await supabase.rpc(
+    "regenerate_campaign_approval_token",
+    { p_campaign_id: campaignId },
   );
 
-  if (!error) {
-    if (data == null) return null;
-    return mappaCampagnaDaRow(data as CampaignRow);
+  if (!regenErr && typeof nuovo === "string" && nuovo.trim()) {
+    return nuovo.trim();
   }
 
-  if (!isRpcMissingError(error.message)) {
-    throw new Error(error.message);
+  if (regenErr && isRpcMissingError(regenErr.message)) {
+    return campaignId;
   }
 
-  return leggiCampagnaDaSupabase(id);
+  if (regenErr) {
+    throw new Error(regenErr.message);
+  }
+
+  throw new Error(
+    "Impossibile generare il link di approvazione. Riprova tra poco.",
+  );
+}
+
+/** URL assoluto pagina pubblica approval (token o id pre-P4). */
+export function urlApprovazioneDaToken(token: string): string {
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "";
+  return `${origin}/approvazione/${token}`;
 }
 
 /**
- * APPROVED via RPC pubblica (fallback update diretto pre-cutover).
+ * Owner: rigenera token (invalida subito il vecchio link).
+ * Non grant ad anon (RPC authenticated-only).
  */
-export async function approvaCampagnaPubblica(id: string): Promise<string> {
-  const { data, error } = await supabase.rpc("approve_campaign_public", {
-    p_id: id,
+export async function rigeneraTokenApprovazione(
+  campaignId: string,
+): Promise<string> {
+  const { data, error } = await supabase.rpc(
+    "regenerate_campaign_approval_token",
+    { p_campaign_id: campaignId },
+  );
+  if (error) throw new Error(error.message);
+  if (typeof data !== "string" || !data.trim()) {
+    throw new Error("Token di approvazione non generato.");
+  }
+  return data.trim();
+}
+
+/**
+ * Lettura pubblica approval.
+ * Preferisce RPC token (P4). Fallback UUID RPC SOLO se RPC token assente
+ * (cutover: codice P4 + schema P3). Mai fallback su "not found".
+ */
+export async function leggiCampagnaPerApprovazionePubblica(
+  capability: string,
+): Promise<Campagna | null> {
+  const token = capability?.trim();
+  if (!token) return null;
+
+  const tokenRpc = await supabase.rpc(
+    "get_campaign_for_public_approval_token",
+    { p_token: token },
+  );
+
+  if (!tokenRpc.error) {
+    if (tokenRpc.data == null) return null;
+    return mappaCampagnaDaRow(tokenRpc.data as CampaignRow);
+  }
+
+  if (!isRpcMissingError(tokenRpc.error.message)) {
+    throw new Error(tokenRpc.error.message);
+  }
+
+  // Dual-path cutover: UUID capability ancora attiva finché RPC id esistono.
+  const idRpc = await supabase.rpc("get_campaign_for_public_approval", {
+    p_id: token,
   });
 
-  if (!error) {
-    const approvedAt =
-      data &&
-      typeof data === "object" &&
-      "approved_at" in data &&
-      typeof (data as { approved_at?: unknown }).approved_at === "string"
-        ? (data as { approved_at: string }).approved_at
-        : new Date().toISOString();
-    salvaAssetCampagnaLocale(id, { reviewStatus: "APPROVED" });
-    return approvedAt;
+  if (!idRpc.error) {
+    if (idRpc.data == null) return null;
+    return mappaCampagnaDaRow(idRpc.data as CampaignRow);
   }
 
-  if (!isRpcMissingError(error.message)) {
-    throw new Error(error.message);
+  if (!isRpcMissingError(idRpc.error.message)) {
+    throw new Error(idRpc.error.message);
   }
 
-  return approvaCampagnaSuSupabase(id);
+  return leggiCampagnaDaSupabase(token);
 }
 
 /**
- * REVISION_REQUESTED via RPC pubblica (fallback update diretto pre-cutover).
+ * APPROVED via RPC pubblica token (fallback UUID RPC solo se token RPC assente).
+ */
+export async function approvaCampagnaPubblica(
+  capability: string,
+): Promise<string> {
+  const token = capability.trim();
+  if (!token) throw new Error("Token di approvazione mancante.");
+
+  const tokenRpc = await supabase.rpc("approve_campaign_public_token", {
+    p_token: token,
+  });
+
+  if (!tokenRpc.error) {
+    const campaignId = campaignIdDaRpc(tokenRpc.data) ?? token;
+    salvaAssetCampagnaLocale(campaignId, { reviewStatus: "APPROVED" });
+    return approvedAtDaRpc(tokenRpc.data);
+  }
+
+  if (!isRpcMissingError(tokenRpc.error.message)) {
+    throw new Error(tokenRpc.error.message);
+  }
+
+  const idRpc = await supabase.rpc("approve_campaign_public", {
+    p_id: token,
+  });
+
+  if (!idRpc.error) {
+    salvaAssetCampagnaLocale(token, { reviewStatus: "APPROVED" });
+    return approvedAtDaRpc(idRpc.data);
+  }
+
+  if (!isRpcMissingError(idRpc.error.message)) {
+    throw new Error(idRpc.error.message);
+  }
+
+  return approvaCampagnaSuSupabase(token);
+}
+
+/**
+ * REVISION_REQUESTED via RPC pubblica token
+ * (fallback UUID RPC solo se token RPC assente).
  */
 export async function richiediRevisioneCampagnaPubblica(
-  id: string,
+  capability: string,
   note: string,
 ): Promise<string> {
   const revisionNotes = note.trim();
@@ -1127,31 +1276,62 @@ export async function richiediRevisioneCampagnaPubblica(
     throw new Error("Scrivi una nota di modifica concreta.");
   }
 
-  salvaAssetCampagnaLocale(id, {
-    revisionNotes,
-    reviewStatus: "REVISION_REQUESTED",
-  });
+  const token = capability.trim();
+  if (!token) throw new Error("Token di approvazione mancante.");
 
-  const { data, error } = await supabase.rpc(
-    "request_campaign_revision_public",
-    { p_id: id, p_notes: revisionNotes },
+  const tokenRpc = await supabase.rpc(
+    "request_campaign_revision_public_token",
+    { p_token: token, p_notes: revisionNotes },
   );
 
-  if (!error) {
+  if (!tokenRpc.error) {
+    const campaignId = campaignIdDaRpc(tokenRpc.data) ?? token;
+    salvaAssetCampagnaLocale(campaignId, {
+      revisionNotes,
+      reviewStatus: "REVISION_REQUESTED",
+    });
     if (
-      data &&
-      typeof data === "object" &&
-      "revision_notes" in data &&
-      typeof (data as { revision_notes?: unknown }).revision_notes === "string"
+      tokenRpc.data &&
+      typeof tokenRpc.data === "object" &&
+      "revision_notes" in tokenRpc.data &&
+      typeof (tokenRpc.data as { revision_notes?: unknown }).revision_notes ===
+        "string"
     ) {
-      return (data as { revision_notes: string }).revision_notes;
+      return (tokenRpc.data as { revision_notes: string }).revision_notes;
     }
     return revisionNotes;
   }
 
-  if (!isRpcMissingError(error.message)) {
-    throw new Error(error.message);
+  if (!isRpcMissingError(tokenRpc.error.message)) {
+    throw new Error(tokenRpc.error.message);
   }
 
-  return richiediRevisioneCampagnaSuSupabase(id, revisionNotes);
+  salvaAssetCampagnaLocale(token, {
+    revisionNotes,
+    reviewStatus: "REVISION_REQUESTED",
+  });
+
+  const idRpc = await supabase.rpc("request_campaign_revision_public", {
+    p_id: token,
+    p_notes: revisionNotes,
+  });
+
+  if (!idRpc.error) {
+    if (
+      idRpc.data &&
+      typeof idRpc.data === "object" &&
+      "revision_notes" in idRpc.data &&
+      typeof (idRpc.data as { revision_notes?: unknown }).revision_notes ===
+        "string"
+    ) {
+      return (idRpc.data as { revision_notes: string }).revision_notes;
+    }
+    return revisionNotes;
+  }
+
+  if (!isRpcMissingError(idRpc.error.message)) {
+    throw new Error(idRpc.error.message);
+  }
+
+  return richiediRevisioneCampagnaSuSupabase(token, revisionNotes);
 }
