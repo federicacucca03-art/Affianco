@@ -22,6 +22,10 @@ import { BarraBreakEven } from "@/components/nuova-contatti/BarraBreakEven";
 import { alertFattibilitaNicchia } from "@/lib/fattibilita-nicchia";
 import type { TargetType } from "@/types/campagne";
 import { riferimentoAstaMeta, type SettoreIntel } from "@/lib/sector-intel";
+import {
+  type ConversionRateSource,
+  tassoConversioneLeadsValido,
+} from "@/lib/conversion-rate";
 
 type Props = {
   config: ConfigurazioneContatti;
@@ -50,6 +54,8 @@ type Props = {
   percorsoRetargeting?: boolean;
   /** UX moderna AWARENESS / apertura (Step 1–2). */
   percorsoAwareness?: boolean;
+  percorsoLeads?: boolean;
+  conversionRateSource?: ConversionRateSource;
 };
 
 export function PannelloPerche({
@@ -73,6 +79,8 @@ export function PannelloPerche({
   settoreIntel = null,
   percorsoRetargeting = false,
   percorsoAwareness = false,
+  percorsoLeads = false,
+  conversionRateSource = "ESTIMATED",
 }: Props) {
   const isBookings = objective === "BOOKINGS";
   const isInStore = objective === "IN_STORE";
@@ -106,7 +114,12 @@ export function PannelloPerche({
     ? calculatePersoneUnicheAwareness(budgetLancio, cpmLocale)
     : 0;
   const numericScontrino = Number(scontrinoMedio) || 0;
-  const numericTasso = Number(tassoConversione) || (isBookings ? 75 : 10);
+  const tassoLeads = percorsoLeads
+    ? tassoConversioneLeadsValido(conversionRateSource, tassoConversione)
+    : null;
+  const numericTasso = percorsoLeads
+    ? (tassoLeads ?? 0)
+    : Number(tassoConversione) || (isBookings ? 75 : 10);
   const margineNegozio =
     Number(productMargin) ||
     (isEcommerce ? 60 : isRetargeting ? 50 : 40);
@@ -170,6 +183,7 @@ export function PannelloPerche({
     !isEcommerce &&
     !isAwareness &&
     numericScontrino > 0 &&
+    !(percorsoLeads && conversionRateSource === "UNKNOWN") &&
     (ltvEconomics
       ? ltvEconomics.breakEvenCpl > 0 && ltvEconomics.cplSostenibileLtv > 0
       : breakEven > 0 && maxCpl > 0);

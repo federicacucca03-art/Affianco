@@ -23,7 +23,53 @@ const CTA_GENERICO =
   /(?:^|[.!?]\s*)(?:scopri di più|clicca qui|maggiori info|saperne di più|clicca per)(?:\s|$|[.!?])/i;
 
 const PAROLE_BENEFICIO =
-  /beneficio|promo|gratis|gratuit|sconto|subito|concret|risolv|aiut|visibil|invisib|senza ferrett|agevolat|tasso zero|scansione|check-?up/i;
+  /beneficio|promo|gratis|gratuit|sconto|subito|concret|risolv|aiut|visibil|agevolat|check-?up/i;
+
+const TERMINI_RISCHIO_INVENTATI = [
+  { pattern: /allineator/i, label: "allineatori" },
+  { pattern: /ferrett/i, label: "ferretti" },
+  { pattern: /scansione\s*3\s*d/i, label: "scansione 3D" },
+  { pattern: /\bgratuit/i, label: "gratuità" },
+  { pattern: /\bpromo\b/i, label: "promo" },
+  { pattern: /\bsconto/i, label: "sconti" },
+  { pattern: /tasso\s*zero/i, label: "tasso zero" },
+  { pattern: /invisibil/i, label: "invisibili" },
+];
+
+function analizzaCoerenzaOfferta(
+  testo: string,
+  brief: string,
+  offerta: string,
+  settore: string,
+): ControlloMessaggioVoce | null {
+  const t = testo.trim();
+  if (!t) return null;
+
+  const lower = t.toLowerCase();
+
+  for (const termine of TERMINI_RISCHIO_INVENTATI) {
+    if (!termine.pattern.test(lower)) continue;
+    const inSorgente =
+      termine.pattern.test(brief) ||
+      termine.pattern.test(offerta) ||
+      termine.pattern.test(settore);
+    if (!inSorgente) {
+      return {
+        id: "coerenza",
+        label: "Coerenza offerta",
+        emoji: "🟡",
+        messaggio: "Contenuto non coerente con l'offerta",
+      };
+    }
+  }
+
+  return {
+    id: "coerenza",
+    label: "Coerenza offerta",
+    emoji: "🟢",
+    messaggio: "Allineato a brief e offerta forniti",
+  };
+}
 
 function contaFrasi(testo: string): number {
   const pulito = testo.trim();
@@ -181,6 +227,8 @@ export function analizzaControlloMessaggioLeads(input: {
   headline?: string;
   citta: string;
   frontEndOffer: string;
+  brief?: string;
+  settore?: string;
 }): ControlloMessaggioRisultato {
   const testo = input.testoVarianteA ?? "";
   const { hookOk, cittaOk, offertaOk } = dettaglioHookMobileLeads(
@@ -261,8 +309,15 @@ export function analizzaControlloMessaggioLeads(input: {
   );
   const { voce: lunghezzaVoce, nota } = analizzaLunghezza(testo);
   const headlineVoce = analizzaHeadlineMobile(input.headline ?? "");
+  const coerenzaVoce = analizzaCoerenzaOfferta(
+    testo,
+    input.brief ?? "",
+    input.frontEndOffer,
+    input.settore ?? "",
+  );
 
   const voci = [hookVoce, beneficioVoce, ctaVoce, lunghezzaVoce];
+  if (coerenzaVoce) voci.push(coerenzaVoce);
   if (headlineVoce) voci.push(headlineVoce);
 
   return { voci, notaLunghezza: nota };

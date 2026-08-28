@@ -42,6 +42,7 @@ export type SavedCampaign = {
   status: string;
   dataCreazione: string;
   frontEndOffer: string;
+  revisionNotes?: string;
 };
 
 function storageDisponibile(): boolean {

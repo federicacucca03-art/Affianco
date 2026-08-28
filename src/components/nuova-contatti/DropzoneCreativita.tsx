@@ -682,8 +682,7 @@ export function DropzoneCreativita({
           <p className="text-sm leading-relaxed text-[var(--ink)]">
             💡 Regola d&apos;oro per il Business Locale: Le foto reali della
             vetrina/ingresso, del titolare, del team o dei prodotti/piatti
-            punta generano un Costo per Visita (CPA) fino al 40% inferiore
-            rispetto ai volantini o alle grafiche generiche.
+            puntano su autenticità e credibilità rispetto a grafiche generiche.
           </p>
         </div>
       ) : isBookings ? (
@@ -710,8 +709,7 @@ export function DropzoneCreativita({
           <p className="text-sm leading-relaxed text-[var(--ink)]">
             💡 Regola d&apos;oro per il Business Locale: Le foto reali del
             titolare, del team, della sede o dei lavori finiti (prima/dopo)
-            generano un costo per contatto (CPL) fino al 40% inferiore rispetto
-            ai volantini o alle grafiche Canva.
+            possono risultare più credibili rispetto a immagini generiche.
           </p>
         </div>
       )}

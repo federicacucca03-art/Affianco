@@ -687,7 +687,7 @@ export default function DettaglioCampagnaPage() {
             >
               {revisioneInChiusura
                 ? "Aggiornamento…"
-                : "✅ Segna modifiche come completate"}
+                : "✅ Modifiche completate — Rimanda in approvazione"}
             </button>
             {erroreRevisione ? (
               <p className="mt-2 text-xs text-[#C45C5C]">{erroreRevisione}</p>

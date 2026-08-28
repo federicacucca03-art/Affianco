@@ -455,8 +455,8 @@ export default function ApprovazioneCampagnaPage() {
                 ) : (
                   <>
                     <span className="font-medium">{cplSostenibile}€</span> a
-                    contatto (Calcolata per garantire il tuo margine di guadagno
-                    su ogni vendita).
+                    contatto (Soglia economica di riferimento calcolata sui dati
+                    inseriti).
                   </>
                 )}
               </p>
@@ -465,7 +465,10 @@ export default function ApprovazioneCampagnaPage() {
         </section>
 
         <div className="mt-6">
-          <AnteprimaFeedApprovazione campagna={campagna} />
+          <AnteprimaFeedApprovazione
+            campagna={campagna}
+            approvalToken={approvalCapability}
+          />
         </div>
 
         <div className="mt-8 space-y-3 pb-8">

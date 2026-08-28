@@ -25,6 +25,10 @@ import {
 } from "@/data/defaults-contatti";
 import { generaVariantiCopy, titoloAnnuncioEcommerce, titoloAnnuncioLeads, type TonoVoce } from "@/data/varianti-copy";
 import { pulisciNomeAttivitaPubblico } from "@/lib/copy-pubblico";
+import {
+  type ConversionRateSource,
+  tassoConversioneLeadsValido,
+} from "@/lib/conversion-rate";
 import { leggiBozzaOnboarding } from "@/data/clienti-store";
 import { saveCampaign, saveClient, getClientById, getCampaigns } from "@/utils/clientStorage";
 import type { Cliente } from "@/types/clienti";
@@ -49,7 +53,7 @@ import {
   type CreativitaAsset,
   type EcommerceCreativoFormato,
 } from "@/lib/creativita";
-import { salvaCampagnaCompleta, leggiCampagnaDaSupabase, assicuratiTokenApprovazione, urlApprovazioneDaToken } from "@/lib/campagne-db";
+import { salvaCampagnaCompleta, leggiCampagnaDaSupabase, assicuratiTokenApprovazione, urlApprovazioneDaToken, completaRevisioneCampagnaSuSupabase } from "@/lib/campagne-db";
 import { messaggioAiUserFacing } from "@/lib/anthropic-messaggi";
 import {
   logErroreSupabaseDev,
@@ -343,6 +347,7 @@ export function PercorsoContatti({
   const [copyAiErrore, setCopyAiErrore] = useState<string | null>(null);
   const stepPrecedenteRef = useRef<WizardStep | null>(null);
   const copyAiAbortRef = useRef<AbortController | null>(null);
+  const copyAiGiaEseguitoRef = useRef(false);
   const [contesto, setContesto] = useState<{
     settore?: string;
     citta?: string;
@@ -369,8 +374,10 @@ export function PercorsoContatti({
             : 1500,
   );
   const [tassoConversione, setTassoConversione] = useState<number | string>(
-    isBookings ? 75 : 10,
+    isBookings ? 75 : "",
   );
+  const [conversionRateSource, setConversionRateSource] =
+    useState<ConversionRateSource>("ESTIMATED");
   const [productMargin, setProductMargin] = useState<number | string>(
     isEcommerce ? 60 : isInStore ? 40 : 50,
   );
@@ -458,6 +465,14 @@ export function PercorsoContatti({
   const [statusApprovazioneGrezzo, setStatusApprovazioneGrezzo] = useState<
     string | null
   >(null);
+  const [revisionNotesCliente, setRevisionNotesCliente] = useState<
+    string | null
+  >(null);
+  const [rimandaApprovazioneInCorso, setRimandaApprovazioneInCorso] =
+    useState(false);
+  const [erroreRimandaApprovazione, setErroreRimandaApprovazione] = useState<
+    string | null
+  >(null);
 
   const statoApprovazioneLeads: StatoApprovazioneLeads = useMemo(
     () =>
@@ -478,6 +493,7 @@ export function PercorsoContatti({
       const campagna = await leggiCampagnaDaSupabase(targetId);
       if (campagna?.status) {
         setStatusApprovazioneGrezzo(campagna.status);
+        setRevisionNotesCliente(campagna.revisionNotes ?? null);
         return;
       }
     } catch {
@@ -485,6 +501,7 @@ export function PercorsoContatti({
     }
     const locale = getCampaigns().find((c) => c.id === targetId);
     setStatusApprovazioneGrezzo(locale?.status ?? "DRAFT");
+    setRevisionNotesCliente(locale?.revisionNotes ?? null);
   }, [campagnaIdSalvata]);
 
   useEffect(() => {
@@ -620,7 +637,8 @@ export function PercorsoContatti({
               ? 60
               : 1500,
     );
-    setTassoConversione(isBookings ? 75 : 10);
+    setTassoConversione(isBookings ? 75 : "");
+    setConversionRateSource("ESTIMATED");
     setProductMargin(isEcommerce ? 60 : isInStore ? 40 : 50);
     setFulfillmentCost(5);
     setEcommerceLtvAttivo(false);
@@ -680,93 +698,6 @@ export function PercorsoContatti({
     }
   }, [searchParams, objectiveEffettivo, currentSlug, isEcommerce, isRetargeting, isInStore, isBookings]);
 
-  useEffect(() => {
-    if (variantiManuali) return;
-
-    const rigenerate = generaVariantiCopy({
-      settore: contesto.settore,
-      nomeCliente: config.nomeCliente,
-      citta: contesto.citta ?? "",
-      elevatorPitch,
-      objective: objectiveEffettivo,
-      frontEndOffer,
-      targetType,
-      tono: tonoVoce,
-      bookingChannel: isBookings ? bookingChannel : undefined,
-      postiDisponibiliSettimana: isPercorsoBookings
-        ? postiDisponibiliSettimana
-        : undefined,
-      heroProduct: isEcommerce
-        ? heroProduct.trim() || elevatorPitch.trim()
-        : undefined,
-      sitoWeb: isAwareness ? sitoWeb : undefined,
-    });
-    const servizio = estraiServizioPrincipale(
-      [
-        elevatorPitch.trim(),
-        frontEndOffer.trim(),
-        isEcommerce ? heroProduct.trim() || elevatorPitch.trim() : "",
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      isEcommerce
-        ? contesto.settore?.trim() || "e-commerce"
-        : contesto.settore,
-    );
-    const citta = (contesto.citta ?? "").trim();
-    const hero =
-      heroProduct.trim() || elevatorPitch.trim() || "";
-    const titoloAnnuncio = isEcommerce
-      ? titoloAnnuncioEcommerce(hero, frontEndOffer)
-      : objectiveEffettivo === "LEADS"
-        ? titoloAnnuncioLeads(
-            servizio,
-            citta,
-            contesto.settore ?? "",
-            frontEndOffer,
-            elevatorPitch,
-          )
-        : citta
-          ? `${servizio.charAt(0).toUpperCase()}${servizio.slice(1)} a ${citta}`
-          : servizio.charAt(0).toUpperCase() + servizio.slice(1);
-
-    setConfig((prev) => {
-      if (
-        prev.varianteA === rigenerate[0].testo &&
-        prev.varianteB === rigenerate[1].testo &&
-        prev.varianteC === rigenerate[2].testo &&
-        prev.titoloAnnuncio === titoloAnnuncio
-      ) {
-        return prev;
-      }
-      return {
-        ...prev,
-        varianteA: rigenerate[0].testo,
-        varianteB: rigenerate[1].testo,
-        varianteC: rigenerate[2].testo,
-        titoloAnnuncio,
-      };
-    });
-  }, [
-    elevatorPitch,
-    frontEndOffer,
-    heroProduct,
-    targetType,
-    tonoVoce,
-    config.nomeCliente,
-    contesto.settore,
-    contesto.citta,
-    variantiManuali,
-    objectiveEffettivo,
-    bookingChannel,
-    isBookings,
-    isPercorsoBookings,
-    postiDisponibiliSettimana,
-    isEcommerce,
-    isAwareness,
-    sitoWeb,
-  ]);
-
   const etichetteVarianti = useMemo(
     () =>
       generaVariantiCopy({
@@ -809,7 +740,16 @@ export function PercorsoContatti({
 
   function cambiaTonoVoce(tono: TonoVoce) {
     setTonoVoce(tono);
-    setVariantiManuali(false);
+  }
+
+  function rigeneraVariantiCopy() {
+    if (variantiManuali) {
+      const ok = window.confirm(
+        "Rigenerando perderai le modifiche manuali. Continuare?",
+      );
+      if (!ok) return;
+    }
+    void generaCopyConAi();
   }
 
   function applicaCopyFallbackStatico() {
@@ -947,13 +887,22 @@ export function PercorsoContatti({
     stepPrecedenteRef.current = wizardStep;
     if (wizardStep !== 3) return;
     if (precedente === 3) return;
+
+    const haCopy = Boolean(
+      (config.varianteA ?? "").trim() ||
+        (config.varianteB ?? "").trim() ||
+        (config.varianteC ?? "").trim(),
+    );
+    if (copyAiGiaEseguitoRef.current || haCopy) return;
+    copyAiGiaEseguitoRef.current = true;
     void generaCopyConAi();
+
     return () => {
       if (copyAiAbortRef.current) {
         copyAiAbortRef.current.abort("navigate");
       }
     };
-    // Solo all'ingresso nello step 3: i dati del form sono letti al momento della chiamata.
+    // Solo all'ingresso nello step 3, una volta per sessione se il copy è vuoto.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wizardStep]);
 
@@ -982,6 +931,7 @@ export function PercorsoContatti({
           : undefined,
       objective: objectiveEffettivo,
       bookingChannel: isBookings ? bookingChannel : undefined,
+      conversionRateSource: isPercorsoLeads ? conversionRateSource : undefined,
     });
   }, [
     config.budgetGiornaliero,
@@ -1001,6 +951,8 @@ export function PercorsoContatti({
     objectiveEffettivo,
     isBookings,
     bookingChannel,
+    isPercorsoLeads,
+    conversionRateSource,
   ]);
 
   function aggiornaConfig(prossimo: ConfigurazioneContatti) {
@@ -1050,8 +1002,12 @@ export function PercorsoContatti({
   const diagnosi = useMemo(
     () => {
       const ticket = Number(scontrinoMedio) || 0;
-      const showUp =
-        Number(tassoConversione) || (isBookings ? 75 : 10);
+      const tassoLeadsDiag = isPercorsoLeads
+        ? tassoConversioneLeadsValido(conversionRateSource, tassoConversione)
+        : null;
+      const showUp = isPercorsoLeads
+        ? (tassoLeadsDiag ?? 0)
+        : Number(tassoConversione) || (isBookings ? 75 : 10);
       const cpaBookings = isBookings
         ? calculateMaxSustainableBookingCpa(ticket, showUp, targetMargin)
         : 0;
@@ -1294,6 +1250,8 @@ export function PercorsoContatti({
       bookingChannel,
       scontrinoMedio,
       tassoConversione,
+      conversionRateSource,
+      isPercorsoLeads,
       targetMargin,
       productMargin,
       fulfillmentCost,
@@ -1507,7 +1465,12 @@ export function PercorsoContatti({
       const campaignId = campagnaIdStabileRef.current;
 
       const ticket = Number(scontrinoMedio) || 0;
-      const tasso = Number(tassoConversione) || (isBookings ? 75 : 10);
+      const tassoLeads = isPercorsoLeads
+        ? tassoConversioneLeadsValido(conversionRateSource, tassoConversione)
+        : null;
+      const tasso = isPercorsoLeads
+        ? tassoLeads
+        : Number(tassoConversione) || (isBookings ? 75 : 10);
       const margineProdotto =
         Number(productMargin) || (isEcommerce ? 60 : isInStore ? 40 : 50);
       const costoFulfillment = Number(fulfillmentCost) || 0;
@@ -1533,13 +1496,20 @@ export function PercorsoContatti({
                   ecommerceLtvAttivo,
                 )
               : (() => {
+                  if (isPercorsoLeads && tassoLeads == null) {
+                    return undefined;
+                  }
                   const base = isBookings
                     ? calculateMaxSustainableBookingCpa(
                         ticket,
-                        tasso,
+                        tasso ?? 0,
                         targetMargin,
                       )
-                    : calculateMaxSustainableCpl(ticket, tasso, targetMargin);
+                    : calculateMaxSustainableCpl(
+                        ticket,
+                        tasso ?? 0,
+                        targetMargin,
+                      );
                   if (
                     !ltvAttivo ||
                     isEcommerce ||
@@ -1555,7 +1525,7 @@ export function PercorsoContatti({
                     anniPermanenza: Number(anniPermanenza) || 1,
                     loyaltyPercent: Number(loyaltyPercent) || 0,
                     margineLordoPercent: Number(margineLordoLtv) || 50,
-                    tassoConversionePercent: tasso,
+                    tassoConversionePercent: tasso ?? 0,
                     targetMarginPercent: targetMargin,
                   });
                   return ltv.cplSostenibileLtv > 0
@@ -1584,11 +1554,13 @@ export function PercorsoContatti({
         closingRate:
           isEcommerce || isInStore || isRetargeting || isAwareness
             ? undefined
-            : tasso,
+            : tassoLeads != null
+              ? tassoLeads
+              : undefined,
         targetMargin: isRetargeting || isAwareness ? undefined : targetMargin,
         objective: objectiveEffettivo,
         bookingServiceValue: isBookings ? ticket || undefined : undefined,
-        showUpRate: isBookings ? tasso : undefined,
+        showUpRate: isBookings ? (tasso ?? 75) : undefined,
         bookingChannel: isBookings ? bookingChannel : undefined,
         bookingConfirmationPolicy: isBookings
           ? bookingConfirmationPolicy
@@ -1622,6 +1594,7 @@ export function PercorsoContatti({
         targetType,
         targetAge,
         creativitaMeta: creativitaToMeta(creativita),
+        creativitaAssets: creativita,
       });
 
       const clientIdSalvato = persistiClienteSeRichiesto();
@@ -1695,6 +1668,25 @@ export function PercorsoContatti({
       logErroreSupabaseDev("copia_link_approvazione", e);
     } finally {
       setLinkApprovazioneInCorso(false);
+    }
+  }
+
+  async function rimandaInApprovazione() {
+    if (rimandaApprovazioneInCorso) return;
+    setRimandaApprovazioneInCorso(true);
+    setErroreRimandaApprovazione(null);
+    try {
+      const id = await assicuraCampagnaSalvata();
+      await completaRevisioneCampagnaSuSupabase(id);
+      setStatusApprovazioneGrezzo("DRAFT");
+      setRevisionNotesCliente(null);
+      await caricaStatusApprovazione(id);
+    } catch (e) {
+      setErroreRimandaApprovazione(
+        messaggioErroreSupabase(e, "salva"),
+      );
+    } finally {
+      setRimandaApprovazioneInCorso(false);
     }
   }
 
@@ -1974,6 +1966,7 @@ export function PercorsoContatti({
             ) : (
               <>
                 {wizardStep === 6 ? (
+                  <>
                   <CardLinkApprovazione
                     onCopia={() => void copiaLinkApprovazione()}
                     inCorso={linkApprovazioneInCorso}
@@ -2036,6 +2029,39 @@ export function PercorsoContatti({
                         : undefined
                     }
                   />
+                  {statoApprovazioneLeads === "modifiche_richieste" ? (
+                    <section className="rounded-[var(--radius)] border border-[#f5c9b8] bg-[#fff4f0] p-5 shadow-[var(--shadow-soft)]">
+                      <h2 className="text-sm font-medium text-[var(--ink)]">
+                        Feedback del cliente
+                      </h2>
+                      {revisionNotesCliente?.trim() ? (
+                        <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[var(--ink)]">
+                          {revisionNotesCliente.trim()}
+                        </p>
+                      ) : (
+                        <p className="mt-3 text-sm text-[var(--ink-muted)]">
+                          Il cliente ha richiesto modifiche senza lasciare una
+                          nota testuale.
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void rimandaInApprovazione()}
+                        disabled={rimandaApprovazioneInCorso}
+                        className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                      >
+                        {rimandaApprovazioneInCorso
+                          ? "Invio in corso…"
+                          : "Modifiche completate — Rimanda in approvazione"}
+                      </button>
+                      {erroreRimandaApprovazione ? (
+                        <p className="mt-2 text-sm text-[#C45C5C]">
+                          {erroreRimandaApprovazione}
+                        </p>
+                      ) : null}
+                    </section>
+                  ) : null}
+                  </>
                 ) : null}
               <FormConfigurazione
                 key={
@@ -2100,6 +2126,8 @@ export function PercorsoContatti({
                 tassoConversione={tassoConversione}
                 onCambiaScontrinoMedio={setScontrinoMedio}
                 onCambiaTassoConversione={setTassoConversione}
+                conversionRateSource={conversionRateSource}
+                onCambiaConversionRateSource={setConversionRateSource}
                 elevatorPitch={elevatorPitch}
                 onCambiaElevatorPitch={(valore) => {
                   setElevatorPitch(valore);
@@ -2155,6 +2183,8 @@ export function PercorsoContatti({
                 onCambiaDataEventoApertura={setDataEventoApertura}
                 tonoVoce={tonoVoce}
                 onCambiaTonoVoce={cambiaTonoVoce}
+                onRigeneraVarianti={rigeneraVariantiCopy}
+                copyAiLoading={copyAiLoading}
                 targetMargin={targetMargin}
                 onCambiaTargetMargin={setTargetMargin}
                 objective={objectiveEffettivo}
@@ -2202,6 +2232,7 @@ export function PercorsoContatti({
                     ? statoApprovazioneLeads
                     : undefined
                 }
+                revisionNotesCliente={revisionNotesCliente}
               />
               </>
             )}
@@ -2310,6 +2341,8 @@ export function PercorsoContatti({
                   loyaltyPercent={loyaltyPercent}
                   percorsoRetargeting={isPercorsoRetargeting}
                   percorsoAwareness={isPercorsoAwareness}
+                  percorsoLeads={isPercorsoLeads}
+                  conversionRateSource={conversionRateSource}
                   margineLordoLtv={margineLordoLtv}
                   targetType={targetType}
                   launchBudget={launchBudget}

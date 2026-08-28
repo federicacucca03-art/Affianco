@@ -35,6 +35,7 @@ type Props = {
   /** Layout step 6 campagna pronta (BOOKINGS e futuri percorsi). */
   layoutCampagnaPronta?: boolean;
   statoApprovazione?: StatoApprovazioneLeads;
+  revisionNotesCliente?: string | null;
 };
 
 function descrizioneCsvObjective(
@@ -75,6 +76,7 @@ export function MetaAdsImportCode({
   layoutLeads = false,
   layoutCampagnaPronta = false,
   statoApprovazione,
+  revisionNotesCliente = null,
 }: Props) {
   const usaLayoutCampagnaPronta = layoutCampagnaPronta || layoutLeads;
   const [copiato, setCopiato] = useState(false);
@@ -126,6 +128,7 @@ export function MetaAdsImportCode({
   }
 
   const approvata = statoApprovazione === "approvata";
+  const revisioneRichiesta = statoApprovazione === "modifiche_richieste";
   const mostraWarningApprovazione =
     usaLayoutCampagnaPronta &&
     statoApprovazione != null &&
@@ -189,8 +192,15 @@ export function MetaAdsImportCode({
           {mostraWarningApprovazione ? (
             <div className="mb-4 rounded-xl border border-[#f5e0a8] bg-[#fff9e8] px-4 py-3.5">
               <p className="text-sm font-medium text-[var(--ink)]">
-                La campagna non è ancora approvata dal cliente.
+                {revisioneRichiesta
+                  ? "Il cliente ha richiesto delle modifiche."
+                  : "La campagna non è ancora approvata dal cliente."}
               </p>
+              {revisioneRichiesta && revisionNotesCliente?.trim() ? (
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[var(--ink-muted)]">
+                  {revisionNotesCliente.trim()}
+                </p>
+              ) : null}
             </div>
           ) : null}
 

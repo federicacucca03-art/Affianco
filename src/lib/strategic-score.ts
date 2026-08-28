@@ -1,4 +1,5 @@
 import type { NicheBenchmark } from "@/lib/benchmarks";
+import type { ConversionRateSource } from "@/lib/conversion-rate";
 import type { BookingChannel, CampagnaObjective } from "@/types/campagne";
 
 export type StrategicScoreInput = {
@@ -15,6 +16,8 @@ export type StrategicScoreInput = {
   destinationUrl?: string;
   objective?: CampagnaObjective;
   bookingChannel?: BookingChannel;
+  /** LEADS: provenienza tasso conversione (non penalizza lo score se UNKNOWN). */
+  conversionRateSource?: ConversionRateSource;
 };
 
 export type StrategicScoreResult = {
@@ -134,6 +137,18 @@ export function calculateStrategicScore(
     );
   }
 
+  const isLeads =
+    !input.objective || input.objective === "LEADS";
+  if (isLeads && input.conversionRateSource === "UNKNOWN") {
+    suggestions.push(
+      "⚠️ Dato economico mancante: serve il tasso di conversione per una soglia CPL affidabile.",
+    );
+  } else if (isLeads && input.conversionRateSource === "ESTIMATED") {
+    suggestions.push(
+      "ℹ️ Calcolo basato su una stima — sostituisci con dati reali appena disponibili.",
+    );
+  }
+
   let tone: StrategicScoreResult["tone"] = "orange";
   let label = "🔴 Rischio spreco budget";
 
@@ -142,7 +157,7 @@ export function calculateStrategicScore(
     label = "🟢 Pronta per il lancio";
   } else if (score >= 40) {
     tone = "yellow";
-    label = "🟡 Bozza pronta - Inserisci i dati del cliente";
+    label = "🟡 Bozza pronta — Completa gli identificativi Meta";
   }
 
   return {

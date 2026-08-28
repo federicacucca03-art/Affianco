@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import type {
   BookingChannel,
@@ -20,6 +20,10 @@ import { analizzaControlloMessaggioEcommerce } from "@/lib/controllo-messaggio-e
 import { analizzaControlloMessaggioInstore } from "@/lib/controllo-messaggio-instore";
 import { analizzaControlloMessaggioRetargeting } from "@/lib/controllo-messaggio-retargeting";
 import { analizzaControlloMessaggioAwareness } from "@/lib/controllo-messaggio-awareness";
+import {
+  type ConversionRateSource,
+  tassoConversioneLeadsValido,
+} from "@/lib/conversion-rate";
 import { ControlloMessaggio } from "@/components/nuova-contatti/ControlloMessaggio";
 import { ChevronDown } from "lucide-react";
 import { MetaAdsImportCode } from "@/components/nuova-contatti/MetaAdsImportCode";
@@ -99,6 +103,8 @@ type Props = {
   tassoConversione: number | string;
   onCambiaScontrinoMedio: (valore: number | string) => void;
   onCambiaTassoConversione: (valore: number | string) => void;
+  conversionRateSource?: ConversionRateSource;
+  onCambiaConversionRateSource?: (valore: ConversionRateSource) => void;
   elevatorPitch: string;
   onCambiaElevatorPitch: (valore: string) => void;
   sitoWeb: string;
@@ -123,6 +129,8 @@ type Props = {
   onCambiaDataEventoApertura?: (valore: string) => void;
   tonoVoce?: TonoVoce;
   onCambiaTonoVoce?: (valore: TonoVoce) => void;
+  onRigeneraVarianti?: () => void;
+  copyAiLoading?: boolean;
   targetMargin: 30 | 50 | 70;
   onCambiaTargetMargin: (valore: 30 | 50 | 70) => void;
   objective?: CampagnaObjective;
@@ -181,6 +189,7 @@ type Props = {
   copyPreparazioneNota?: string | null;
   /** LEADS step 6: stato approvazione cliente per export Meta. */
   statoApprovazioneLeads?: StatoApprovazioneLeads;
+  revisionNotesCliente?: string | null;
   /** BOOKINGS prenotazioni: posti settimana (solo UI, non persistito). */
   postiDisponibiliSettimana?: string;
   onCambiaPostiDisponibiliSettimana?: (valore: string) => void;
@@ -347,6 +356,8 @@ export function FormConfigurazione({
   tassoConversione,
   onCambiaScontrinoMedio,
   onCambiaTassoConversione,
+  conversionRateSource = "ESTIMATED",
+  onCambiaConversionRateSource,
   elevatorPitch,
   onCambiaElevatorPitch,
   sitoWeb,
@@ -367,6 +378,8 @@ export function FormConfigurazione({
   onCambiaDataEventoApertura,
   tonoVoce = "diretto",
   onCambiaTonoVoce,
+  onRigeneraVarianti,
+  copyAiLoading = false,
   targetMargin,
   onCambiaTargetMargin,
   objective = "LEADS",
@@ -412,9 +425,40 @@ export function FormConfigurazione({
   copyInPreparazione = false,
   copyPreparazioneNota = null,
   statoApprovazioneLeads,
+  revisionNotesCliente = null,
   postiDisponibiliSettimana = "",
   onCambiaPostiDisponibiliSettimana,
 }: Props) {
+  const [leadRicevuti, setLeadRicevuti] = useState<number | string>("");
+  const [clientiAcquisiti, setClientiAcquisiti] = useState<number | string>("");
+
+  function selezionaConversionRateSource(source: ConversionRateSource) {
+    onCambiaConversionRateSource?.(source);
+    if (source === "UNKNOWN") {
+      onCambiaTassoConversione("");
+      setLeadRicevuti("");
+      setClientiAcquisiti("");
+    }
+  }
+
+  function aggiornaCalcolatoreConversione(
+    lead: number | string,
+    clienti: number | string,
+  ) {
+    const l = Number(lead);
+    const c = Number(clienti);
+    if (
+      Number.isFinite(l) &&
+      l > 0 &&
+      Number.isFinite(c) &&
+      c >= 0 &&
+      c <= l
+    ) {
+      const pct = Math.round((c / l) * 1000) / 10;
+      onCambiaTassoConversione(pct);
+    }
+  }
+
   function aggiorna<K extends keyof ConfigurazioneContatti>(
     chiave: K,
     valore: ConfigurazioneContatti[K],
@@ -503,7 +547,12 @@ export function FormConfigurazione({
     objective: objectiveEffettivo,
   });
   const valoreVisita = Number(scontrinoMedio) || 0;
-  const showUp = Number(tassoConversione) || (isBookings ? 75 : 10);
+  const tassoLeads = isPercorsoLeads
+    ? tassoConversioneLeadsValido(conversionRateSource, tassoConversione)
+    : null;
+  const showUp = isPercorsoLeads
+    ? (tassoLeads ?? 0)
+    : Number(tassoConversione) || (isBookings ? 75 : 10);
   const margineProdotto =
     Number(productMargin) ||
     (isEcommerce ? 60 : isInStore ? 40 : isRetargeting ? 50 : 50);
@@ -576,7 +625,11 @@ export function FormConfigurazione({
   const margineLordoPerLtv = isEcommerce || isInStore
     ? margineProdotto
     : Number(margineLordoLtv) || 50;
-  const tassoPerLtv = isBookings ? showUp : Number(tassoConversione) || 10;
+  const tassoPerLtv = isBookings
+    ? showUp
+    : isPercorsoLeads
+      ? (tassoLeads ?? 0)
+      : Number(tassoConversione) || 10;
   const ltvEconomics =
     mostraLtv && ltvAttivo && valoreVisita > 0
       ? calculateLtvEconomics({
@@ -590,23 +643,35 @@ export function FormConfigurazione({
         })
       : null;
   const cplPrimoAcquistoLeads =
-    !isBookings &&
-    !isEcommerce &&
-    !isInStore &&
-    !isRetargeting &&
-    !isAwareness &&
-    valoreVisita > 0
-      ? calculateMaxSustainableCpl(valoreVisita, showUp, targetMargin)
-      : 0;
+    isPercorsoLeads &&
+    valoreVisita > 0 &&
+    tassoLeads != null &&
+    tassoLeads > 0
+      ? calculateMaxSustainableCpl(valoreVisita, tassoLeads, targetMargin)
+      : !isPercorsoLeads &&
+          !isBookings &&
+          !isEcommerce &&
+          !isInStore &&
+          !isRetargeting &&
+          !isAwareness &&
+          valoreVisita > 0
+        ? calculateMaxSustainableCpl(valoreVisita, showUp, targetMargin)
+        : 0;
   const breakEvenLeads =
-    !isBookings &&
-    !isEcommerce &&
-    !isInStore &&
-    !isRetargeting &&
-    !isAwareness &&
-    valoreVisita > 0
-      ? calculateBreakEvenPerLead(valoreVisita, showUp)
-      : 0;
+    isPercorsoLeads &&
+    valoreVisita > 0 &&
+    tassoLeads != null &&
+    tassoLeads > 0
+      ? calculateBreakEvenPerLead(valoreVisita, tassoLeads)
+      : !isPercorsoLeads &&
+          !isBookings &&
+          !isEcommerce &&
+          !isInStore &&
+          !isRetargeting &&
+          !isAwareness &&
+          valoreVisita > 0
+        ? calculateBreakEvenPerLead(valoreVisita, showUp)
+        : 0;
   const breakEvenBookings =
     isBookings && valoreVisita > 0
       ? calculateBreakEvenPerBooking(valoreVisita, showUp)
@@ -635,7 +700,7 @@ export function FormConfigurazione({
         ? cpaInStore
         : isBookings
           ? cpaSostenibile
-          : cplPrimoAcquistoLeads || 45;
+          : cplPrimoAcquistoLeads;
   const alertFattibilita =
     (isBookings ||
       (!isEcommerce &&
@@ -692,6 +757,8 @@ export function FormConfigurazione({
             headline: config.titoloAnnuncio,
             citta: citta ?? "",
             frontEndOffer: frontEndOffer ?? "",
+            brief: elevatorPitch,
+            settore: settore ?? "",
           })
         : null,
     [
@@ -700,6 +767,8 @@ export function FormConfigurazione({
       config.titoloAnnuncio,
       citta,
       frontEndOffer,
+      elevatorPitch,
+      settore,
     ],
   );
 
@@ -2221,8 +2290,16 @@ export function FormConfigurazione({
                     ? isPercorsoBookings
                       ? "Es. 60€ — base per calcolare il costo target per prenotazione (CPA)."
                       : "Es. 60€ — base per il CPA massimo per appuntamento confermato."
-                    : "Base per calcolare il CPL target di riferimento e il break-even."}
+                    : isPercorsoLeads
+                      ? "Valore medio di una vendita al cliente. Usato per calcolare il CPL di riferimento."
+                      : "Base per calcolare il CPL target di riferimento e il break-even."}
           </p>
+          {isPercorsoLeads ? (
+            <p className="text-xs text-[var(--ink-muted)]">
+              Proviene dal Passo 1 (brief/offerta) o da dati che inserisci qui:
+              non è un dato automatico di Meta.
+            </p>
+          ) : null}
           {isInStore || isRetargeting ? (
             <>
               <Campo
@@ -2332,6 +2409,148 @@ export function FormConfigurazione({
                   ? "Percentuale di persone prenotate che si presentano davvero (default 75%). Usata per il break-even reale."
                   : "Quante persone prenotate si presentano davvero (default 75%)."}
               </p>
+            </>
+          ) : isPercorsoLeads ? (
+            <>
+              <div>
+                <p className="mb-2 text-sm font-medium text-[var(--ink)]">
+                  Conosci il tasso di conversione?
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      { value: "REAL" as const, label: "Dato reale" },
+                      { value: "ESTIMATED" as const, label: "Stima" },
+                      { value: "UNKNOWN" as const, label: "Non lo so" },
+                    ] as const
+                  ).map((opzione) => (
+                    <button
+                      key={opzione.value}
+                      type="button"
+                      onClick={() =>
+                        selezionaConversionRateSource(opzione.value)
+                      }
+                      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                        conversionRateSource === opzione.value
+                          ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                          : "border-[var(--border)] bg-white text-[var(--ink-muted)]"
+                      }`}
+                    >
+                      {opzione.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {conversionRateSource === "REAL" ? (
+                <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface-hover)] p-4">
+                  <p className="text-xs text-[var(--ink-muted)]">
+                    Usa dati storici del cliente.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Campo etichetta="Lead ricevuti">
+                      <input
+                        type="number"
+                        min={1}
+                        value={leadRicevuti}
+                        onChange={(e) => {
+                          const valore =
+                            e.target.value === "" ? "" : Number(e.target.value);
+                          setLeadRicevuti(valore);
+                          aggiornaCalcolatoreConversione(valore, clientiAcquisiti);
+                        }}
+                        placeholder="60"
+                        className={inputClass}
+                      />
+                    </Campo>
+                    <Campo etichetta="Clienti acquisiti">
+                      <input
+                        type="number"
+                        min={0}
+                        value={clientiAcquisiti}
+                        onChange={(e) => {
+                          const valore =
+                            e.target.value === "" ? "" : Number(e.target.value);
+                          setClientiAcquisiti(valore);
+                          aggiornaCalcolatoreConversione(leadRicevuti, valore);
+                        }}
+                        placeholder="9"
+                        className={inputClass}
+                      />
+                    </Campo>
+                  </div>
+                  <Campo etichetta="Tasso di conversione calcolato (%)">
+                    <input
+                      type="number"
+                      min={0.1}
+                      max={100}
+                      step={0.1}
+                      value={tassoConversione}
+                      onChange={(e) =>
+                        onCambiaTassoConversione(
+                          e.target.value === "" ? "" : Number(e.target.value),
+                        )
+                      }
+                      placeholder="15"
+                      className={inputClass}
+                    />
+                  </Campo>
+                </div>
+              ) : null}
+
+              {conversionRateSource === "ESTIMATED" ? (
+                <div className="space-y-3">
+                  <Campo etichetta="Tasso di conversione stimato (%)">
+                    <input
+                      type="number"
+                      min={0.1}
+                      max={100}
+                      step={0.1}
+                      value={tassoConversione}
+                      onChange={(e) =>
+                        onCambiaTassoConversione(
+                          e.target.value === "" ? "" : Number(e.target.value),
+                        )
+                      }
+                      placeholder="Inserisci una stima"
+                      className={inputClass}
+                    />
+                  </Campo>
+                  <p className="text-xs text-[var(--ink-muted)]">
+                    <span className="font-medium text-[var(--ink)]">
+                      Dato stimato.
+                    </span>{" "}
+                    È un valore indicativo. Sostituiscilo con il dato reale
+                    appena disponibile.
+                  </p>
+                </div>
+              ) : null}
+
+              {conversionRateSource === "UNKNOWN" ? (
+                <div className="rounded-xl border border-[#f5e0c8] bg-[#fffaf3] p-4">
+                  <p className="text-sm font-medium text-[var(--ink)]">
+                    Soglia economica non ancora disponibile
+                  </p>
+                  <p className="mt-2 text-sm text-[var(--ink-muted)]">
+                    Per calcolarla serve sapere quante richieste diventano
+                    mediamente clienti.
+                  </p>
+                  <p className="mt-3 text-sm text-[var(--ink)]">
+                    Chiedi al cliente:
+                  </p>
+                  <p className="mt-1 text-sm italic text-[var(--ink-muted)]">
+                    &quot;Negli ultimi 30/60/90 giorni quante richieste avete
+                    ricevuto e quante sono diventate clienti?&quot;
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => selezionaConversionRateSource("ESTIMATED")}
+                    className="mt-4 inline-flex items-center justify-center rounded-full border border-[var(--accent)] bg-white px-4 py-2 text-sm font-medium text-[var(--accent)] transition-colors hover:bg-[var(--accent-soft)]"
+                  >
+                    Inserisco una stima temporanea
+                  </button>
+                </div>
+              ) : null}
             </>
           ) : (
             <Campo etichetta="Tasso di conversione stimato da lead a cliente (%)">
@@ -2681,6 +2900,16 @@ export function FormConfigurazione({
                   ? "CPL e LTV — Sostenibilità acquisizione"
                   : "CPL target di riferimento"}
               </p>
+              {conversionRateSource === "ESTIMATED" && !ltvEconomics ? (
+                <p className="mt-2 inline-flex rounded-full bg-[#fff6e5] px-2.5 py-0.5 text-xs font-medium text-[#9a6700]">
+                  Calcolo basato su una stima
+                </p>
+              ) : null}
+              {conversionRateSource === "REAL" && !ltvEconomics ? (
+                <p className="mt-2 inline-flex rounded-full bg-[#e8f4ec] px-2.5 py-0.5 text-xs font-medium text-[#3D8B57]">
+                  Dato reale
+                </p>
+              ) : null}
               {!ltvEconomics ? (
                 <p className="mt-2 text-sm leading-relaxed text-[var(--ink-muted)]">
                   È la soglia economica stimata sulla base dei dati inseriti.
@@ -3091,6 +3320,23 @@ export function FormConfigurazione({
             })}
           </div>
         </div>
+
+        {onRigeneraVarianti ? (
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={onRigeneraVarianti}
+              disabled={copyAiLoading}
+              className="inline-flex items-center justify-center rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium text-[var(--ink)] transition-colors hover:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {copyAiLoading ? "Rigenerazione in corso…" : "Rigenera varianti"}
+            </button>
+            <p className="mt-1.5 text-xs text-[var(--ink-muted)]">
+              Rigenera headline e varianti A/B/C solo quando lo chiedi
+              esplicitamente.
+            </p>
+          </div>
+        ) : null}
 
         <div className="mt-4 rounded-xl border-2 border-[var(--accent)]/30 bg-[var(--surface-hover)] p-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -3591,6 +3837,7 @@ export function FormConfigurazione({
           isPercorsoAwareness
         }
         statoApprovazione={statoApprovazioneLeads}
+        revisionNotesCliente={revisionNotesCliente}
       />
       {isPercorsoAwareness ? (
         <section className="mt-6 rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">

@@ -150,9 +150,11 @@ export function fondiCampagnaConAssetLocali(campagna: Campagna): Campagna {
     shippingMarket: campagna.shippingMarket ?? locali.shippingMarket,
     heroProduct: campagna.heroProduct || locali.heroProduct,
     creativitaMeta:
-      campagna.creativitaMeta?.length
+      campagna.creativitaMeta?.some((c) => c.storagePath)
         ? campagna.creativitaMeta
-        : locali.creativitaMeta,
+        : locali.creativitaMeta?.length
+          ? locali.creativitaMeta
+          : campagna.creativitaMeta,
     revisionNotes,
     status,
   };

@@ -36,6 +36,8 @@ export type CreativitaMeta = {
   avvisoFormato: boolean;
   formatoOrizzontale?: boolean;
   isVideo?: boolean;
+  /** Path privato in Supabase Storage (signed URL generato server-side). */
+  storagePath?: string;
 };
 
 export const ETICHETTE_CREATIVITA: Record<CreativitaRuolo, string> = {

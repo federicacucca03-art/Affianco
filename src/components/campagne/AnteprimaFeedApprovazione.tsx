@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Campagna } from "@/types/campagne";
 import { ctaLabelDaObjective } from "@/data/meta-import-tsv";
 import { isUrlMapsIndicazioni } from "@/lib/url-maps";
@@ -9,6 +9,7 @@ type TabVariante = "A" | "B" | "C";
 
 type Props = {
   campagna: Campagna;
+  approvalToken: string;
 };
 
 const ETICHETTE_LEAD: Record<TabVariante, string> = {
@@ -47,8 +48,14 @@ const ETICHETTE_AWARE: Record<TabVariante, string> = {
   C: "Variante C — Benvenuto",
 };
 
-export function AnteprimaFeedApprovazione({ campagna }: Props) {
+export function AnteprimaFeedApprovazione({
+  campagna,
+  approvalToken,
+}: Props) {
   const [tab, setTab] = useState<TabVariante>("A");
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+  const [mediaErrore, setMediaErrore] = useState(false);
+
   const objective = campagna.objective ?? "LEADS";
   const etichette =
     objective === "ECOMMERCE"
@@ -88,6 +95,52 @@ export function AnteprimaFeedApprovazione({ campagna }: Props) {
       : tab === "B"
         ? campagna.varianteB
         : campagna.varianteC;
+
+  const creativitaPrincipale =
+    campagna.creativitaMeta?.find((c) => c.ruolo === "principale") ??
+    campagna.creativitaMeta?.[0];
+  const storagePath = creativitaPrincipale?.storagePath?.trim() || "";
+
+  useEffect(() => {
+    let attivo = true;
+    setMediaUrl(null);
+    setMediaErrore(false);
+
+    if (!storagePath || !approvalToken.trim()) {
+      return () => {
+        attivo = false;
+      };
+    }
+
+    void (async () => {
+      try {
+        const res = await fetch("/api/approval/creative-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            approvalToken: approvalToken.trim(),
+            storagePath,
+          }),
+        });
+        const data = (await res.json()) as {
+          signedUrl?: string;
+          error?: string;
+        };
+        if (!attivo) return;
+        if (!res.ok || !data.signedUrl) {
+          setMediaErrore(true);
+          return;
+        }
+        setMediaUrl(data.signedUrl);
+      } catch {
+        if (attivo) setMediaErrore(true);
+      }
+    })();
+
+    return () => {
+      attivo = false;
+    };
+  }, [approvalToken, storagePath]);
 
   const nome = campagna.nomeCliente.trim() || "Brand";
   const iniziali = nome
@@ -150,12 +203,35 @@ export function AnteprimaFeedApprovazione({ campagna }: Props) {
         </div>
 
         <div className="relative aspect-[4/5] w-full bg-[#eef0f3]">
-          <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-6 text-center">
-            <div className="h-16 w-16 rounded-2xl bg-white/80 shadow-sm" />
-            <p className="text-xs text-[var(--ink-muted)]">
-              Anteprima creatività
-            </p>
-          </div>
+          {mediaUrl ? (
+            creativitaPrincipale?.isVideo ? (
+              <video
+                src={mediaUrl}
+                className="h-full w-full object-cover"
+                controls
+                playsInline
+                muted
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={mediaUrl}
+                alt="Creatività campagna"
+                className="h-full w-full object-cover"
+              />
+            )
+          ) : (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-6 text-center">
+              <div className="h-16 w-16 rounded-2xl bg-white/80 shadow-sm" />
+              <p className="text-xs text-[var(--ink-muted)]">
+                {mediaErrore
+                  ? "Anteprima creatività non disponibile"
+                  : storagePath
+                    ? "Caricamento anteprima…"
+                    : "Anteprima creatività"}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between gap-3 bg-[#f3f4f6] px-3 py-2.5">

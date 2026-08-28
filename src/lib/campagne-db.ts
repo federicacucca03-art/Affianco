@@ -24,7 +24,13 @@ import {
   salvaAssetCampagnaLocale,
   type CampagnaAssets,
 } from "@/data/campagne-assets-store";
-import type { CreativitaMeta } from "@/lib/creativita";
+import type { CreativitaMeta, CreativitaAsset } from "@/lib/creativita";
+import {
+  caricaCreativitaSuStorage,
+  eliminaCreativitaDaStorage,
+  metaDaCreativitaJson,
+  pathsCreativitaRimossi,
+} from "@/lib/creativita-storage";
 
 export type ClientRow = {
   id: string;
@@ -101,6 +107,7 @@ export type CampaignRow = {
   target_age?: string | null;
   shipping_market?: string | null;
   hero_product?: string | null;
+  creativita?: unknown;
   clients?: ClientJoin | ClientJoin[] | null;
 };
 
@@ -110,7 +117,7 @@ export type DatiSalvataggioCampagna = {
   website?: string;
   nomeCampagna: string;
   dailyBudget: number;
-  maxSustainableCpa: number;
+  maxSustainableCpa?: number;
   averageTicketValue?: number;
   closingRate?: number;
   /** LEADS | BOOKINGS | ECOMMERCE | IN_STORE | RETARGETING | AWARENESS */
@@ -148,6 +155,8 @@ export type DatiSalvataggioCampagna = {
   heroProduct?: string;
   /** Metadata creatività (fino a 3) per export Meta A/B visivo. */
   creativitaMeta?: CreativitaMeta[];
+  /** Asset locali (blob) da caricare su Storage al salvataggio. */
+  creativitaAssets?: CreativitaAsset[];
   /**
    * Se presente: UPDATE della stessa campagna (o INSERT idempotente con questo id).
    * Se assente in create: viene generato un UUID client-side.
@@ -306,7 +315,7 @@ export function mappaCampagnaDaRow(row: CampaignRow): Campagna {
   const cliente = clienteDaJoin(row.clients);
   const nomeCliente = cliente?.name?.trim() || "Cliente";
   const base: Campagna = {
-    id: row.id,
+    id: row.id ?? "",
     nomeCliente,
     iniziali: inizialiDaNome(nomeCliente),
     stato: statoDaCampagna(row),
@@ -373,6 +382,9 @@ export function mappaCampagnaDaRow(row: CampaignRow): Campagna {
       return n;
     })(),
     approvalToken: row.approval_token?.trim() || undefined,
+    creativitaMeta:
+      metaDaCreativitaJson(row.creativita) ??
+      (undefined as CreativitaMeta[] | undefined),
   };
 
   return fondiCampagnaConAssetLocali(base);
@@ -496,7 +508,7 @@ type CampagnaWriteInput = {
   clientId: string;
   name: string;
   dailyBudget: number;
-  maxSustainableCpa: number;
+  maxSustainableCpa?: number;
   status?: string;
   objective?: CampagnaObjective;
   bookingServiceValue?: number;
@@ -530,6 +542,7 @@ type CampagnaWriteInput = {
   targetAge?: TargetAgeBand;
   shippingMarket?: EcommerceShippingMarket;
   heroProduct?: string;
+  creativitaMeta?: CreativitaMeta[];
 };
 
 function nomeCampagnaFallback(objective: CampagnaObjective): string {
@@ -556,8 +569,10 @@ export function costruisciPayloadCampagna(
     name: input.name.trim() || nomeCampagnaFallback(objective),
     objective,
     daily_budget: input.dailyBudget,
-    max_sustainable_cpa: input.maxSustainableCpa,
   };
+  if (input.maxSustainableCpa != null && input.maxSustainableCpa > 0) {
+    payload.max_sustainable_cpa = input.maxSustainableCpa;
+  }
 
   if (opts?.id) payload.id = opts.id;
   if (includeStatus) {
@@ -615,6 +630,9 @@ export function costruisciPayloadCampagna(
   if (input.heroProduct?.trim()) {
     payload.hero_product = input.heroProduct.trim();
   }
+  if (input.creativitaMeta !== undefined) {
+    payload.creativita = input.creativitaMeta;
+  }
 
   return payload;
 }
@@ -660,6 +678,7 @@ function writeInputDaDati(
     targetAge: dati.targetAge,
     shippingMarket: dati.shippingMarket,
     heroProduct: dati.heroProduct,
+    creativitaMeta: dati.creativitaMeta,
   };
 }
 
@@ -767,7 +786,9 @@ function assetsDaDati(dati: DatiSalvataggioCampagna): CampagnaAssets {
     averageOrderValue: dati.averageOrderValue,
     productMargin: dati.productMargin,
     maxSustainableCpa:
-      dati.maxSustainableCpa > 0 ? dati.maxSustainableCpa : undefined,
+      dati.maxSustainableCpa != null && dati.maxSustainableCpa > 0
+        ? dati.maxSustainableCpa
+        : undefined,
     averageReceipt: dati.averageReceipt,
     storeMargin: dati.storeMargin,
     recoveryValue: dati.recoveryValue,
@@ -793,27 +814,73 @@ export async function salvaCampagnaCompleta(
   const metaEsistente = await leggiMetaCampagna(campaignId);
   const isUpdate = metaEsistente != null;
 
+  let creativitaMeta = dati.creativitaMeta;
+  if (dati.creativitaAssets !== undefined) {
+    let metaPrecedente = creativitaMeta;
+    if (!metaPrecedente?.length && isUpdate) {
+      try {
+        const campagnaEsistente = await leggiCampagnaDaSupabase(campaignId);
+        metaPrecedente = campagnaEsistente?.creativitaMeta;
+      } catch {
+        // Non bloccante.
+      }
+    }
+
+    if (dati.creativitaAssets.length === 0) {
+      const daEliminare = pathsCreativitaRimossi(metaPrecedente ?? [], []);
+      if (daEliminare.length > 0) {
+        try {
+          await eliminaCreativitaDaStorage(daEliminare);
+        } catch {
+          // Cleanup best-effort.
+        }
+      }
+      creativitaMeta = [];
+    } else {
+      creativitaMeta = await caricaCreativitaSuStorage(
+        dati.creativitaAssets,
+        metaPrecedente ?? [],
+      );
+      const daEliminare = pathsCreativitaRimossi(
+        metaPrecedente ?? [],
+        creativitaMeta,
+      );
+      if (daEliminare.length > 0) {
+        try {
+          await eliminaCreativitaDaStorage(daEliminare);
+        } catch {
+          // Cleanup best-effort.
+        }
+      }
+    }
+  }
+  const datiSalvataggio: DatiSalvataggioCampagna = {
+    ...dati,
+    campaignId,
+    creativitaMeta,
+  };
+
   let cliente: ClientRow;
   if (metaEsistente?.client_id) {
-    cliente = await aggiornaClienteConosciuto(metaEsistente.client_id, dati);
-  } else if (dati.clientId?.trim()) {
-    cliente = await aggiornaClienteConosciuto(dati.clientId.trim(), dati);
+    cliente = await aggiornaClienteConosciuto(metaEsistente.client_id, datiSalvataggio);
+  } else if (datiSalvataggio.clientId?.trim()) {
+    cliente = await aggiornaClienteConosciuto(datiSalvataggio.clientId.trim(), datiSalvataggio);
   } else {
     cliente = await trovaOCreaCliente({
-      name: dati.nomeCliente,
-      elevatorPitch: dati.elevatorPitch,
-      website: dati.website,
+      name: datiSalvataggio.nomeCliente,
+      elevatorPitch: datiSalvataggio.elevatorPitch,
+      website: datiSalvataggio.website,
       averageTicketValue:
-        dati.recoveryValue ??
-        dati.averageReceipt ??
-        dati.averageOrderValue ??
-        dati.bookingServiceValue ??
-        dati.averageTicketValue,
-      closingRate: dati.showUpRate ?? dati.closingRate,
+        datiSalvataggio.recoveryValue ??
+        datiSalvataggio.averageReceipt ??
+        datiSalvataggio.averageOrderValue ??
+        datiSalvataggio.bookingServiceValue ??
+        datiSalvataggio.averageTicketValue,
+      closingRate: datiSalvataggio.showUpRate ?? datiSalvataggio.closingRate,
     });
   }
 
-  const writeInput = writeInputDaDati(dati, cliente.id);
+  const writeInput = writeInputDaDati(datiSalvataggio, cliente.id);
   let campagna: CampaignRow;
   let appenaCreata = false;
 
@@ -838,7 +905,7 @@ export async function salvaCampagnaCompleta(
     }
   }
 
-  const assets = assetsDaDati(dati);
+  const assets = assetsDaDati(datiSalvataggio);
   salvaAssetCampagnaLocale(campagna.id, assets);
 
   if (appenaCreata) {
@@ -851,48 +918,52 @@ export async function salvaCampagnaCompleta(
 
   return mappaCampagnaDaRow({
     ...campagna,
-    variante_a: campagna.variante_a ?? dati.varianteA,
-    variante_b: campagna.variante_b ?? dati.varianteB,
-    variante_c: campagna.variante_c ?? dati.varianteC,
-    page_id: campagna.page_id ?? dati.pageId,
-    form_id: campagna.form_id ?? dati.formId,
-    settore: campagna.settore ?? dati.settore,
-    citta: campagna.citta ?? dati.citta,
-    raggio_km: campagna.raggio_km ?? dati.raggioKm,
-    eta_min: campagna.eta_min ?? dati.etaMin,
-    eta_max: campagna.eta_max ?? dati.etaMax,
-    titolo_annuncio: campagna.titolo_annuncio ?? dati.titoloAnnuncio,
-    target_margin: campagna.target_margin ?? dati.targetMargin,
+    variante_a: campagna.variante_a ?? datiSalvataggio.varianteA,
+    variante_b: campagna.variante_b ?? datiSalvataggio.varianteB,
+    variante_c: campagna.variante_c ?? datiSalvataggio.varianteC,
+    page_id: campagna.page_id ?? datiSalvataggio.pageId,
+    form_id: campagna.form_id ?? datiSalvataggio.formId,
+    settore: campagna.settore ?? datiSalvataggio.settore,
+    citta: campagna.citta ?? datiSalvataggio.citta,
+    raggio_km: campagna.raggio_km ?? datiSalvataggio.raggioKm,
+    eta_min: campagna.eta_min ?? datiSalvataggio.etaMin,
+    eta_max: campagna.eta_max ?? datiSalvataggio.etaMax,
+    titolo_annuncio: campagna.titolo_annuncio ?? datiSalvataggio.titoloAnnuncio,
+    target_margin: campagna.target_margin ?? datiSalvataggio.targetMargin,
     booking_service_value:
-      campagna.booking_service_value ?? dati.bookingServiceValue,
-    show_up_rate: campagna.show_up_rate ?? dati.showUpRate,
-    booking_channel: campagna.booking_channel ?? dati.bookingChannel,
+      campagna.booking_service_value ?? datiSalvataggio.bookingServiceValue,
+    show_up_rate: campagna.show_up_rate ?? datiSalvataggio.showUpRate,
+    booking_channel: campagna.booking_channel ?? datiSalvataggio.bookingChannel,
     booking_confirmation_policy:
-      campagna.booking_confirmation_policy ?? dati.bookingConfirmationPolicy,
+      campagna.booking_confirmation_policy ??
+      datiSalvataggio.bookingConfirmationPolicy,
     average_order_value:
-      campagna.average_order_value ?? dati.averageOrderValue,
-    product_margin: campagna.product_margin ?? dati.productMargin,
-    average_receipt: campagna.average_receipt ?? dati.averageReceipt,
-    store_margin: campagna.store_margin ?? dati.storeMargin,
-    recovery_value: campagna.recovery_value ?? dati.recoveryValue,
-    recovery_margin: campagna.recovery_margin ?? dati.recoveryMargin,
-    recovery_discount: campagna.recovery_discount ?? dati.recoveryDiscount,
-    launch_budget: campagna.launch_budget ?? dati.launchBudget,
+      campagna.average_order_value ?? datiSalvataggio.averageOrderValue,
+    product_margin: campagna.product_margin ?? datiSalvataggio.productMargin,
+    average_receipt: campagna.average_receipt ?? datiSalvataggio.averageReceipt,
+    store_margin: campagna.store_margin ?? datiSalvataggio.storeMargin,
+    recovery_value: campagna.recovery_value ?? datiSalvataggio.recoveryValue,
+    recovery_margin: campagna.recovery_margin ?? datiSalvataggio.recoveryMargin,
+    recovery_discount:
+      campagna.recovery_discount ?? datiSalvataggio.recoveryDiscount,
+    launch_budget: campagna.launch_budget ?? datiSalvataggio.launchBudget,
     awareness_radius_km:
-      campagna.awareness_radius_km ?? dati.awarenessRadiusKm,
-    estimated_cpm: campagna.estimated_cpm ?? dati.estimatedCpm,
-    front_end_offer: campagna.front_end_offer ?? dati.frontEndOffer,
-    target_type: campagna.target_type ?? dati.targetType,
-    target_age: campagna.target_age ?? dati.targetAge,
-    shipping_market: campagna.shipping_market ?? dati.shippingMarket,
-    hero_product: campagna.hero_product ?? dati.heroProduct,
+      campagna.awareness_radius_km ?? datiSalvataggio.awarenessRadiusKm,
+    estimated_cpm: campagna.estimated_cpm ?? datiSalvataggio.estimatedCpm,
+    front_end_offer: campagna.front_end_offer ?? datiSalvataggio.frontEndOffer,
+    target_type: campagna.target_type ?? datiSalvataggio.targetType,
+    target_age: campagna.target_age ?? datiSalvataggio.targetAge,
+    shipping_market: campagna.shipping_market ?? datiSalvataggio.shippingMarket,
+    hero_product: campagna.hero_product ?? datiSalvataggio.heroProduct,
+    creativita: creativitaMeta ?? campagna.creativita,
     clients: {
       id: cliente.id,
       name: cliente.name,
-      elevator_pitch: cliente.elevator_pitch ?? dati.elevatorPitch ?? null,
+      elevator_pitch:
+        cliente.elevator_pitch ?? datiSalvataggio.elevatorPitch ?? null,
       average_ticket_value: cliente.average_ticket_value,
       closing_rate: cliente.closing_rate,
-      website: cliente.website ?? dati.website ?? null,
+      website: cliente.website ?? datiSalvataggio.website ?? null,
     },
   });
 }
@@ -901,7 +972,7 @@ const SELECT_LISTA =
   "id, created_at, client_id, name, objective, status, daily_budget, max_sustainable_cpa, booking_service_value, show_up_rate, booking_channel, average_order_value, product_margin, average_receipt, store_margin, recovery_value, recovery_margin, recovery_discount, launch_budget, awareness_radius_km, estimated_cpm, approved_at, revision_notes, approval_token, clients(id, name, elevator_pitch, average_ticket_value, closing_rate)";
 
 const SELECT_DETTAGLIO =
-  "id, created_at, client_id, name, objective, status, daily_budget, max_sustainable_cpa, variante_a, variante_b, variante_c, page_id, form_id, settore, citta, raggio_km, eta_min, eta_max, titolo_annuncio, target_margin, booking_service_value, show_up_rate, booking_channel, booking_confirmation_policy, average_order_value, product_margin, average_receipt, store_margin, recovery_value, recovery_margin, recovery_discount, launch_budget, awareness_radius_km, estimated_cpm, front_end_offer, target_type, target_age, shipping_market, hero_product, approved_at, revision_notes, approval_token, clients(id, name, elevator_pitch, average_ticket_value, closing_rate, website)";
+  "id, created_at, client_id, name, objective, status, daily_budget, max_sustainable_cpa, variante_a, variante_b, variante_c, page_id, form_id, settore, citta, raggio_km, eta_min, eta_max, titolo_annuncio, target_margin, booking_service_value, show_up_rate, booking_channel, booking_confirmation_policy, average_order_value, product_margin, average_receipt, store_margin, recovery_value, recovery_margin, recovery_discount, launch_budget, awareness_radius_km, estimated_cpm, front_end_offer, target_type, target_age, shipping_market, hero_product, creativita, approved_at, revision_notes, approval_token, clients(id, name, elevator_pitch, average_ticket_value, closing_rate, website)";
 
 /** Elenco campagne con join sul cliente, dalla più recente. */
 export async function leggiCampagneDaSupabase(): Promise<Campagna[]> {
