@@ -817,10 +817,12 @@ export async function salvaCampagnaCompleta(
   let creativitaMeta = dati.creativitaMeta;
   if (dati.creativitaAssets !== undefined) {
     let metaPrecedente = creativitaMeta;
-    if (!metaPrecedente?.length && isUpdate) {
+    if (isUpdate) {
       try {
         const campagnaEsistente = await leggiCampagnaDaSupabase(campaignId);
-        metaPrecedente = campagnaEsistente?.creativitaMeta;
+        if (campagnaEsistente?.creativitaMeta?.length) {
+          metaPrecedente = campagnaEsistente.creativitaMeta;
+        }
       } catch {
         // Non bloccante.
       }

@@ -38,7 +38,13 @@ function nuovoId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
   }
-  return `cre_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  // Fallback compatibile con path Storage `{user_id}/{asset_uuid}.ext`
+  const hex = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+  return hex;
 }
 
 const FORMATI_ECOMMERCE: {

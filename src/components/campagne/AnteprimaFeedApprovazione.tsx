@@ -54,6 +54,7 @@ export function AnteprimaFeedApprovazione({
 }: Props) {
   const [tab, setTab] = useState<TabVariante>("A");
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+  const [mediaCaricamento, setMediaCaricamento] = useState(false);
   const [mediaErrore, setMediaErrore] = useState(false);
 
   const objective = campagna.objective ?? "LEADS";
@@ -105,12 +106,15 @@ export function AnteprimaFeedApprovazione({
     let attivo = true;
     setMediaUrl(null);
     setMediaErrore(false);
+    setMediaCaricamento(false);
 
     if (!storagePath || !approvalToken.trim()) {
       return () => {
         attivo = false;
       };
     }
+
+    setMediaCaricamento(true);
 
     void (async () => {
       try {
@@ -128,12 +132,20 @@ export function AnteprimaFeedApprovazione({
         };
         if (!attivo) return;
         if (!res.ok || !data.signedUrl) {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("[AnteprimaFeedApprovazione] signed URL fallito", {
+              status: res.status,
+              error: data.error,
+            });
+          }
           setMediaErrore(true);
           return;
         }
         setMediaUrl(data.signedUrl);
       } catch {
         if (attivo) setMediaErrore(true);
+      } finally {
+        if (attivo) setMediaCaricamento(false);
       }
     })();
 
@@ -226,9 +238,11 @@ export function AnteprimaFeedApprovazione({
               <p className="text-xs text-[var(--ink-muted)]">
                 {mediaErrore
                   ? "Anteprima creatività non disponibile"
-                  : storagePath
+                  : mediaCaricamento
                     ? "Caricamento anteprima…"
-                    : "Anteprima creatività"}
+                    : storagePath
+                      ? "Anteprima creatività"
+                      : "Nessuna creatività caricata"}
               </p>
             </div>
           )}

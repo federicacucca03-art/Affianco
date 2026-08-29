@@ -91,15 +91,12 @@ export async function caricaCreativitaSuStorage(
 
   for (const asset of assets) {
     const base = creativitaToMeta([asset])[0];
-    const giaRemoto = existingMeta.find(
-      (m) =>
-        m.id === asset.id &&
-        m.storagePath &&
-        !asset.url.startsWith("blob:") &&
-        !asset.url.startsWith("data:"),
+    const metaEsistente = existingMeta.find(
+      (m) => m.id === asset.id && m.storagePath,
     );
-    if (giaRemoto?.storagePath) {
-      risultati.push({ ...base, storagePath: giaRemoto.storagePath });
+    // Già su Storage (es. blob URL revocato dopo il primo save): riusa path DB.
+    if (metaEsistente?.storagePath) {
+      risultati.push({ ...base, storagePath: metaEsistente.storagePath });
       continue;
     }
 
@@ -113,7 +110,9 @@ export async function caricaCreativitaSuStorage(
       if (pathEsistente) {
         risultati.push({ ...base, storagePath: pathEsistente });
       } else {
-        risultati.push(base);
+        throw new Error(
+          `Impossibile salvare ${asset.nomeFile}: file remoto senza path Storage.`,
+        );
       }
       continue;
     }
@@ -140,6 +139,13 @@ export async function caricaCreativitaSuStorage(
       ...base,
       storagePath: path,
     });
+  }
+
+  const senzaPath = risultati.filter((m) => !m.storagePath?.trim());
+  if (senzaPath.length > 0) {
+    throw new Error(
+      "Impossibile salvare una o più creatività: upload Storage incompleto.",
+    );
   }
 
   return risultati;
