@@ -521,10 +521,7 @@ export default function DettaglioCampagnaPage() {
     if (!campagna) return;
     setErroreLinkApprovazione(null);
     try {
-      const token = await assicuratiTokenApprovazione(
-        campagna.id,
-        campagna.approvalToken,
-      );
+      const token = await assicuratiTokenApprovazione(campagna.id);
       const url = urlApprovazioneDaToken(token);
       if (token !== campagna.approvalToken) {
         setCampagna({ ...campagna, approvalToken: token });

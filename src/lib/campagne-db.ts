@@ -26,11 +26,17 @@ import {
 } from "@/data/campagne-assets-store";
 import type { CreativitaMeta, CreativitaAsset } from "@/lib/creativita";
 import {
+  normalizzaApprovalToken,
+  urlApprovazioneDaToken,
+} from "@/lib/approval-token";
+import {
   caricaCreativitaSuStorage,
   eliminaCreativitaDaStorage,
   metaDaCreativitaJson,
   pathsCreativitaRimossi,
 } from "@/lib/creativita-storage";
+
+export { urlApprovazioneDaToken } from "@/lib/approval-token";
 
 export type ClientRow = {
   id: string;
@@ -381,7 +387,7 @@ export function mappaCampagnaDaRow(row: CampaignRow): Campagna {
       if (!n || n === "Nessuna nota aggiuntiva fornita.") return undefined;
       return n;
     })(),
-    approvalToken: row.approval_token?.trim() || undefined,
+    approvalToken: normalizzaApprovalToken(row.approval_token),
     creativitaMeta:
       metaDaCreativitaJson(row.creativita) ??
       (undefined as CreativitaMeta[] | undefined),
@@ -1170,16 +1176,12 @@ function campaignIdDaRpc(data: unknown): string | undefined {
 
 /**
  * Assicura un approval_token per link pubblico (owner).
- * - Se già presente → riusa
- * - Altrimenti RPC regenerate (crea/ruota)
+ * Source of truth: colonna DB `campaigns.approval_token` (mai state/localStorage).
+ * Se assente → RPC regenerate (crea).
  */
 export async function assicuratiTokenApprovazione(
   campaignId: string,
-  tokenEsistente?: string | null,
 ): Promise<string> {
-  const existing = tokenEsistente?.trim();
-  if (existing) return existing;
-
   const { data, error } = await supabase
     .from("campaigns")
     .select("approval_token")
@@ -1187,13 +1189,16 @@ export async function assicuratiTokenApprovazione(
     .maybeSingle();
 
   if (!error) {
-    const fromDb = (data as { approval_token?: string | null } | null)
-      ?.approval_token?.trim();
+    const fromDb = normalizzaApprovalToken(
+      (data as { approval_token?: string | null } | null)?.approval_token,
+    );
     if (fromDb) return fromDb;
   } else if (isApprovalTokenColumnMissingError(error.message)) {
     throw new Error(
       "Token di approvazione non disponibile. Aggiorna lo schema o riprova.",
     );
+  } else if (error) {
+    throw new Error(error.message);
   }
 
   const { data: nuovo, error: regenErr } = await supabase.rpc(
@@ -1201,8 +1206,9 @@ export async function assicuratiTokenApprovazione(
     { p_campaign_id: campaignId },
   );
 
-  if (!regenErr && typeof nuovo === "string" && nuovo.trim()) {
-    return nuovo.trim();
+  if (!regenErr && typeof nuovo === "string") {
+    const generated = normalizzaApprovalToken(nuovo);
+    if (generated) return generated;
   }
 
   if (regenErr) {
@@ -1212,13 +1218,6 @@ export async function assicuratiTokenApprovazione(
   throw new Error(
     "Impossibile generare il link di approvazione. Riprova tra poco.",
   );
-}
-
-/** URL assoluto pagina pubblica approval (token). */
-export function urlApprovazioneDaToken(token: string): string {
-  const origin =
-    typeof window !== "undefined" ? window.location.origin : "";
-  return `${origin}/approvazione/${token}`;
 }
 
 /**

@@ -1642,11 +1642,7 @@ export function PercorsoContatti({
     setErroreLinkApprovazione(null);
     try {
       const id = await assicuraCampagnaSalvata();
-      const salvata = await leggiCampagnaDaSupabase(id);
-      const token = await assicuratiTokenApprovazione(
-        id,
-        salvata?.approvalToken,
-      );
+      const token = await assicuratiTokenApprovazione(id);
       const url = urlApprovazioneDaToken(token);
       await navigator.clipboard.writeText(url);
       setLinkApprovazioneCopiato(true);
