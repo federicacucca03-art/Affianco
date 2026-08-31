@@ -6,7 +6,8 @@ export type CampaignLogEventType =
   | "EXPORTED"
   | "METRICS_UPDATED"
   | "DIAGNOSIS_CHANGED"
-  | "NOTE_ADDED";
+  | "NOTE_ADDED"
+  | "UPDATED";
 
 export type CampaignLog = {
   id: string;
@@ -35,6 +36,7 @@ const EVENTI_VALIDI: CampaignLogEventType[] = [
   "METRICS_UPDATED",
   "DIAGNOSIS_CHANGED",
   "NOTE_ADDED",
+  "UPDATED",
 ];
 
 function isEventType(valore: string): valore is CampaignLogEventType {
@@ -202,6 +204,8 @@ export function etichettaEvento(tipo: CampaignLogEventType): string {
       return "Diagnosi";
     case "NOTE_ADDED":
       return "Nota";
+    case "UPDATED":
+      return "Aggiornamento";
     default:
       return "Evento";
   }
@@ -221,6 +225,8 @@ export function emojiEvento(tipo: CampaignLogEventType): string {
       return "🩺";
     case "NOTE_ADDED":
       return "📝";
+    case "UPDATED":
+      return "✏️";
     default:
       return "•";
   }
@@ -240,6 +246,8 @@ export function stileBadgeEvento(tipo: CampaignLogEventType): string {
       return "bg-[#FFF0F0] text-[#C45C5C]";
     case "NOTE_ADDED":
       return "bg-[var(--surface-hover)] text-[var(--ink)]";
+    case "UPDATED":
+      return "bg-[#F3EEFF] text-[#5B4B8A]";
     default:
       return "bg-[var(--surface-hover)] text-[var(--ink-muted)]";
   }
@@ -322,6 +330,20 @@ export async function logCampagnaEsportata(campaignId: string) {
     eventType: "EXPORTED",
     title: "Export Meta completato",
     description: "Campagna pronta esportata per Meta Ads Manager",
+  });
+}
+
+/** Helper: log modifica configurazione (edit mode). */
+export async function logCampagnaAggiornata(input: {
+  campaignId: string;
+  title: string;
+  description?: string;
+}) {
+  return registraEventoCampagna({
+    campaignId: input.campaignId,
+    eventType: "UPDATED",
+    title: input.title,
+    description: input.description,
   });
 }
 

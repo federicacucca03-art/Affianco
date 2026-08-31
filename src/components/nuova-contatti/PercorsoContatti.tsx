@@ -96,8 +96,14 @@ import {
   deveInvalidareApprovazione,
   ticketDaCampagna,
   margineDaCampagna,
+  creaSnapshotConfigurazione,
+  diffConfigurazione,
+  testoLogAggiornamento,
+  type SnapshotConfigurazione,
+  type SnapshotConfigurazioneInput,
 } from "@/lib/campagna-edit";
 import { anteprimeDaCreativitaMeta } from "@/lib/creativita-storage";
+import { logCampagnaAggiornata } from "@/lib/campaign-logs";
 
 const CRS_SESSION_PREFIX = "affianco-conversion-rate-source:";
 
@@ -493,6 +499,9 @@ export function PercorsoContatti({
   /** Lock: seconde chiamate riusano la stessa Promise (niente doppio INSERT). */
   const saveInFlightRef = useRef<Promise<string> | null>(null);
   const snapshotInizialeRef = useRef<string>("");
+  const snapshotConfigInizialeRef = useRef<SnapshotConfigurazione | null>(
+    null,
+  );
   const statusEditInizialeRef = useRef<string | null>(null);
   const [hydrateEditInCorso, setHydrateEditInCorso] = useState(isEditMode);
   const [erroreHydrateEdit, setErroreHydrateEdit] = useState<string | null>(
@@ -843,7 +852,7 @@ export function PercorsoContatti({
         const anteprime = await anteprimeDaCreativitaMeta(meta);
         if (!attivo) return;
         setCreativita(anteprime);
-        snapshotInizialeRef.current = firmaSostanziale({
+        const payloadSnapshot: SnapshotConfigurazioneInput = {
           frontEndOffer: trovata.frontEndOffer ?? "",
           elevatorPitch: trovata.elevatorPitch ?? "",
           varianteA: trovata.varianteA ?? "",
@@ -852,7 +861,10 @@ export function PercorsoContatti({
           titoloAnnuncio: trovata.titoloAnnuncio ?? "",
           creativita: anteprime,
           dailyBudget: trovata.budgetGiornaliero ?? 20,
-          launchBudget: trovata.launchBudget ?? 0,
+          launchBudget:
+            (trovata.objective ?? "LEADS") === "AWARENESS"
+              ? (trovata.launchBudget ?? 0)
+              : 0,
           citta: trovata.citta ?? "",
           raggioKm: raggioHydrate,
           etaMin: eta.etaMin,
@@ -865,8 +877,22 @@ export function PercorsoContatti({
           objective: trovata.objective ?? "LEADS",
           destinationUrl: trovata.website ?? "",
           heroProduct: trovata.heroProduct ?? "",
-          bookingChannel: trovata.bookingChannel,
-        });
+          bookingChannel:
+            (trovata.objective ?? "LEADS") === "BOOKINGS"
+              ? trovata.bookingChannel
+              : undefined,
+          pageId: trovata.pageId ?? "",
+          formId: trovata.formId ?? "",
+          conversionRateSource:
+            trovata.conversionRateSource ??
+            ((trovata.objective ?? "LEADS") === "LEADS" ? "ESTIMATED" : ""),
+          nomeCampagna:
+            trovata.nomeCampagna ||
+            defaultConfigurazioneContatti.nomeCampagna,
+        };
+        snapshotInizialeRef.current = firmaSostanziale(payloadSnapshot);
+        snapshotConfigInizialeRef.current =
+          creaSnapshotConfigurazione(payloadSnapshot);
         const haVideo = anteprime.some((a) => a.isVideo);
         setFormatoEcommerce(
           haVideo ? "VIDEO" : anteprime.length >= 3 ? "CAROUSEL" : "SINGLE",
@@ -1749,6 +1775,41 @@ export function PercorsoContatti({
     }));
   }
 
+  function snapshotConfigWizardCorrente(): SnapshotConfigurazione {
+    const ticket = Number(scontrinoMedio) || 0;
+    const tassoNum = Number(tassoConversione) || 0;
+    const margineProdotto =
+      Number(productMargin) || (isEcommerce ? 60 : isInStore ? 40 : 50);
+    return creaSnapshotConfigurazione({
+      frontEndOffer,
+      elevatorPitch,
+      varianteA: config.varianteA,
+      varianteB: config.varianteB,
+      varianteC: config.varianteC,
+      titoloAnnuncio: config.titoloAnnuncio,
+      creativita,
+      dailyBudget: config.budgetGiornaliero,
+      launchBudget: isAwareness ? Number(launchBudget) || 0 : 0,
+      citta: contesto.citta,
+      raggioKm: config.raggioKm,
+      etaMin: config.etaMin,
+      etaMax: config.etaMax,
+      targetType,
+      targetAge,
+      ticket,
+      conversionRate: tassoNum,
+      margine: isPercorsoLeads || isBookings ? targetMargin : margineProdotto,
+      objective: objectiveEffettivo,
+      destinationUrl: sitoWeb,
+      heroProduct,
+      bookingChannel: isBookings ? bookingChannel : undefined,
+      pageId,
+      formId,
+      conversionRateSource: isPercorsoLeads ? conversionRateSource : "",
+      nomeCampagna: config.nomeCampagna,
+    });
+  }
+
   function snapshotWizardCorrente(): string {
     const ticket = Number(scontrinoMedio) || 0;
     const tassoNum = Number(tassoConversione) || 0;
@@ -1763,7 +1824,7 @@ export function PercorsoContatti({
       titoloAnnuncio: config.titoloAnnuncio,
       creativita,
       dailyBudget: config.budgetGiornaliero,
-      launchBudget: Number(launchBudget) || 0,
+      launchBudget: isAwareness ? Number(launchBudget) || 0 : 0,
       citta: contesto.citta,
       raggioKm: config.raggioKm,
       etaMin: config.etaMin,
@@ -1809,6 +1870,14 @@ export function PercorsoContatti({
         }
       }
       const campaignId = campagnaIdStabileRef.current;
+
+      const changesetEdit =
+        isEditMode && snapshotConfigInizialeRef.current
+          ? diffConfigurazione(
+              snapshotConfigInizialeRef.current,
+              snapshotConfigWizardCorrente(),
+            )
+          : [];
 
       const ticket = Number(scontrinoMedio) || 0;
       const tassoLeads = isPercorsoLeads
@@ -1964,6 +2033,7 @@ export function PercorsoContatti({
       }
 
       let statusDopoSave = salvata.status ?? "DRAFT";
+      let richiestaNuovaApprovazione = false;
       if (isEditMode) {
         const sostanziale = haModificaSostanziale(
           snapshotInizialeRef.current,
@@ -1974,6 +2044,22 @@ export function PercorsoContatti({
         ) {
           await invalidaApprovazioneDopoModificaSostanziale(salvata.id);
           statusDopoSave = "DRAFT";
+          richiestaNuovaApprovazione = true;
+        }
+        if (changesetEdit.length > 0) {
+          try {
+            const { title, description } = testoLogAggiornamento(
+              changesetEdit,
+              { richiestaNuovaApprovazione },
+            );
+            await logCampagnaAggiornata({
+              campaignId: salvata.id,
+              title,
+              description,
+            });
+          } catch {
+            // Diario non bloccante: il salvataggio campagna è già riuscito.
+          }
         }
       }
 
