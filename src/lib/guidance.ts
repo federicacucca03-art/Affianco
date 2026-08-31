@@ -7,6 +7,11 @@ import {
   type StrategicScoreResult,
 } from "@/lib/strategic-score";
 import type { CampagnaObjective, TargetAgeBand } from "@/types/campagne";
+import {
+  rilevaMismatchOffertaBrief,
+  valutaQualitaBrief,
+  valutaQualitaOfferta,
+} from "@/lib/qualita-step1";
 
 /**
  * Guidance Layer V2 — calcolata al volo, non persistita.
@@ -36,19 +41,6 @@ export type GuidanceSet = {
 export const MAX_GUIDANCE_SECONDARI = 2;
 
 /**
- * Offerta presente ma troppo corta per essere specifica.
- * Soglia deterministica: meno di 24 caratteri (spazi trimmati).
- * Non pretente di capire il mercato: misura solo la specificità testuale.
- */
-export const OFFERTA_CORTA_MAX_CHARS = 24;
-
-/**
- * Brief assente o troppo corto per guidare copy e tono.
- * Soglia: meno di 40 caratteri (spazi trimmati).
- */
-export const BRIEF_CORTO_MAX_CHARS = 40;
-
-/**
  * Budget giornaliero «molto inferiore» alla soglia sostenibile.
  * 0,25 = il budget copre meno di un quarto della soglia CPL/CPA.
  * È una regola educativa, non un giudizio sul budget «giusto».
@@ -70,12 +62,17 @@ function etichettaCosto(objective?: CampagnaObjective): "lead" | "CPA" {
 function pesoItem(item: GuidanceItem): number {
   if (item.level === "BLOCKER") return 500;
   if (item.level === "WARNING") {
+    if (item.id === "step1-mismatch") return 430;
     if (item.id === "economia-cr-unknown") return 420;
     if (item.id === "economia-cr-estimated") return 410;
     return 400;
   }
-  // La soglia economica è l'insight principale quando non ci sono warning.
   if (item.id === "economia-soglia") return 300;
+  if (item.id === "step1-offerta-generica" || item.id === "step1-offerta-poco-chiara") {
+    return 220;
+  }
+  if (item.id === "step1-brief-corto") return 210;
+  if (item.id === "step1-eta-ampia") return 205;
   if (item.level === "SUGGESTION") return 200;
   if (item.id === "economia-cr-real") return 50;
   return 100;
@@ -227,6 +224,10 @@ function etaEstremamenteAmpia(input: GuidanceStep1Input): boolean {
   return false;
 }
 
+/**
+ * Step 1: qualità offerta/brief via `qualita-step1.ts` (non soglie di caratteri).
+ * Offerta vuota: il wizard già blocca Continua. Non duplicare.
+ */
 export function generaGuidanceStep1(
   input: GuidanceStep1Input,
 ): GuidanceItem[] {
@@ -234,26 +235,55 @@ export function generaGuidanceStep1(
   const offerta = (input.frontEndOffer ?? "").trim();
   const brief = (input.elevatorPitch ?? "").trim();
 
-  // Offerta vuota: il wizard già blocca il Continua. Non duplicare.
-  if (offerta.length > 0 && offerta.length < OFFERTA_CORTA_MAX_CHARS) {
+  if (offerta && brief && rilevaMismatchOffertaBrief(offerta, brief)) {
     items.push({
-      id: "step1-offerta-generica",
-      level: "SUGGESTION",
-      title: "Rendi l'offerta più specifica.",
+      id: "step1-mismatch",
+      level: "WARNING",
+      title: "Offerta e brief non sembrano allineati.",
       description:
-        "Un'offerta più concreta (cosa include, per chi, quale beneficio) aiuta Affianco a scrivere e a valutare la campagna.",
+        "Il brief sembra parlare di un servizio diverso rispetto all'offerta indicata.",
+      actionLabel: "Rivedi offerta e brief",
       field: "frontEndOffer",
       step: 1,
     });
   }
 
-  if (brief.length < BRIEF_CORTO_MAX_CHARS) {
+  // Offerta vuota: il wizard già blocca il Continua. Non duplicare.
+  if (offerta.length > 0) {
+    const qOfferta = valutaQualitaOfferta(offerta);
+    if (qOfferta === "GENERIC") {
+      items.push({
+        id: "step1-offerta-generica",
+        level: "SUGGESTION",
+        title: "Rendi l'offerta più specifica.",
+        description:
+          "Il servizio è ancora descritto in modo generico. Specifica cosa riceve concretamente il cliente.",
+        actionLabel: "Rivedi offerta",
+        field: "frontEndOffer",
+        step: 1,
+      });
+    } else if (qOfferta === "TOO_SHORT" || qOfferta === "UNCLEAR") {
+      items.push({
+        id: "step1-offerta-poco-chiara",
+        level: "SUGGESTION",
+        title: "Chiarisci meglio l'offerta.",
+        description:
+          "Aggiungi il servizio concreto e cosa riceve il cliente.",
+        field: "frontEndOffer",
+        step: 1,
+      });
+    }
+  }
+
+  const qBrief = valutaQualitaBrief(brief);
+  if (qBrief === "TOO_SHORT" || qBrief === "INCOMPLETE") {
     items.push({
       id: "step1-brief-corto",
       level: "SUGGESTION",
       title: "Il brief può guidare meglio Affianco.",
       description:
-        "Spiega chi vuoi raggiungere, quale problema risolvi e con quale tono vuoi comunicare.",
+        "Aggiungi target, obiettivo e tono della comunicazione.",
+      actionLabel: "Completa il brief",
       field: "elevatorPitch",
       step: 1,
     });

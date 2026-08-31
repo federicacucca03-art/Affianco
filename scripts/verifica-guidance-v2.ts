@@ -448,15 +448,18 @@ const offertaCorta = generaGuidanceStep1({
   targetAge: "25-50",
 });
 assert(
-  offertaCorta.some((i) => i.id === "step1-offerta-generica"),
-  "extra: offerta corta → SUGGESTION",
+  offertaCorta.some((i) => i.id === "step1-offerta-poco-chiara"),
+  "extra: offerta troppo corta → SUGGESTION chiarisci",
 );
 assert(
   !generaGuidanceStep1({
     frontEndOffer: "",
     elevatorPitch: AURORA_BRIEF,
     targetAge: "25-50",
-  }).some((i) => i.id === "step1-offerta-generica"),
+  }).some(
+    (i) =>
+      i.id === "step1-offerta-generica" || i.id === "step1-offerta-poco-chiara",
+  ),
   "extra: offerta vuota non duplica il BLOCKER",
 );
 
