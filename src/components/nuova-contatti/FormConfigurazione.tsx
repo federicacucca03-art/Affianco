@@ -71,6 +71,7 @@ import { SpiegazioneCalcoloCpl } from "@/components/nuova-contatti/SpiegazioneCa
 import {
   generaGuidanceEconomica,
   generaGuidanceStep1,
+  type RaccomandazioneLancioStato,
 } from "@/lib/guidance";
 import { consiglioStrategicoNicchia } from "@/lib/consiglio-nicchia";
 import { testiPasso1Wizard } from "@/data/wizard-step1-config";
@@ -195,6 +196,8 @@ type Props = {
   /** LEADS step 6: stato approvazione cliente per export Meta. */
   statoApprovazioneLeads?: StatoApprovazioneLeads;
   revisionNotesCliente?: string | null;
+  /** Decisione di lancio: solo copy/CTA export, non blocca l'approval. */
+  statoLancio?: RaccomandazioneLancioStato;
   /** BOOKINGS prenotazioni: posti settimana (solo UI, non persistito). */
   postiDisponibiliSettimana?: string;
   onCambiaPostiDisponibiliSettimana?: (valore: string) => void;
@@ -431,6 +434,7 @@ export function FormConfigurazione({
   copyPreparazioneNota = null,
   statoApprovazioneLeads,
   revisionNotesCliente = null,
+  statoLancio,
   postiDisponibiliSettimana = "",
   onCambiaPostiDisponibiliSettimana,
 }: Props) {
@@ -3888,6 +3892,7 @@ export function FormConfigurazione({
         }
         statoApprovazione={statoApprovazioneLeads}
         revisionNotesCliente={revisionNotesCliente}
+        statoLancio={statoLancio}
       />
       {isPercorsoAwareness ? (
         <section className="mt-6 rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">

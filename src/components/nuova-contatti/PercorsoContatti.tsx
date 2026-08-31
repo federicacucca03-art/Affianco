@@ -87,7 +87,7 @@ import {
   type WizardStep,
 } from "@/lib/pre-lancio-check";
 import { calculateStrategicScore } from "@/lib/strategic-score";
-import { raccomandaLancio } from "@/lib/guidance";
+import { raccomandaLancio, copyHeaderStep6, etichettaStepperStep6 } from "@/lib/guidance";
 import { RaccomandazioneLancio } from "@/components/nuova-contatti/AffiancoSuggerisce";
 import { calculateLaunchReadiness } from "@/lib/launch-readiness";
 import { estraiServizioPrincipale } from "@/lib/extract-service";
@@ -2209,7 +2209,7 @@ export function PercorsoContatti({
             : "Più richieste di contatto";
 
   const stepAttuale = WIZARD_STEPS.find((s) => s.id === wizardStep);
-  const titoloStepWizard =
+  const titoloStepWizardStatico =
     isPercorsoAwareness && wizardStep === 1
       ? "Partiamo dalla nuova apertura"
       : isPercorsoAwareness && wizardStep === 2
@@ -2279,7 +2279,7 @@ export function PercorsoContatti({
                   : isPercorsoLeads && wizardStep === 6
                 ? "Campagna pronta"
                 : stepAttuale?.titolo ?? "";
-  const sottotitoloStepWizard =
+  const sottotitoloStepWizardStatico =
     isPercorsoAwareness && wizardStep === 1
       ? "Definiamo cosa vuoi far conoscere, dove si trova e quale messaggio deve ricordare il pubblico."
       : isPercorsoAwareness && wizardStep === 2
@@ -2341,6 +2341,11 @@ export function PercorsoContatti({
             : isPercorsoLeads && wizardStep === 6
           ? "La struttura è completa. Falla approvare al cliente e poi esportala su Meta Ads Manager."
           : null;
+  const headerLancio = copyHeaderStep6(raccomandazioneLancio.stato);
+  const titoloStepWizard =
+    wizardStep === 6 ? headerLancio.titolo : titoloStepWizardStatico;
+  const sottotitoloStepWizard =
+    wizardStep === 6 ? headerLancio.sottotitolo : sottotitoloStepWizardStatico;
   const etichettaPulsanteAvanti =
     wizardStep === 5 &&
     (isPercorsoLeads ||
@@ -2405,30 +2410,30 @@ export function PercorsoContatti({
         <div className="mb-8 rounded-[var(--radius)] bg-white p-4 shadow-[var(--shadow-soft)] sm:p-5">
           <WizardStepper
             step={wizardStep}
-            titoliOverride={
-              isPercorsoAwareness
+            titoliOverride={{
+              ...(isPercorsoAwareness
                 ? {
                     3: "Messaggio di apertura",
                     4: "Creatività di apertura",
                     5: "Controllo",
-                    6: "Campagna pronta",
                   }
                 : isPercorsoRetargeting
-                ? {
-                    3: "Messaggio di recupero",
-                    4: "Creatività di recupero",
-                    5: "Controllo",
-                    6: "Campagna pronta",
-                  }
-                : isPercorsoInstore
-                ? {
-                    3: "Messaggio locale",
-                    4: "Creatività locale",
-                    5: "Controllo",
-                    6: "Campagna pronta",
-                  }
-                : undefined
-            }
+                  ? {
+                      3: "Messaggio di recupero",
+                      4: "Creatività di recupero",
+                      5: "Controllo",
+                    }
+                  : isPercorsoInstore
+                    ? {
+                        3: "Messaggio locale",
+                        4: "Creatività locale",
+                        5: "Controllo",
+                      }
+                    : {}),
+              ...(wizardStep === 6
+                ? { 6: etichettaStepperStep6(raccomandazioneLancio.stato) }
+                : {}),
+            }}
             onVaiAStep={(s) => {
               if (s <= wizardStep) setWizardStep(s);
             }}
@@ -2731,6 +2736,7 @@ export function PercorsoContatti({
                     : undefined
                 }
                 revisionNotesCliente={revisionNotesCliente}
+                statoLancio={raccomandazioneLancio.stato}
               />
               </>
             )}

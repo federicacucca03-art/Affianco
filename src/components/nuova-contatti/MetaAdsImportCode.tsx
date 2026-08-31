@@ -9,13 +9,19 @@ import type {
   TargetType,
 } from "@/types/campagne";
 import type { CreativitaMeta } from "@/lib/creativita";
-import {
-  generaCodiceImportMeta,
-  scaricaFileMetaCsv,
-} from "@/data/meta-import-tsv";
 import { ModaleGuidaImportMeta } from "@/components/nuova-contatti/ModaleGuidaImportMeta";
 import { logCampagnaEsportata } from "@/lib/campaign-logs";
 import type { StatoApprovazioneLeads } from "@/components/nuova-contatti/StatoApprovazioneLeads";
+import {
+  csvMetaHaCopyEsportabile,
+  generaCodiceImportMeta,
+  scaricaFileMetaCsv,
+} from "@/data/meta-import-tsv";
+import { richiedeModuloContatti } from "@/lib/launch-readiness";
+import {
+  etichetteExportMeta,
+  type RaccomandazioneLancioStato,
+} from "@/lib/guidance";
 
 type Props = {
   config: ConfigurazioneContatti;
@@ -36,6 +42,7 @@ type Props = {
   layoutCampagnaPronta?: boolean;
   statoApprovazione?: StatoApprovazioneLeads;
   revisionNotesCliente?: string | null;
+  statoLancio?: RaccomandazioneLancioStato;
 };
 
 function descrizioneCsvObjective(
@@ -77,6 +84,7 @@ export function MetaAdsImportCode({
   layoutCampagnaPronta = false,
   statoApprovazione,
   revisionNotesCliente = null,
+  statoLancio,
 }: Props) {
   const usaLayoutCampagnaPronta = layoutCampagnaPronta || layoutLeads;
   const [copiato, setCopiato] = useState(false);
@@ -119,20 +127,28 @@ export function MetaAdsImportCode({
     }
   }
 
-  function scaricaFileCsv() {
-    scaricaFileMetaCsv(csvContent);
-    setGuidaAperta(true);
-    if (campaignId) {
-      void logCampagnaEsportata(campaignId);
-    }
-  }
-
   const approvata = statoApprovazione === "approvata";
   const revisioneRichiesta = statoApprovazione === "modifiche_richieste";
   const mostraWarningApprovazione =
     usaLayoutCampagnaPronta &&
     statoApprovazione != null &&
     statoApprovazione !== "approvata";
+  const formRichiesto = richiedeModuloContatti(objective, bookingChannel);
+  const exportUi = etichetteExportMeta({
+    statoLancio: statoLancio ?? "NOT_READY",
+    haCopyExport: csvMetaHaCopyEsportabile(config),
+    pageIdMancante: pageId.trim() === "",
+    formIdMancante: formRichiesto && formId.trim() === "",
+  });
+
+  function scaricaFileCsv() {
+    if (!exportUi.exportAbilitato) return;
+    scaricaFileMetaCsv(csvContent);
+    setGuidaAperta(true);
+    if (campaignId) {
+      void logCampagnaEsportata(campaignId);
+    }
+  }
 
   const bloccoDettagliTecnici = (
     <>
@@ -213,14 +229,20 @@ export function MetaAdsImportCode({
           <button
             type="button"
             onClick={scaricaFileCsv}
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-[var(--ink)] px-5 py-3.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            disabled={!exportUi.exportAbilitato}
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-[var(--ink)] px-5 py-3.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Download className="h-4 w-4" strokeWidth={1.75} />
-            Esporta Campagna Pronta per Meta
+            {exportUi.labelCta}
           </button>
-          <p className="mt-2 text-center text-xs text-[var(--ink-muted)]">
-            Al download si apre la guida passo-passo per Ads Manager.
+          <p className="mt-2 text-center text-xs leading-relaxed text-[var(--ink-muted)]">
+            {exportUi.microcopy}
           </p>
+          {exportUi.exportAbilitato ? (
+            <p className="mt-1 text-center text-xs text-[var(--ink-muted)]">
+              Al download si apre la guida passo-passo per Ads Manager.
+            </p>
+          ) : null}
           {objective === "RETARGETING" ? (
             <p className="mt-3 text-center text-xs leading-relaxed text-[var(--ink-muted)]">
               L&apos;export prepara struttura, obiettivo, evento e impostazioni
@@ -276,11 +298,15 @@ export function MetaAdsImportCode({
           <button
             type="button"
             onClick={scaricaFileCsv}
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-[var(--ink)] px-5 py-3.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            disabled={!exportUi.exportAbilitato}
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-[var(--ink)] px-5 py-3.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Download className="h-4 w-4" strokeWidth={1.75} />
-            🚀 Esporta Campagna Pronta per Meta
+            {exportUi.labelCta}
           </button>
+          <p className="text-center text-xs leading-relaxed text-[var(--ink-muted)]">
+            {exportUi.microcopy}
+          </p>
 
           <button
             type="button"

@@ -476,3 +476,114 @@ export function raccomandaLancio(
     actions: [],
   };
 }
+
+export type CopyHeaderStep6 = {
+  titolo: string;
+  sottotitolo: string;
+};
+
+/** Sintesi header Step 6: non duplica la card Guidance. */
+export function copyHeaderStep6(
+  stato: RaccomandazioneLancioStato,
+): CopyHeaderStep6 {
+  if (stato === "READY_TO_LAUNCH") {
+    return {
+      titolo: "Campagna pronta",
+      sottotitolo:
+        "La strategia e la configurazione operativa sono complete.",
+    };
+  }
+  if (stato === "READY_WITH_CAUTION") {
+    return {
+      titolo: "Configurazione quasi pronta",
+      sottotitolo:
+        "Ci sono ancora alcuni elementi da verificare prima del lancio.",
+    };
+  }
+  return {
+    titolo: "Configurazione da completare",
+    sottotitolo:
+      "Completa gli elementi indicati da Affianco prima di andare live.",
+  };
+}
+
+export function etichettaStepperStep6(
+  stato: RaccomandazioneLancioStato,
+): string {
+  if (stato === "READY_TO_LAUNCH") return "Pronta";
+  if (stato === "READY_WITH_CAUTION") return "Da verificare";
+  return "Da completare";
+}
+
+export const LABEL_EXPORT_PRONTA = "Esporta Campagna Pronta per Meta";
+export const LABEL_EXPORT_BOZZA = "Esporta bozza per Meta";
+export const MICROCOPY_EXPORT_PRONTA =
+  "La configurazione è completa per l'importazione.";
+export const MICROCOPY_EXPORT_BOZZA =
+  "Puoi preparare il file ora e completare gli elementi mancanti in Ads Manager prima della pubblicazione.";
+export const MICROCOPY_EXPORT_PAGE_FORM =
+  "Page ID e Form ID dovranno essere completati in Meta Ads Manager prima di andare live.";
+export const MICROCOPY_EXPORT_PAGE =
+  "Page ID dovrà essere completato in Meta Ads Manager prima di andare live.";
+export const MICROCOPY_EXPORT_FORM =
+  "Form ID dovrà essere completato in Meta Ads Manager prima di andare live.";
+export const MICROCOPY_EXPORT_BLOCCATO =
+  "Inserisci almeno un testo annuncio per generare il file.";
+
+export type EtichetteExportMeta = {
+  labelCta: string;
+  microcopy: string;
+  exportAbilitato: boolean;
+  motivoBlocco?: string;
+};
+
+export type EtichetteExportMetaInput = {
+  statoLancio: RaccomandazioneLancioStato;
+  /** Almeno una variante A/B/C con testo: il CSV non usa il placeholder. */
+  haCopyExport: boolean;
+  pageIdMancante?: boolean;
+  formIdMancante?: boolean;
+};
+
+/**
+ * Label e microcopy export: lancio ≠ file CSV.
+ * Page/Form vuoti non bloccano se il generatore li accetta.
+ * Blocco solo se manca il copy necessario a produrre un file valido.
+ */
+export function etichetteExportMeta(
+  input: EtichetteExportMetaInput,
+): EtichetteExportMeta {
+  if (!input.haCopyExport) {
+    return {
+      labelCta: LABEL_EXPORT_BOZZA,
+      microcopy: MICROCOPY_EXPORT_BLOCCATO,
+      exportAbilitato: false,
+      motivoBlocco: MICROCOPY_EXPORT_BLOCCATO,
+    };
+  }
+
+  if (input.statoLancio === "READY_TO_LAUNCH") {
+    return {
+      labelCta: LABEL_EXPORT_PRONTA,
+      microcopy: MICROCOPY_EXPORT_PRONTA,
+      exportAbilitato: true,
+    };
+  }
+
+  const page = Boolean(input.pageIdMancante);
+  const form = Boolean(input.formIdMancante);
+  const microcopy =
+    page && form
+      ? MICROCOPY_EXPORT_PAGE_FORM
+      : page
+        ? MICROCOPY_EXPORT_PAGE
+        : form
+          ? MICROCOPY_EXPORT_FORM
+          : MICROCOPY_EXPORT_BOZZA;
+
+  return {
+    labelCta: LABEL_EXPORT_BOZZA,
+    microcopy,
+    exportAbilitato: true,
+  };
+}

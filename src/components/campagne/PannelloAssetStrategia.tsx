@@ -11,6 +11,10 @@ import {
 import type { ConfigurazioneContatti } from "@/types/campagne";
 import { assicuraVariantiCampagna } from "@/lib/assicura-varianti";
 import { logCampagnaEsportata } from "@/lib/campaign-logs";
+import { csvMetaHaCopyEsportabile } from "@/data/meta-import-tsv";
+import { calculateLaunchReadiness, richiedeModuloContatti } from "@/lib/launch-readiness";
+import { calculateStrategicScore } from "@/lib/strategic-score";
+import { etichetteExportMeta, raccomandaLancio } from "@/lib/guidance";
 
 type Props = {
   campagna: Campagna;
@@ -227,6 +231,73 @@ export function PannelloAssetStrategia({ campagna, onEsportata }: Props) {
   const etaMin = campagnaConCopy.etaMin ?? 25;
   const etaMax = campagnaConCopy.etaMax ?? 65;
   const budget = campagnaConCopy.budgetGiornaliero ?? 20;
+  const exportUi = useMemo(() => {
+    const haCopy = csvMetaHaCopyEsportabile(campagnaConCopy);
+    const launchReadiness = calculateLaunchReadiness({
+      fotoCaricata: (campagnaConCopy.creativitaMeta?.length ?? 0) > 0,
+      clienteHaApprovato:
+        (campagnaConCopy.status ?? "").toUpperCase() === "APPROVED",
+      paginaFacebookId: campagnaConCopy.pageId ?? "",
+      moduloContattiId: campagnaConCopy.formId ?? "",
+      destinationUrl: campagnaConCopy.website,
+      objective: campagnaConCopy.objective,
+      bookingChannel: campagnaConCopy.bookingChannel,
+      haCopySelezionato: haCopy,
+      haTitoloAnnuncio: Boolean((campagnaConCopy.titoloAnnuncio ?? "").trim()),
+    });
+    const ticket = Number(
+      campagnaConCopy.averageOrderValue ??
+        campagnaConCopy.averageReceipt ??
+        campagnaConCopy.recoveryValue ??
+        campagnaConCopy.bookingServiceValue ??
+        campagnaConCopy.scontrinoMedio ??
+        0,
+    );
+    const strategicScore = calculateStrategicScore({
+      budgetGiornaliero: campagnaConCopy.budgetGiornaliero ?? 20,
+      settore: campagnaConCopy.settore ?? "",
+      citta: campagnaConCopy.citta ?? "",
+      ticket: ticket > 0 ? ticket : null,
+      conversionRate:
+        campagnaConCopy.tassoConversionePercent ??
+        campagnaConCopy.showUpRate ??
+        null,
+      conversionRateSource: campagnaConCopy.conversionRateSource,
+      targetMargin:
+        campagnaConCopy.targetMargin === 30 ||
+        campagnaConCopy.targetMargin === 70
+          ? campagnaConCopy.targetMargin
+          : 50,
+      maxSustainableCpl: campagnaConCopy.maxSustainableCpa ?? null,
+      frontEndOffer: campagnaConCopy.frontEndOffer,
+      elevatorPitch: campagnaConCopy.elevatorPitch,
+      targetType: campagnaConCopy.targetType,
+      targetAge: campagnaConCopy.targetAge,
+      raggioKm: campagnaConCopy.raggioKm ?? campagnaConCopy.awarenessRadiusKm,
+      haCopySelezionato: haCopy,
+      copyVarianteA: campagnaConCopy.varianteA,
+      titoloAnnuncio: campagnaConCopy.titoloAnnuncio,
+      fotoCaricata: (campagnaConCopy.creativitaMeta?.length ?? 0) > 0,
+      objective: campagnaConCopy.objective,
+      bookingChannel: campagnaConCopy.bookingChannel,
+      fase: "completa",
+    });
+    const raccomandazione = raccomandaLancio({
+      strategicScore,
+      launchReadiness,
+      objective: campagnaConCopy.objective,
+    });
+    const formRichiesto = richiedeModuloContatti(
+      campagnaConCopy.objective,
+      campagnaConCopy.bookingChannel,
+    );
+    return etichetteExportMeta({
+      statoLancio: raccomandazione.stato,
+      haCopyExport: haCopy,
+      pageIdMancante: !(campagnaConCopy.pageId ?? "").trim(),
+      formIdMancante: formRichiesto && !(campagnaConCopy.formId ?? "").trim(),
+    });
+  }, [campagnaConCopy]);
 
   return (
     <div className="space-y-6">
@@ -356,17 +427,22 @@ export function PannelloAssetStrategia({ campagna, onEsportata }: Props) {
       <div className="pb-4">
         <button
           type="button"
+          disabled={!exportUi.exportAbilitato}
           onClick={() => {
+            if (!exportUi.exportAbilitato) return;
             scaricaCsvMeta(campagnaConCopy);
             setGuidaAperta(true);
             void logCampagnaEsportata(campagna.id).then(() => {
               onEsportata?.();
             });
           }}
-          className="inline-flex w-full items-center justify-center rounded-full bg-[var(--ink)] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 sm:w-auto"
+          className="inline-flex w-full items-center justify-center rounded-full bg-[var(--ink)] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
         >
-          🚀 Esporta Campagna Pronta per Meta
+          {exportUi.labelCta}
         </button>
+        <p className="mt-2 max-w-xl text-xs leading-relaxed text-[var(--ink-muted)]">
+          {exportUi.microcopy}
+        </p>
       </div>
 
       <ModaleGuidaImportMeta

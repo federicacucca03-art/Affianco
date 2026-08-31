@@ -488,6 +488,22 @@ export function generaCodiceImportMeta(
   return `\uFEFF${intestazione}\n${righe.join("\n")}`;
 }
 
+/**
+ * Il generatore emette un placeholder se A/B/C sono vuoti.
+ * Senza almeno un testo reale il CSV non è un export valido.
+ */
+export function csvMetaHaCopyEsportabile(input: {
+  varianteA?: string | null;
+  varianteB?: string | null;
+  varianteC?: string | null;
+}): boolean {
+  return Boolean(
+    (input.varianteA ?? "").trim() ||
+      (input.varianteB ?? "").trim() ||
+      (input.varianteC ?? "").trim(),
+  );
+}
+
 export function scaricaFileMetaCsv(
   csvContent: string,
   nomeFile = "campagna_meta_antifuffa.csv",
