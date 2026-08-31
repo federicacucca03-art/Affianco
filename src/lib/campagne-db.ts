@@ -35,6 +35,10 @@ import {
   metaDaCreativitaJson,
   pathsCreativitaRimossi,
 } from "@/lib/creativita-storage";
+import {
+  normalizzaConversionRateSource,
+  type ConversionRateSource,
+} from "@/lib/conversion-rate";
 
 export { urlApprovazioneDaToken } from "@/lib/approval-token";
 
@@ -114,6 +118,7 @@ export type CampaignRow = {
   shipping_market?: string | null;
   hero_product?: string | null;
   creativita?: unknown;
+  conversion_rate_source?: string | null;
   clients?: ClientJoin | ClientJoin[] | null;
 };
 
@@ -161,6 +166,8 @@ export type DatiSalvataggioCampagna = {
   heroProduct?: string;
   /** Metadata creatività (fino a 3) per export Meta A/B visivo. */
   creativitaMeta?: CreativitaMeta[];
+  /** LEADS: provenienza tasso di conversione (REAL | ESTIMATED | UNKNOWN). */
+  conversionRateSource?: ConversionRateSource;
   /** Asset locali (blob) da caricare su Storage al salvataggio. */
   creativitaAssets?: CreativitaAsset[];
   /**
@@ -381,6 +388,9 @@ export function mappaCampagnaDaRow(row: CampaignRow): Campagna {
       row.max_sustainable_cpa > 0
         ? row.max_sustainable_cpa
         : undefined,
+    conversionRateSource: normalizzaConversionRateSource(
+      row.conversion_rate_source,
+    ),
     approvedAt: row.approved_at ?? undefined,
     revisionNotes: (() => {
       const n = row.revision_notes?.trim();
@@ -549,6 +559,7 @@ type CampagnaWriteInput = {
   shippingMarket?: EcommerceShippingMarket;
   heroProduct?: string;
   creativitaMeta?: CreativitaMeta[];
+  conversionRateSource?: ConversionRateSource;
 };
 
 function nomeCampagnaFallback(objective: CampagnaObjective): string {
@@ -639,6 +650,9 @@ export function costruisciPayloadCampagna(
   if (input.creativitaMeta !== undefined) {
     payload.creativita = input.creativitaMeta;
   }
+  if (input.conversionRateSource) {
+    payload.conversion_rate_source = input.conversionRateSource;
+  }
 
   return payload;
 }
@@ -685,6 +699,7 @@ function writeInputDaDati(
     shippingMarket: dati.shippingMarket,
     heroProduct: dati.heroProduct,
     creativitaMeta: dati.creativitaMeta,
+    conversionRateSource: dati.conversionRateSource,
   };
 }
 
@@ -809,6 +824,7 @@ function assetsDaDati(dati: DatiSalvataggioCampagna): CampagnaAssets {
       dati.creativitaMeta && dati.creativitaMeta.length > 0
         ? dati.creativitaMeta
         : undefined,
+    conversionRateSource: dati.conversionRateSource,
   };
 }
 
@@ -979,8 +995,11 @@ export async function salvaCampagnaCompleta(
 const SELECT_LISTA =
   "id, created_at, client_id, name, objective, status, daily_budget, max_sustainable_cpa, booking_service_value, show_up_rate, booking_channel, average_order_value, product_margin, average_receipt, store_margin, recovery_value, recovery_margin, recovery_discount, launch_budget, awareness_radius_km, estimated_cpm, approved_at, revision_notes, approval_token, clients(id, name, elevator_pitch, average_ticket_value, closing_rate)";
 
-const SELECT_DETTAGLIO =
+const SELECT_DETTAGLIO_SENZA_CRS =
   "id, created_at, client_id, name, objective, status, daily_budget, max_sustainable_cpa, variante_a, variante_b, variante_c, page_id, form_id, settore, citta, raggio_km, eta_min, eta_max, titolo_annuncio, target_margin, booking_service_value, show_up_rate, booking_channel, booking_confirmation_policy, average_order_value, product_margin, average_receipt, store_margin, recovery_value, recovery_margin, recovery_discount, launch_budget, awareness_radius_km, estimated_cpm, front_end_offer, target_type, target_age, shipping_market, hero_product, creativita, approved_at, revision_notes, approval_token, clients(id, name, elevator_pitch, average_ticket_value, closing_rate, website)";
+
+const SELECT_DETTAGLIO =
+  "id, created_at, client_id, name, objective, status, daily_budget, max_sustainable_cpa, variante_a, variante_b, variante_c, page_id, form_id, settore, citta, raggio_km, eta_min, eta_max, titolo_annuncio, target_margin, booking_service_value, show_up_rate, booking_channel, booking_confirmation_policy, average_order_value, product_margin, average_receipt, store_margin, recovery_value, recovery_margin, recovery_discount, launch_budget, awareness_radius_km, estimated_cpm, front_end_offer, target_type, target_age, shipping_market, hero_product, creativita, conversion_rate_source, approved_at, revision_notes, approval_token, clients(id, name, elevator_pitch, average_ticket_value, closing_rate, website)";
 
 /** Elenco campagne con join sul cliente, dalla più recente. */
 export async function leggiCampagneDaSupabase(): Promise<Campagna[]> {
@@ -1016,6 +1035,21 @@ export async function leggiCampagnaDaSupabase(
 
   if (!tentativoDettaglio.error && tentativoDettaglio.data) {
     return mappaCampagnaDaRow(tentativoDettaglio.data as CampaignRow);
+  }
+
+  const erroreDettaglio = tentativoDettaglio.error;
+  const colonnaCrsMancante =
+    Boolean(erroreDettaglio) &&
+    /conversion_rate_source/i.test(erroreDettaglio?.message ?? "");
+  if (colonnaCrsMancante) {
+    const senzaCrs = await supabase
+      .from("campaigns")
+      .select(SELECT_DETTAGLIO_SENZA_CRS)
+      .eq("id", id)
+      .maybeSingle();
+    if (!senzaCrs.error && senzaCrs.data) {
+      return mappaCampagnaDaRow(senzaCrs.data as CampaignRow);
+    }
   }
 
   // Schema senza colonne asset / website: fallback select base.

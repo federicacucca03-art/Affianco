@@ -1,3 +1,4 @@
+import type { ConversionRateSource } from "@/lib/conversion-rate";
 import type { CreativitaMeta } from "@/lib/creativita";
 
 export type Giudizio =
@@ -251,6 +252,11 @@ export type Campagna = {
    * Per ECOMMERCE = CPA Max break-even da famiglia W del wizard.
    */
   maxSustainableCpa?: number;
+  /**
+   * Provenienza del tasso di conversione LEADS (colonna conversion_rate_source).
+   * REAL | ESTIMATED | UNKNOWN. Non è un giudizio di qualità.
+   */
+  conversionRateSource?: ConversionRateSource;
   /** Metadata creatività A/B (fino a 3 immagini). */
   creativitaMeta?: CreativitaMeta[];
 };

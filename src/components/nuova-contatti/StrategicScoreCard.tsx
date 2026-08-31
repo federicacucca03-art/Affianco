@@ -1,12 +1,15 @@
 "use client";
 
 import type { StrategicScoreResult } from "@/lib/strategic-score";
+import {
+  CAVEAT_STIMA,
+  LABEL_RISCHIO_SPRECO_BUDGET,
+  PESI_STRATEGIC_SCORE,
+} from "@/lib/strategic-score";
+import { etichettaConversionRateSource } from "@/lib/conversion-rate";
 
 type Props = {
   result: StrategicScoreResult;
-  budgetMin?: number;
-  /** Etichetta ultimo fattore (modulo vs URL store vs completamento). */
-  etichettaAssetFinale?: string;
 };
 
 const TONE_STYLES = {
@@ -21,6 +24,10 @@ const TONE_STYLES = {
   orange: {
     card: "border-[#f5c9b8] bg-[#fff4f0]",
     score: "text-[#c2410c]",
+  },
+  neutral: {
+    card: "border-[var(--border)] bg-white",
+    score: "text-[var(--ink)]",
   },
 } as const;
 
@@ -52,49 +59,49 @@ function RigaFattore({
   );
 }
 
-export function StrategicScoreCard({
-  result,
-  budgetMin,
-  etichettaAssetFinale = "ID Modulo Contatti",
-}: Props) {
+export function StrategicScoreCard({ result }: Props) {
   const stile = TONE_STYLES[result.tone];
   const b = result.breakdown;
+  const eco = result.economia;
 
   const fattori = [
     {
-      ok: b.strategyBudget > 0,
-      label:
-        budgetMin != null
-          ? `Budget ≥ ${budgetMin}€/giorno`
-          : "Budget giornaliero nella norma",
-      punti: b.strategyBudget,
-      max: 40,
+      ok: b.economia >= PESI_STRATEGIC_SCORE.economia * 0.75,
+      label: eco.maxCplCalcolabile
+        ? `Economia (soglia sostenibile ${eco.maxSustainableCpl}€)`
+        : "Economia",
+      punti: b.economia,
+      max: PESI_STRATEGIC_SCORE.economia,
     },
     {
-      ok: b.copy > 0,
-      label: "Copy varianti presenti",
+      ok: b.offerta === PESI_STRATEGIC_SCORE.offerta,
+      label: "Offerta e brief",
+      punti: b.offerta,
+      max: PESI_STRATEGIC_SCORE.offerta,
+    },
+    {
+      ok: b.targeting === PESI_STRATEGIC_SCORE.targeting,
+      label: "Targeting",
+      punti: b.targeting,
+      max: PESI_STRATEGIC_SCORE.targeting,
+    },
+    {
+      ok: b.copy === PESI_STRATEGIC_SCORE.copy,
+      label: "Copy",
       punti: b.copy,
-      max: 20,
+      max: PESI_STRATEGIC_SCORE.copy,
     },
     {
-      ok: b.foto > 0,
-      label: "Creatività caricata",
-      punti: b.foto,
-      max: 15,
-    },
-    {
-      ok: b.pageId > 0,
-      label: "ID Pagina Facebook",
-      punti: b.pageId,
-      max: 15,
-    },
-    {
-      ok: b.formId > 0,
-      label: etichettaAssetFinale,
-      punti: b.formId,
-      max: 10,
+      ok: b.creativita === PESI_STRATEGIC_SCORE.creativita,
+      label: "Creatività",
+      punti: b.creativita,
+      max: PESI_STRATEGIC_SCORE.creativita,
     },
   ];
+
+  const suggestionsVisibili = result.suggestions.filter(
+    (s) => !s.includes(LABEL_RISCHIO_SPRECO_BUDGET) || result.avvisoSprecoBudget,
+  );
 
   return (
     <section
@@ -103,18 +110,41 @@ export function StrategicScoreCard({
       <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
         Strategic Score
       </p>
-      <p
-        className={`mt-2 text-4xl font-medium tracking-tight tabular-nums ${stile.score}`}
-      >
-        {result.score}
-        <span className="text-lg font-normal text-[var(--ink-muted)]">
-          {" "}
-          / 100
-        </span>
-      </p>
-      <p className="mt-2 text-sm font-medium text-[var(--ink)]">
-        {result.label}
-      </p>
+      {result.mostraPunteggio ? (
+        <p
+          className={`mt-2 text-4xl font-medium tracking-tight tabular-nums ${stile.score}`}
+        >
+          {result.score}
+          <span className="text-lg font-normal text-[var(--ink-muted)]">
+            {" "}
+            / 100
+          </span>
+        </p>
+      ) : (
+        <p className="mt-2 text-lg font-medium text-[var(--ink)]">
+          {result.label}
+        </p>
+      )}
+      {result.mostraPunteggio ? (
+        <p className="mt-2 text-sm font-medium text-[var(--ink)]">
+          {result.label}
+        </p>
+      ) : null}
+
+      {eco.conversionRateSource === "REAL" ? (
+        <p className="mt-2 text-xs font-medium text-[#1f7a3a]">Dato reale</p>
+      ) : null}
+      {eco.conversionRateSource === "ESTIMATED" ? (
+        <p className="mt-2 text-xs leading-relaxed text-[#9a6700]">
+          {CAVEAT_STIMA}
+        </p>
+      ) : null}
+      {eco.conversionRateSource === "UNKNOWN" ? (
+        <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
+          Tasso di conversione non disponibile — i numeri non sono ancora
+          certi.
+        </p>
+      ) : null}
 
       <ul className="mt-4 space-y-2 border-t border-black/5 pt-3">
         {fattori.map((f) => (
@@ -128,21 +158,44 @@ export function StrategicScoreCard({
         ))}
       </ul>
 
-      {result.isComplete ? (
+      {eco.benchmarkBudgetMin != null ? (
         <p className="mt-3 text-xs leading-relaxed text-[var(--ink-muted)]">
-          Tutti gli asset richiesti sono inseriti.
+          Per realtà simili a {eco.citta || "questa zona"} il benchmark
+          indicativo parte da circa {eco.benchmarkBudgetMin}€/giorno.
         </p>
-      ) : result.suggestions.length > 0 ? (
+      ) : null}
+
+      {result.avvisoSprecoBudget ? (
+        <p className="mt-3 text-xs font-medium leading-relaxed text-[#c2410c]">
+          {LABEL_RISCHIO_SPRECO_BUDGET}: il CPL di mercato tipico supera la
+          soglia sostenibile.
+        </p>
+      ) : null}
+
+      {suggestionsVisibili.length > 0 ? (
         <ul className="mt-3 space-y-1.5 border-t border-black/5 pt-3">
-          {result.suggestions.map((suggerimento) => (
-            <li
-              key={suggerimento}
-              className="text-xs leading-relaxed text-[var(--ink-muted)]"
-            >
-              {suggerimento}
-            </li>
-          ))}
+          {suggestionsVisibili
+            .filter(
+              (s) =>
+                !s.includes("benchmark indicativo") &&
+                !s.includes(CAVEAT_STIMA),
+            )
+            .map((suggerimento) => (
+              <li
+                key={suggerimento}
+                className="text-xs leading-relaxed text-[var(--ink-muted)]"
+              >
+                {suggerimento}
+              </li>
+            ))}
         </ul>
+      ) : null}
+
+      {eco.conversionRateSource ? (
+        <p className="mt-3 text-[10px] uppercase tracking-wide text-[var(--ink-muted)]">
+          Fonte conversione:{" "}
+          {etichettaConversionRateSource(eco.conversionRateSource)}
+        </p>
       ) : null}
     </section>
   );

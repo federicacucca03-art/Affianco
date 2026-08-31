@@ -27,6 +27,7 @@ import { generaVariantiCopy, titoloAnnuncioEcommerce, titoloAnnuncioLeads, type 
 import { pulisciNomeAttivitaPubblico } from "@/lib/copy-pubblico";
 import {
   type ConversionRateSource,
+  normalizzaConversionRateSource,
   tassoConversioneLeadsValido,
 } from "@/lib/conversion-rate";
 import { leggiBozzaOnboarding } from "@/data/clienti-store";
@@ -38,6 +39,8 @@ import { PannelloPerche } from "@/components/nuova-contatti/PannelloPerche";
 import { ChecklistMeta } from "@/components/nuova-contatti/ChecklistMeta";
 import { MetaFeedMockup } from "@/components/nuova-contatti/MetaFeedMockup";
 import { StrategicScoreCard } from "@/components/nuova-contatti/StrategicScoreCard";
+import { ValutazioneEconomicaCard } from "@/components/nuova-contatti/ValutazioneEconomicaCard";
+import { LaunchReadinessCard } from "@/components/nuova-contatti/LaunchReadinessCard";
 import { WizardStepper } from "@/components/nuova-contatti/WizardStepper";
 import { DiagnosiPreLancio } from "@/components/nuova-contatti/DiagnosiPreLancio";
 import { CardLinkApprovazione } from "@/components/nuova-contatti/CardLinkApprovazione";
@@ -83,9 +86,36 @@ import {
   type PreLancioAzioneRapida,
   type WizardStep,
 } from "@/lib/pre-lancio-check";
-import { calculateStrategicScore, richiedeDestinationUrl, richiedeModuloContatti } from "@/lib/strategic-score";
+import { calculateStrategicScore } from "@/lib/strategic-score";
+import { calculateLaunchReadiness } from "@/lib/launch-readiness";
 import { estraiServizioPrincipale } from "@/lib/extract-service";
 import { etaDaTargetAgeBand } from "@/types/campagne";
+
+const CRS_SESSION_PREFIX = "affianco-conversion-rate-source:";
+
+function chiaveCrsSessione(search: string): string {
+  return `${CRS_SESSION_PREFIX}${search || "nuova"}`;
+}
+
+function persistiCrsSessione(search: string, source: ConversionRateSource) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(chiaveCrsSessione(search), source);
+  } catch {
+    // quota / private mode
+  }
+}
+
+function leggiCrsSessione(search: string): ConversionRateSource | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    return normalizzaConversionRateSource(
+      window.sessionStorage.getItem(chiaveCrsSessione(search)),
+    );
+  } catch {
+    return undefined;
+  }
+}
 
 function nomeCampagnaPerObiettivo(
   objective: CampagnaObjective,
@@ -352,7 +382,14 @@ export function PercorsoContatti({
     isBookings ? 75 : "",
   );
   const [conversionRateSource, setConversionRateSource] =
-    useState<ConversionRateSource>("ESTIMATED");
+    useState<ConversionRateSource>(
+      () => leggiCrsSessione(searchParams.toString()) ?? "ESTIMATED",
+    );
+
+  function cambiaConversionRateSource(source: ConversionRateSource) {
+    setConversionRateSource(source);
+    persistiCrsSessione(searchParams.toString(), source);
+  }
   const [productMargin, setProductMargin] = useState<number | string>(
     isEcommerce ? 60 : isInStore ? 40 : 50,
   );
@@ -410,14 +447,21 @@ export function PercorsoContatti({
     intelApplicatoRef.current = intel.id;
     setScontrinoMedio(intel.aovDefault);
     setProductMargin(intel.margineDefault);
-    setConfig((prev) => ({
-      ...prev,
-      budgetGiornaliero: intel.budgetGiornalieroMin,
-      raggioKm:
-        isEcommerce || isRetargeting
-          ? Math.max(prev.raggioKm, intel.raggioKmConsigliato)
-          : intel.raggioKmConsigliato,
-    }));
+    setConfig((prev) => {
+      const citta = contesto.citta ?? "";
+      const benchmarkCitta = getBenchmarkForNiche(
+        intel.nome || intel.id,
+        citta,
+      );
+      return {
+        ...prev,
+        budgetGiornaliero: benchmarkCitta.recommendedDailyBudgetMin,
+        raggioKm:
+          isEcommerce || isRetargeting
+            ? Math.max(prev.raggioKm, intel.raggioKmConsigliato)
+            : intel.raggioKmConsigliato,
+      };
+    });
   }
 
   useEffect(() => {
@@ -616,7 +660,8 @@ export function PercorsoContatti({
               : 1500,
     );
     setTassoConversione(isBookings ? 75 : "");
-    setConversionRateSource("ESTIMATED");
+    const crsPersistito = leggiCrsSessione(searchParams.toString());
+    setConversionRateSource(crsPersistito ?? "ESTIMATED");
     setProductMargin(isEcommerce ? 60 : isInStore ? 40 : 50);
     setFulfillmentCost(5);
     setEcommerceLtvAttivo(false);
@@ -915,14 +960,116 @@ export function PercorsoContatti({
         (config.varianteB ?? "").trim() ||
         (config.varianteC ?? "").trim(),
     );
+    const ticket = Number(scontrinoMedio) || 0;
+    const tassoLeads = isPercorsoLeads
+      ? tassoConversioneLeadsValido(conversionRateSource, tassoConversione)
+      : null;
+    const tasso = isPercorsoLeads
+      ? tassoLeads
+      : Number(tassoConversione) || (isBookings ? 75 : 10);
+    const margineProdotto =
+      Number(productMargin) || (isEcommerce ? 60 : isInStore ? 40 : 50);
+    const costoFulfillment = Number(fulfillmentCost) || 0;
+    const sconto = Number(recoveryDiscount) || 0;
+    const maxCpl = isAwareness
+      ? Number(estimatedCpm) || 7
+      : isRetargeting
+        ? calculateMaxSustainableRecoveryCpa(ticket, margineProdotto, sconto)
+        : isInStore
+          ? calculateMaxSustainableInStoreCpa(
+              ticket,
+              margineProdotto,
+              targetMargin,
+            )
+          : isEcommerce
+            ? calculateEcommerceCpaMax(
+                ticket,
+                margineProdotto,
+                costoFulfillment,
+                ecommerceLtvAttivo,
+              )
+            : isPercorsoLeads && tassoLeads == null
+              ? null
+              : isBookings
+                ? calculateMaxSustainableBookingCpa(
+                    ticket,
+                    tasso ?? 0,
+                    targetMargin,
+                  )
+                : calculateMaxSustainableCpl(
+                    ticket,
+                    tasso ?? 0,
+                    targetMargin,
+                  );
 
     return calculateStrategicScore({
       budgetGiornaliero: config.budgetGiornaliero,
-      benchmark,
+      recommendedDailyBudgetMin: benchmark.recommendedDailyBudgetMin,
+      cplMercatoMin: benchmark.cplMin,
       settore,
       citta,
+      ticket: ticket > 0 ? ticket : null,
+      conversionRate: isPercorsoLeads ? tassoLeads : (tasso ?? null),
+      conversionRateSource: isPercorsoLeads ? conversionRateSource : undefined,
+      targetMargin,
+      maxSustainableCpl:
+        maxCpl != null && Number.isFinite(maxCpl) && maxCpl > 0 ? maxCpl : null,
+      frontEndOffer,
+      elevatorPitch,
+      targetType,
+      targetAge,
+      raggioKm: config.raggioKm,
       haCopySelezionato,
+      copyVarianteA: config.varianteA,
+      titoloAnnuncio: config.titoloAnnuncio,
       fotoCaricata: creativita.length > 0,
+      objective: objectiveEffettivo,
+      bookingChannel: isBookings ? bookingChannel : undefined,
+      fase: wizardStep < 5 ? "provvisoria" : "completa",
+    });
+  }, [
+    config.budgetGiornaliero,
+    config.varianteA,
+    config.varianteB,
+    config.varianteC,
+    config.titoloAnnuncio,
+    config.raggioKm,
+    contesto.settore,
+    contesto.citta,
+    creativita.length,
+    scontrinoMedio,
+    tassoConversione,
+    conversionRateSource,
+    productMargin,
+    fulfillmentCost,
+    recoveryDiscount,
+    estimatedCpm,
+    ecommerceLtvAttivo,
+    targetMargin,
+    frontEndOffer,
+    elevatorPitch,
+    targetType,
+    targetAge,
+    isEcommerce,
+    isInStore,
+    isRetargeting,
+    isAwareness,
+    isBookings,
+    isPercorsoLeads,
+    objectiveEffettivo,
+    bookingChannel,
+    wizardStep,
+  ]);
+
+  const launchReadiness = useMemo(() => {
+    const haCopySelezionato = Boolean(
+      (config.varianteA ?? "").trim() ||
+        (config.varianteB ?? "").trim() ||
+        (config.varianteC ?? "").trim(),
+    );
+    return calculateLaunchReadiness({
+      fotoCaricata: creativita.length > 0,
+      clienteHaApprovato: statoApprovazioneLeads === "approvata",
       paginaFacebookId: pageId,
       moduloContattiId: formId,
       destinationUrl:
@@ -931,16 +1078,12 @@ export function PercorsoContatti({
           : undefined,
       objective: objectiveEffettivo,
       bookingChannel: isBookings ? bookingChannel : undefined,
-      conversionRateSource: isPercorsoLeads ? conversionRateSource : undefined,
+      haCopySelezionato,
+      haTitoloAnnuncio: Boolean((config.titoloAnnuncio ?? "").trim()),
     });
   }, [
-    config.budgetGiornaliero,
-    config.varianteA,
-    config.varianteB,
-    config.varianteC,
-    contesto.settore,
-    contesto.citta,
     creativita.length,
+    statoApprovazioneLeads,
     pageId,
     formId,
     sitoWeb,
@@ -951,8 +1094,10 @@ export function PercorsoContatti({
     objectiveEffettivo,
     isBookings,
     bookingChannel,
-    isPercorsoLeads,
-    conversionRateSource,
+    config.varianteA,
+    config.varianteB,
+    config.varianteC,
+    config.titoloAnnuncio,
   ]);
 
   function aggiornaConfig(prossimo: ConfigurazioneContatti) {
@@ -1595,11 +1740,20 @@ export function PercorsoContatti({
         targetAge,
         creativitaMeta: creativitaToMeta(creativita),
         creativitaAssets: creativita,
+        conversionRateSource: isPercorsoLeads
+          ? conversionRateSource
+          : undefined,
       });
 
       const clientIdSalvato = persistiClienteSeRichiesto();
       campagnaIdStabileRef.current = salvata.id;
       setCampagnaIdSalvata(salvata.id);
+      if (isPercorsoLeads) {
+        persistiCrsSessione(searchParams.toString(), conversionRateSource);
+      }
+      if (salvata.conversionRateSource) {
+        cambiaConversionRateSource(salvata.conversionRateSource);
+      }
 
       saveCampaign({
         id: salvata.id,
@@ -1878,7 +2032,11 @@ export function PercorsoContatti({
         ? "Continua verso Campagna Pronta"
         : "Avanti";
   const mostraSidebar =
-    wizardStep === 2 || wizardStep === 3 || wizardStep === 4 || wizardStep === 6;
+    wizardStep === 2 ||
+    wizardStep === 3 ||
+    wizardStep === 4 ||
+    wizardStep === 5 ||
+    wizardStep === 6;
 
   return (
     <div className="min-h-screen bg-slate-50/50 py-8">
@@ -2123,7 +2281,7 @@ export function PercorsoContatti({
                 onCambiaScontrinoMedio={setScontrinoMedio}
                 onCambiaTassoConversione={setTassoConversione}
                 conversionRateSource={conversionRateSource}
-                onCambiaConversionRateSource={setConversionRateSource}
+                onCambiaConversionRateSource={cambiaConversionRateSource}
                 elevatorPitch={elevatorPitch}
                 onCambiaElevatorPitch={(valore) => {
                   setElevatorPitch(valore);
@@ -2238,26 +2396,11 @@ export function PercorsoContatti({
             <div className="min-w-0 space-y-6 lg:sticky lg:top-8 lg:col-span-4">
               {wizardStep === 2 ? (
                 <div className={isPercorsoEcommerce ? "opacity-90" : undefined}>
-                <StrategicScoreCard
-                  result={strategicScore}
-                  budgetMin={
-                    getBenchmarkForNiche(
-                      contesto.settore ?? "",
-                      contesto.citta ?? "",
-                    ).recommendedDailyBudgetMin
-                  }
-                  etichettaAssetFinale={
-                    richiedeDestinationUrl(objectiveEffettivo)
-                      ? "URL destinazione"
-                      : richiedeModuloContatti(
-                            objectiveEffettivo,
-                            bookingChannel,
-                          )
-                        ? "ID Modulo Contatti"
-                        : "Asset di collegamento"
-                  }
-                />
+                  <ValutazioneEconomicaCard result={strategicScore} />
                 </div>
+              ) : null}
+              {wizardStep === 5 ? (
+                <StrategicScoreCard result={strategicScore} />
               ) : null}
               {wizardStep === 6 &&
               (isPercorsoLeads ||
@@ -2268,55 +2411,11 @@ export function PercorsoContatti({
                 isPercorsoAwareness) ? (
                 <ChecklistMeta />
               ) : null}
-              {wizardStep === 6 &&
-              (isPercorsoLeads ||
-                isPercorsoBookings ||
-                isPercorsoEcommerce ||
-                isPercorsoInstore ||
-                isPercorsoRetargeting ||
-                isPercorsoAwareness) ? (
-                <div className="rounded-[var(--radius)] border border-[var(--border)] bg-white/70 p-3 opacity-90 shadow-sm">
-                  <p className="mb-2 px-1 text-xs text-[var(--ink-muted)]">
-                    Indicatore sintetico
-                  </p>
-                  <StrategicScoreCard
-                    result={strategicScore}
-                    budgetMin={
-                      getBenchmarkForNiche(
-                        contesto.settore ?? "",
-                        contesto.citta ?? "",
-                      ).recommendedDailyBudgetMin
-                    }
-                    etichettaAssetFinale={
-                      richiedeModuloContatti(
-                        objectiveEffettivo,
-                        bookingChannel,
-                      )
-                        ? "ID Modulo Contatti"
-                        : "Asset di collegamento"
-                    }
-                  />
-                </div>
-              ) : wizardStep === 6 ? (
-                <StrategicScoreCard
-                  result={strategicScore}
-                  budgetMin={
-                    getBenchmarkForNiche(
-                      contesto.settore ?? "",
-                      contesto.citta ?? "",
-                    ).recommendedDailyBudgetMin
-                  }
-                  etichettaAssetFinale={
-                    richiedeDestinationUrl(objectiveEffettivo)
-                      ? "URL destinazione"
-                      : richiedeModuloContatti(
-                            objectiveEffettivo,
-                            bookingChannel,
-                          )
-                        ? "ID Modulo Contatti"
-                        : "Asset di collegamento"
-                  }
-                />
+              {wizardStep === 6 ? (
+                <>
+                  <StrategicScoreCard result={strategicScore} />
+                  <LaunchReadinessCard result={launchReadiness} />
+                </>
               ) : null}
               {wizardStep === 2 ? (
                 <PannelloPerche

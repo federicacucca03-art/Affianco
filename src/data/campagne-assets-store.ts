@@ -5,6 +5,7 @@ import type {
   CampagnaObjective,
   EcommerceShippingMarket,
 } from "@/types/campagne";
+import type { ConversionRateSource } from "@/lib/conversion-rate";
 import type { CreativitaMeta } from "@/lib/creativita";
 
 const STORAGE_KEY = "affianco-campagne-assets";
@@ -51,6 +52,8 @@ export type CampagnaAssets = {
   reviewStatus?: string;
   /** Metadata creatività A/B (fino a 3), senza blob. */
   creativitaMeta?: CreativitaMeta[];
+  /** LEADS: provenienza tasso di conversione. */
+  conversionRateSource?: ConversionRateSource;
 };
 
 function leggiMappa(): Record<string, CampagnaAssets> {
@@ -155,6 +158,8 @@ export function fondiCampagnaConAssetLocali(campagna: Campagna): Campagna {
         : locali.creativitaMeta?.length
           ? locali.creativitaMeta
           : campagna.creativitaMeta,
+    conversionRateSource:
+      campagna.conversionRateSource ?? locali.conversionRateSource,
     revisionNotes,
     status,
   };
