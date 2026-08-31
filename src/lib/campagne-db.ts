@@ -168,6 +168,8 @@ export type DatiSalvataggioCampagna = {
   creativitaMeta?: CreativitaMeta[];
   /** LEADS: provenienza tasso di conversione (REAL | ESTIMATED | UNKNOWN). */
   conversionRateSource?: ConversionRateSource;
+  /** Edit mode: persiste anche stringhe vuote (null in DB) per i campi wizard. */
+  permettiCampiVuoti?: boolean;
   /** Asset locali (blob) da caricare su Storage al salvataggio. */
   creativitaAssets?: CreativitaAsset[];
   /**
@@ -324,7 +326,10 @@ async function updateConFallbackColonne(
 }
 
 /** Mappa riga Supabase → modello UI `Campagna`. */
-export function mappaCampagnaDaRow(row: CampaignRow): Campagna {
+export function mappaCampagnaDaRow(
+  row: CampaignRow,
+  opts?: { ignoraCacheLocale?: boolean },
+): Campagna {
   const cliente = clienteDaJoin(row.clients);
   const nomeCliente = cliente?.name?.trim() || "Cliente";
   const base: Campagna = {
@@ -403,7 +408,7 @@ export function mappaCampagnaDaRow(row: CampaignRow): Campagna {
       (undefined as CreativitaMeta[] | undefined),
   };
 
-  return fondiCampagnaConAssetLocali(base);
+  return opts?.ignoraCacheLocale ? base : fondiCampagnaConAssetLocali(base);
 }
 
 /**
@@ -560,6 +565,7 @@ type CampagnaWriteInput = {
   heroProduct?: string;
   creativitaMeta?: CreativitaMeta[];
   conversionRateSource?: ConversionRateSource;
+  permettiCampiVuoti?: boolean;
 };
 
 function nomeCampagnaFallback(objective: CampagnaObjective): string {
@@ -577,10 +583,11 @@ function nomeCampagnaFallback(objective: CampagnaObjective): string {
  */
 export function costruisciPayloadCampagna(
   input: CampagnaWriteInput,
-  opts?: { includeStatus?: boolean; id?: string },
+  opts?: { includeStatus?: boolean; id?: string; scriviVuoti?: boolean },
 ): Record<string, unknown> {
   const objective = input.objective ?? "LEADS";
   const includeStatus = opts?.includeStatus !== false;
+  const scriviVuoti = Boolean(opts?.scriviVuoti ?? input.permettiCampiVuoti);
   const payload: Record<string, unknown> = {
     client_id: input.clientId,
     name: input.name.trim() || nomeCampagnaFallback(objective),
@@ -596,19 +603,23 @@ export function costruisciPayloadCampagna(
     payload.status = input.status ?? "DRAFT";
   }
 
-  if (input.varianteA?.trim()) payload.variante_a = input.varianteA.trim();
-  if (input.varianteB?.trim()) payload.variante_b = input.varianteB.trim();
-  if (input.varianteC?.trim()) payload.variante_c = input.varianteC.trim();
-  if (input.pageId?.trim()) payload.page_id = input.pageId.trim();
-  if (input.formId?.trim()) payload.form_id = input.formId.trim();
-  if (input.settore?.trim()) payload.settore = input.settore.trim();
-  if (input.citta?.trim()) payload.citta = input.citta.trim();
+  const assegnaTesto = (colonna: string, grezzo?: string) => {
+    const t = grezzo?.trim() ?? "";
+    if (t) payload[colonna] = t;
+    else if (scriviVuoti && grezzo !== undefined) payload[colonna] = null;
+  };
+
+  assegnaTesto("variante_a", input.varianteA);
+  assegnaTesto("variante_b", input.varianteB);
+  assegnaTesto("variante_c", input.varianteC);
+  assegnaTesto("page_id", input.pageId);
+  assegnaTesto("form_id", input.formId);
+  assegnaTesto("settore", input.settore);
+  assegnaTesto("citta", input.citta);
   if (input.raggioKm != null) payload.raggio_km = input.raggioKm;
   if (input.etaMin != null) payload.eta_min = input.etaMin;
   if (input.etaMax != null) payload.eta_max = input.etaMax;
-  if (input.titoloAnnuncio?.trim()) {
-    payload.titolo_annuncio = input.titoloAnnuncio.trim();
-  }
+  assegnaTesto("titolo_annuncio", input.titoloAnnuncio);
   if (input.targetMargin != null) payload.target_margin = input.targetMargin;
   if (input.bookingServiceValue != null) {
     payload.booking_service_value = input.bookingServiceValue;
@@ -638,15 +649,11 @@ export function costruisciPayloadCampagna(
     payload.awareness_radius_km = input.awarenessRadiusKm;
   }
   if (input.estimatedCpm != null) payload.estimated_cpm = input.estimatedCpm;
-  if (input.frontEndOffer?.trim()) {
-    payload.front_end_offer = input.frontEndOffer.trim();
-  }
+  assegnaTesto("front_end_offer", input.frontEndOffer);
   if (input.targetType) payload.target_type = input.targetType;
   if (input.targetAge) payload.target_age = input.targetAge;
   if (input.shippingMarket) payload.shipping_market = input.shippingMarket;
-  if (input.heroProduct?.trim()) {
-    payload.hero_product = input.heroProduct.trim();
-  }
+  assegnaTesto("hero_product", input.heroProduct);
   if (input.creativitaMeta !== undefined) {
     payload.creativita = input.creativitaMeta;
   }
@@ -700,6 +707,7 @@ function writeInputDaDati(
     heroProduct: dati.heroProduct,
     creativitaMeta: dati.creativitaMeta,
     conversionRateSource: dati.conversionRateSource,
+    permettiCampiVuoti: dati.permettiCampiVuoti,
   };
 }
 
@@ -724,6 +732,8 @@ async function aggiornaClienteConosciuto(
   if (dati.nomeCliente.trim()) patch.name = dati.nomeCliente.trim();
   if (dati.elevatorPitch?.trim()) {
     patch.elevator_pitch = dati.elevatorPitch.trim();
+  } else if (dati.permettiCampiVuoti && dati.elevatorPitch !== undefined) {
+    patch.elevator_pitch = dati.elevatorPitch.trim() ? dati.elevatorPitch.trim() : null;
   }
   const ticket =
     dati.recoveryValue ??
@@ -739,6 +749,9 @@ async function aggiornaClienteConosciuto(
     patch.closing_rate = closing;
   }
   if (dati.website?.trim()) patch.website = dati.website.trim();
+  else if (dati.permettiCampiVuoti && dati.website !== undefined) {
+    patch.website = dati.website.trim() ? dati.website.trim() : null;
+  }
 
   if (Object.keys(patch).length === 0) {
     const { data, error } = await supabase
@@ -778,7 +791,10 @@ export async function aggiornaCampagnaLeadGen(
   id: string,
   input: CampagnaWriteInput,
 ): Promise<CampaignRow> {
-  const payload = costruisciPayloadCampagna(input, { includeStatus: false });
+  const payload = costruisciPayloadCampagna(input, {
+    includeStatus: false,
+    scriviVuoti: Boolean(input.permettiCampiVuoti),
+  });
   const data = await updateConFallbackColonne("campaigns", id, payload);
   return data as unknown as CampaignRow;
 }
@@ -1009,7 +1025,9 @@ export async function leggiCampagneDaSupabase(): Promise<Campagna[]> {
     .order("created_at", { ascending: false });
 
   if (!tentativo.error && tentativo.data) {
-    return (tentativo.data as CampaignRow[]).map(mappaCampagnaDaRow);
+    return (tentativo.data as CampaignRow[]).map((row) =>
+      mappaCampagnaDaRow(row),
+    );
   }
 
   const { data, error } = await supabase
@@ -1021,12 +1039,17 @@ export async function leggiCampagneDaSupabase(): Promise<Campagna[]> {
 
   if (error) throw new Error(error.message);
 
-  return ((data ?? []) as CampaignRow[]).map(mappaCampagnaDaRow);
+  return ((data ?? []) as CampaignRow[]).map((row) => mappaCampagnaDaRow(row));
 }
 
 export async function leggiCampagnaDaSupabase(
   id: string,
+  opts?: { ignoraCacheLocale?: boolean },
 ): Promise<Campagna | null> {
+  const map = (row: CampaignRow) =>
+    mappaCampagnaDaRow(row, {
+      ignoraCacheLocale: opts?.ignoraCacheLocale,
+    });
   const tentativoDettaglio = await supabase
     .from("campaigns")
     .select(SELECT_DETTAGLIO)
@@ -1034,7 +1057,7 @@ export async function leggiCampagnaDaSupabase(
     .maybeSingle();
 
   if (!tentativoDettaglio.error && tentativoDettaglio.data) {
-    return mappaCampagnaDaRow(tentativoDettaglio.data as CampaignRow);
+    return map(tentativoDettaglio.data as CampaignRow);
   }
 
   const erroreDettaglio = tentativoDettaglio.error;
@@ -1048,7 +1071,7 @@ export async function leggiCampagnaDaSupabase(
       .eq("id", id)
       .maybeSingle();
     if (!senzaCrs.error && senzaCrs.data) {
-      return mappaCampagnaDaRow(senzaCrs.data as CampaignRow);
+      return map(senzaCrs.data as CampaignRow);
     }
   }
 
@@ -1064,7 +1087,20 @@ export async function leggiCampagnaDaSupabase(
   if (error) throw new Error(error.message);
   if (!data) return null;
 
-  return mappaCampagnaDaRow(data as CampaignRow);
+  return map(data as CampaignRow);
+}
+
+/**
+ * APPROVED + modifica sostanziale: torna DRAFT, azzera approved_at.
+ * NON tocca approval_token né revision_notes.
+ */
+export async function invalidaApprovazioneDopoModificaSostanziale(
+  id: string,
+): Promise<void> {
+  await updateConFallbackColonne("campaigns", id, {
+    status: "DRAFT",
+    approved_at: null,
+  });
 }
 
 /** Imposta status = APPROVED + approved_at. */

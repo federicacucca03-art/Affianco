@@ -24,6 +24,8 @@ export type CreativitaAsset = {
   formatoOrizzontale: boolean;
   /** true se asset video (UGC / unboxing). */
   isVideo?: boolean;
+  /** Path Storage esistente (edit mode): re-save senza re-upload. */
+  storagePath?: string;
 };
 
 /** Metadata persistibile (senza blob). */
@@ -203,6 +205,7 @@ export function creativitaToMeta(lista: CreativitaAsset[]): CreativitaMeta[] {
     avvisoFormato: c.avvisoFormato,
     formatoOrizzontale: c.formatoOrizzontale,
     isVideo: c.isVideo,
+    storagePath: c.storagePath,
   }));
 }
 

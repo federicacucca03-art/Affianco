@@ -91,6 +91,11 @@ export async function caricaCreativitaSuStorage(
 
   for (const asset of assets) {
     const base = creativitaToMeta([asset])[0];
+    const pathSuAsset = asset.storagePath?.trim();
+    if (pathSuAsset) {
+      risultati.push({ ...base, storagePath: pathSuAsset });
+      continue;
+    }
     const metaEsistente = existingMeta.find(
       (m) => m.id === asset.id && m.storagePath,
     );
@@ -149,4 +154,46 @@ export async function caricaCreativitaSuStorage(
   }
 
   return risultati;
+}
+
+const TTL_ANTEPRIMA_OWNER_SEC = 60 * 60;
+
+/**
+ * Signed URL owner (client autenticato, stesso bucket).
+ * Non usa l'API pubblica di approval.
+ */
+export async function urlAnteprimaCreativitaOwner(
+  storagePath: string,
+): Promise<string | null> {
+  const path = storagePath.trim();
+  if (!path) return null;
+  const { data, error } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrl(path, TTL_ANTEPRIMA_OWNER_SEC);
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
+}
+
+/** Ricostruisce asset wizard da metadata DB, senza re-upload. */
+export async function anteprimeDaCreativitaMeta(
+  meta: CreativitaMeta[],
+): Promise<CreativitaAsset[]> {
+  const out: CreativitaAsset[] = [];
+  for (const m of meta) {
+    const path = m.storagePath?.trim();
+    const url = path ? ((await urlAnteprimaCreativitaOwner(path)) ?? "") : "";
+    out.push({
+      id: m.id,
+      url,
+      nomeFile: m.nomeFile,
+      width: m.width,
+      height: m.height,
+      ruolo: m.ruolo,
+      avvisoFormato: m.avvisoFormato,
+      formatoOrizzontale: Boolean(m.formatoOrizzontale),
+      isVideo: m.isVideo,
+      storagePath: path || undefined,
+    });
+  }
+  return out;
 }

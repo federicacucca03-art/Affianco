@@ -18,6 +18,7 @@ import {
   logErroreSupabaseDev,
   messaggioErroreSupabase,
 } from "@/lib/supabase-errori";
+import { hrefModificaConfigurazione } from "@/data/percorsi-nuova-campagna";
 import { PannelloAssetStrategia } from "@/components/campagne/PannelloAssetStrategia";
 import { DiarioBordo } from "@/components/campagne/DiarioBordo";
 import {
@@ -757,7 +758,7 @@ export default function DettaglioCampagnaPage() {
         </dl>
       </header>
 
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <button
           type="button"
           onClick={() => void copiaLinkApprovazione()}
@@ -771,6 +772,12 @@ export default function DettaglioCampagnaPage() {
             ? "Link copiato!"
             : "🔗 Copia Link Cliente per Approvazione"}
         </button>
+        <Link
+          href={hrefModificaConfigurazione(campagna.id, campagna.objective)}
+          className="inline-flex items-center justify-center rounded-full border border-[var(--border)] bg-white px-5 py-2.5 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--surface-hover)]"
+        >
+          Modifica configurazione
+        </Link>
       </div>
       {erroreLinkApprovazione ? (
         <p className="mt-2 text-sm text-red-600" role="alert">

@@ -56,7 +56,7 @@ import {
   type CreativitaAsset,
   type EcommerceCreativoFormato,
 } from "@/lib/creativita";
-import { salvaCampagnaCompleta, leggiCampagnaDaSupabase, assicuratiTokenApprovazione, urlApprovazioneDaToken, completaRevisioneCampagnaSuSupabase } from "@/lib/campagne-db";
+import { salvaCampagnaCompleta, leggiCampagnaDaSupabase, assicuratiTokenApprovazione, urlApprovazioneDaToken, completaRevisioneCampagnaSuSupabase, invalidaApprovazioneDopoModificaSostanziale } from "@/lib/campagne-db";
 import { messaggioAiUserFacing } from "@/lib/anthropic-messaggi";
 import {
   logErroreSupabaseDev,
@@ -90,6 +90,14 @@ import { calculateStrategicScore } from "@/lib/strategic-score";
 import { calculateLaunchReadiness } from "@/lib/launch-readiness";
 import { estraiServizioPrincipale } from "@/lib/extract-service";
 import { etaDaTargetAgeBand } from "@/types/campagne";
+import {
+  firmaSostanziale,
+  haModificaSostanziale,
+  deveInvalidareApprovazione,
+  ticketDaCampagna,
+  margineDaCampagna,
+} from "@/lib/campagna-edit";
+import { anteprimeDaCreativitaMeta } from "@/lib/creativita-storage";
 
 const CRS_SESSION_PREFIX = "affianco-conversion-rate-source:";
 
@@ -339,6 +347,8 @@ export function PercorsoContatti({
             : objective;
   const router = useRouter();
   const searchParams = useSearchParams();
+  const campaignIdEdit = (searchParams.get("campaignId") ?? "").trim();
+  const isEditMode = Boolean(campaignIdEdit);
   const [config, setConfig] = useState<ConfigurazioneContatti>(() =>
     leggiContestoIniziale(searchParams, objectiveEffettivo).config,
   );
@@ -443,6 +453,7 @@ export function PercorsoContatti({
   const intelApplicatoRef = useRef<string | null>(null);
 
   function applicaEconomiaSettore(intel: SettoreIntel) {
+    if (isEditMode) return;
     if (intelApplicatoRef.current === intel.id) return;
     intelApplicatoRef.current = intel.id;
     setScontrinoMedio(intel.aovDefault);
@@ -473,9 +484,20 @@ export function PercorsoContatti({
     null,
   );
   /** UUID stabile per create idempotente (anche se la risposta INSERT si perde). */
-  const campagnaIdStabileRef = useRef<string | null>(null);
+  const campagnaIdStabileRef = useRef<string | null>(
+    campaignIdEdit || null,
+  );
+  if (isEditMode && campaignIdEdit) {
+    campagnaIdStabileRef.current = campaignIdEdit;
+  }
   /** Lock: seconde chiamate riusano la stessa Promise (niente doppio INSERT). */
   const saveInFlightRef = useRef<Promise<string> | null>(null);
+  const snapshotInizialeRef = useRef<string>("");
+  const statusEditInizialeRef = useRef<string | null>(null);
+  const [hydrateEditInCorso, setHydrateEditInCorso] = useState(isEditMode);
+  const [erroreHydrateEdit, setErroreHydrateEdit] = useState<string | null>(
+    null,
+  );
   const [linkApprovazioneCopiato, setLinkApprovazioneCopiato] = useState(false);
   const [linkApprovazioneInCorso, setLinkApprovazioneInCorso] = useState(false);
   const [erroreLinkApprovazione, setErroreLinkApprovazione] = useState<
@@ -592,6 +614,8 @@ export function PercorsoContatti({
   useRevocaObjectUrls(urlsCreativita);
 
   useEffect(() => {
+    const idEdit = searchParams.get("campaignId")?.trim() || "";
+    if (idEdit) return;
     const iniziale = leggiContestoIniziale(searchParams, objectiveEffettivo);
     setConfig(iniziale.config);
     setContesto(iniziale.contesto);
@@ -720,6 +744,146 @@ export function PercorsoContatti({
       if (bozza?.targetAge) setTargetAge(bozza.targetAge);
     }
   }, [searchParams, objectiveEffettivo, currentSlug, isEcommerce, isRetargeting, isInStore, isBookings]);
+
+  useEffect(() => {
+    if (!isEditMode || !campaignIdEdit) {
+      setHydrateEditInCorso(false);
+      return;
+    }
+    let attivo = true;
+    setHydrateEditInCorso(true);
+    setErroreHydrateEdit(null);
+
+    (async () => {
+      try {
+        const trovata = await leggiCampagnaDaSupabase(campaignIdEdit, {
+          ignoraCacheLocale: true,
+        });
+        if (!attivo) return;
+        if (!trovata) {
+          setErroreHydrateEdit("Campagna non trovata.");
+          setHydrateEditInCorso(false);
+          return;
+        }
+
+        campagnaIdStabileRef.current = trovata.id;
+        setCampagnaIdSalvata(trovata.id);
+        statusEditInizialeRef.current = trovata.status ?? "DRAFT";
+        setStatusApprovazioneGrezzo(trovata.status ?? "DRAFT");
+        setRevisionNotesCliente(trovata.revisionNotes ?? null);
+        intelApplicatoRef.current = trovata.settore?.trim() || "edit-lock";
+        copyAiGiaEseguitoRef.current = true;
+
+        const eta = trovata.targetAge
+          ? etaDaTargetAgeBand(trovata.targetAge)
+          : {
+              etaMin: trovata.etaMin ?? 25,
+              etaMax: trovata.etaMax ?? 50,
+            };
+        const ticket = ticketDaCampagna(trovata);
+        const tasso = trovata.showUpRate ?? trovata.tassoConversionePercent;
+        const margine = margineDaCampagna(trovata);
+        const targetTypeHydrate = trovata.targetType ?? "B2C";
+        const targetAgeHydrate = trovata.targetAge ?? "25-50";
+        const raggioHydrate =
+          trovata.awarenessRadiusKm ?? trovata.raggioKm ?? 15;
+        const tm = trovata.targetMargin;
+        const targetMarginHydrate =
+          tm === 30 || tm === 50 || tm === 70 ? tm : 50;
+        const margineWizard =
+          trovata.objective === "LEADS" || trovata.objective === "BOOKINGS" || !trovata.objective
+            ? targetMarginHydrate
+            : (margine ?? 50);
+        setConfig({
+          ...defaultConfigurazioneContatti,
+          nomeCliente: trovata.nomeCliente,
+          nomeCampagna: trovata.nomeCampagna || defaultConfigurazioneContatti.nomeCampagna,
+          budgetGiornaliero: trovata.budgetGiornaliero ?? 20,
+          raggioKm: raggioHydrate,
+          etaMin: eta.etaMin,
+          etaMax: eta.etaMax,
+          varianteA: trovata.varianteA ?? "",
+          varianteB: trovata.varianteB ?? "",
+          varianteC: trovata.varianteC ?? "",
+          titoloAnnuncio: trovata.titoloAnnuncio ?? "",
+        });
+        setNomeCampagnaManuale(true);
+        setVariantiManuali(true);
+        setContesto({
+          settore: trovata.settore ?? "",
+          citta: trovata.citta ?? "",
+        });
+        setElevatorPitch(trovata.elevatorPitch ?? "");
+        setSitoWeb(trovata.website ?? "");
+        setFrontEndOffer(trovata.frontEndOffer ?? "");
+        setPageId(trovata.pageId ?? "");
+        setFormId(trovata.formId ?? "");
+        setHeroProduct(trovata.heroProduct ?? "");
+        setTargetType(targetTypeHydrate);
+        setTargetAge(targetAgeHydrate);
+        if (trovata.shippingMarket) setShippingMarket(trovata.shippingMarket);
+        if (trovata.bookingChannel) setBookingChannel(trovata.bookingChannel);
+        if (trovata.bookingConfirmationPolicy) {
+          setBookingConfirmationPolicy(trovata.bookingConfirmationPolicy);
+        }
+        if (ticket != null) setScontrinoMedio(ticket);
+        if (tasso != null) setTassoConversione(tasso);
+        if (trovata.conversionRateSource) {
+          setConversionRateSource(trovata.conversionRateSource);
+        }
+        if (margine != null) setProductMargin(margine);
+        setTargetMargin(targetMarginHydrate);
+        if (trovata.recoveryDiscount != null) {
+          setRecoveryDiscount(trovata.recoveryDiscount);
+        }
+        if (trovata.launchBudget != null) setLaunchBudget(trovata.launchBudget);
+        if (trovata.estimatedCpm != null) setEstimatedCpm(trovata.estimatedCpm);
+
+        const meta = trovata.creativitaMeta ?? [];
+        const anteprime = await anteprimeDaCreativitaMeta(meta);
+        if (!attivo) return;
+        setCreativita(anteprime);
+        snapshotInizialeRef.current = firmaSostanziale({
+          frontEndOffer: trovata.frontEndOffer ?? "",
+          elevatorPitch: trovata.elevatorPitch ?? "",
+          varianteA: trovata.varianteA ?? "",
+          varianteB: trovata.varianteB ?? "",
+          varianteC: trovata.varianteC ?? "",
+          titoloAnnuncio: trovata.titoloAnnuncio ?? "",
+          creativita: anteprime,
+          dailyBudget: trovata.budgetGiornaliero ?? 20,
+          launchBudget: trovata.launchBudget ?? 0,
+          citta: trovata.citta ?? "",
+          raggioKm: raggioHydrate,
+          etaMin: eta.etaMin,
+          etaMax: eta.etaMax,
+          targetType: targetTypeHydrate,
+          targetAge: targetAgeHydrate,
+          ticket: ticket ?? 0,
+          conversionRate: tasso ?? 0,
+          margine: margineWizard,
+          objective: trovata.objective ?? "LEADS",
+          destinationUrl: trovata.website ?? "",
+          heroProduct: trovata.heroProduct ?? "",
+          bookingChannel: trovata.bookingChannel,
+        });
+        const haVideo = anteprime.some((a) => a.isVideo);
+        setFormatoEcommerce(
+          haVideo ? "VIDEO" : anteprime.length >= 3 ? "CAROUSEL" : "SINGLE",
+        );
+        setWizardStep(1);
+        setHydrateEditInCorso(false);
+      } catch (e) {
+        if (!attivo) return;
+        setErroreHydrateEdit(messaggioErroreSupabase(e, "carica_dettaglio"));
+        setHydrateEditInCorso(false);
+      }
+    })();
+
+    return () => {
+      attivo = false;
+    };
+  }, [isEditMode, campaignIdEdit]);
 
   const etichetteVarianti = useMemo(
     () =>
@@ -1585,6 +1749,37 @@ export function PercorsoContatti({
     }));
   }
 
+  function snapshotWizardCorrente(): string {
+    const ticket = Number(scontrinoMedio) || 0;
+    const tassoNum = Number(tassoConversione) || 0;
+    const margineProdotto =
+      Number(productMargin) || (isEcommerce ? 60 : isInStore ? 40 : 50);
+    return firmaSostanziale({
+      frontEndOffer,
+      elevatorPitch,
+      varianteA: config.varianteA,
+      varianteB: config.varianteB,
+      varianteC: config.varianteC,
+      titoloAnnuncio: config.titoloAnnuncio,
+      creativita,
+      dailyBudget: config.budgetGiornaliero,
+      launchBudget: Number(launchBudget) || 0,
+      citta: contesto.citta,
+      raggioKm: config.raggioKm,
+      etaMin: config.etaMin,
+      etaMax: config.etaMax,
+      targetType,
+      targetAge,
+      ticket,
+      conversionRate: tassoNum,
+      margine: isPercorsoLeads || isBookings ? targetMargin : margineProdotto,
+      objective: objectiveEffettivo,
+      destinationUrl: sitoWeb,
+      heroProduct,
+      bookingChannel: isBookings ? bookingChannel : undefined,
+    });
+  }
+
   function vaiIndietro() {
     setErroreSalvataggio(null);
     setErroriPasso1({});
@@ -1596,14 +1791,20 @@ export function PercorsoContatti({
 
     const operazione = (async () => {
       if (!campagnaIdStabileRef.current) {
-        campagnaIdStabileRef.current =
-          campagnaIdSalvata ??
-          (typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? crypto.randomUUID()
-            : null);
+        if (isEditMode && campaignIdEdit) {
+          campagnaIdStabileRef.current = campaignIdEdit;
+        } else {
+          campagnaIdStabileRef.current =
+            campagnaIdSalvata ??
+            (typeof crypto !== "undefined" && "randomUUID" in crypto
+              ? crypto.randomUUID()
+              : null);
+        }
         if (!campagnaIdStabileRef.current) {
           throw new Error(
-            "Impossibile generare un ID campagna stabile in questo browser.",
+            isEditMode
+              ? "ID campagna mancante: impossibile salvare le modifiche."
+              : "Impossibile generare un ID campagna stabile in questo browser.",
           );
         }
       }
@@ -1685,8 +1886,8 @@ export function PercorsoContatti({
       const salvata = await salvaCampagnaCompleta({
         campaignId,
         nomeCliente: config.nomeCliente || "Nuovo cliente",
-        elevatorPitch,
-        website: sitoWeb,
+        elevatorPitch: isEditMode ? elevatorPitch : elevatorPitch || undefined,
+        website: isEditMode ? sitoWeb : sitoWeb || undefined,
         nomeCampagna:
           config.nomeCampagna.trim() ||
           nomeCampagnaPerObiettivo(
@@ -1720,21 +1921,27 @@ export function PercorsoContatti({
         launchBudget: isAwareness ? budgetLancio : undefined,
         awarenessRadiusKm: isAwareness ? raggioAwareness : undefined,
         estimatedCpm: isAwareness ? cpm : undefined,
-        varianteA: config.varianteA,
-        varianteB: config.varianteB,
-        varianteC: config.varianteC,
-        pageId,
-        formId,
+        varianteA: isEditMode ? config.varianteA : config.varianteA || undefined,
+        varianteB: isEditMode ? config.varianteB : config.varianteB || undefined,
+        varianteC: isEditMode ? config.varianteC : config.varianteC || undefined,
+        pageId: isEditMode ? pageId : pageId || undefined,
+        formId: isEditMode ? formId : formId || undefined,
         settore: contesto.settore,
         citta: contesto.citta,
         raggioKm: isAwareness ? raggioAwareness : config.raggioKm,
         etaMin: config.etaMin,
         etaMax: config.etaMax,
-        titoloAnnuncio: config.titoloAnnuncio,
-        frontEndOffer: frontEndOffer.trim() || undefined,
+        titoloAnnuncio: isEditMode
+          ? config.titoloAnnuncio
+          : config.titoloAnnuncio || undefined,
+        frontEndOffer: isEditMode
+          ? frontEndOffer
+          : frontEndOffer.trim() || undefined,
         shippingMarket: isEcommerce ? shippingMarket : undefined,
         heroProduct: isEcommerce
-          ? heroProduct.trim() || elevatorPitch.trim() || undefined
+          ? isEditMode
+            ? heroProduct
+            : heroProduct.trim() || elevatorPitch.trim() || undefined
           : undefined,
         targetType,
         targetAge,
@@ -1743,6 +1950,7 @@ export function PercorsoContatti({
         conversionRateSource: isPercorsoLeads
           ? conversionRateSource
           : undefined,
+        permettiCampiVuoti: isEditMode,
       });
 
       const clientIdSalvato = persistiClienteSeRichiesto();
@@ -1753,6 +1961,20 @@ export function PercorsoContatti({
       }
       if (salvata.conversionRateSource) {
         cambiaConversionRateSource(salvata.conversionRateSource);
+      }
+
+      let statusDopoSave = salvata.status ?? "DRAFT";
+      if (isEditMode) {
+        const sostanziale = haModificaSostanziale(
+          snapshotInizialeRef.current,
+          snapshotWizardCorrente(),
+        );
+        if (
+          deveInvalidareApprovazione(statusEditInizialeRef.current, sostanziale)
+        ) {
+          await invalidaApprovazioneDopoModificaSostanziale(salvata.id);
+          statusDopoSave = "DRAFT";
+        }
       }
 
       saveCampaign({
@@ -1769,12 +1991,12 @@ export function PercorsoContatti({
         settore: contesto.settore,
         citta: contesto.citta,
         // Preserva status remoto (APPROVED / REVISION_REQUESTED / DRAFT).
-        status: salvata.status ?? "DRAFT",
+        status: statusDopoSave,
         frontEndOffer: frontEndOffer.trim(),
       });
 
-      if (salvata.status) {
-        setStatusApprovazioneGrezzo(salvata.status);
+      if (salvata.status || isEditMode) {
+        setStatusApprovazioneGrezzo(statusDopoSave);
       }
 
       return salvata.id;
@@ -2059,6 +2281,21 @@ export function PercorsoContatti({
           <p className="mt-1 max-w-2xl text-sm text-[var(--ink-muted)]">
             {sottotitolo}
           </p>
+          {isEditMode ? (
+            <div className="mt-4 rounded-xl border border-[#f5e0a8] bg-[#fff9e8] px-4 py-3">
+              <p className="text-sm font-medium text-[#9a6700]">
+                Stai modificando una campagna esistente
+              </p>
+              {hydrateEditInCorso ? (
+                <p className="mt-1 text-xs text-[var(--ink-muted)]">
+                  Caricamento dati dal database…
+                </p>
+              ) : null}
+              {erroreHydrateEdit ? (
+                <p className="mt-1 text-xs text-[#C45C5C]">{erroreHydrateEdit}</p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="mb-8 rounded-[var(--radius)] bg-white p-4 shadow-[var(--shadow-soft)] sm:p-5">
@@ -2473,14 +2710,25 @@ export function PercorsoContatti({
         </div>
 
         <div className="mt-8 flex flex-col gap-3 border-t border-[var(--border)] pt-6 sm:flex-row sm:items-center sm:justify-between">
-          <button
-            type="button"
-            onClick={vaiIndietro}
-            disabled={wizardStep === 1}
-            className="rounded-full border border-[var(--border)] bg-white px-5 py-2.5 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Indietro
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={vaiIndietro}
+              disabled={wizardStep === 1}
+              className="rounded-full border border-[var(--border)] bg-white px-5 py-2.5 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Indietro
+            </button>
+            {isEditMode ? (
+              <button
+                type="button"
+                onClick={() => router.push(`/campagne/${campaignIdEdit}`)}
+                className="rounded-full border border-[var(--border)] bg-white px-5 py-2.5 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--surface-hover)]"
+              >
+                Annulla
+              </button>
+            ) : null}
+          </div>
 
           <div className="flex flex-col items-stretch gap-3 sm:items-end">
             {erroreSalvataggio ? (
@@ -2488,25 +2736,27 @@ export function PercorsoContatti({
                 {erroreSalvataggio}
               </p>
             ) : null}
+            <div className="flex flex-wrap items-center justify-end gap-2">
             {wizardStep < 6 ? (
               <button
                 type="button"
                 onClick={vaiAvanti}
                 disabled={
-                  wizardStep === 5 &&
+                  hydrateEditInCorso ||
+                  (wizardStep === 5 &&
                   (isPercorsoLeads ||
                     isPercorsoBookings ||
                     isPercorsoEcommerce ||
                     isPercorsoInstore ||
                     isPercorsoRetargeting ||
                     isPercorsoAwareness) &&
-                  Boolean(diagnosi.haErroriBloccanti)
+                  Boolean(diagnosi.haErroriBloccanti))
                 }
                 className="rounded-full bg-[var(--ink)] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {etichettaPulsanteAvanti}
               </button>
-            ) : (
+            ) : !isEditMode ? (
               <button
                 type="button"
                 onClick={() => void lanciaCampagna()}
@@ -2521,7 +2771,22 @@ export function PercorsoContatti({
                     ? "3. Salva la campagna"
                     : "Salva campagna e procedi"}
               </button>
-            )}
+            ) : null}
+            {isEditMode ? (
+              <button
+                type="button"
+                onClick={() => void lanciaCampagna()}
+                disabled={
+                  salvataggioInCorso ||
+                  hydrateEditInCorso ||
+                  Boolean(erroreHydrateEdit)
+                }
+                className="rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {salvataggioInCorso ? "Salvataggio in corso…" : "Salva modifiche"}
+              </button>
+            ) : null}
+            </div>
           </div>
         </div>
       </div>
