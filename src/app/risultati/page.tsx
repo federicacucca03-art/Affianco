@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ImagePlus,
   Loader2,
@@ -14,7 +16,9 @@ import {
   buildEconomicContext,
   calcolaCostoDaSpesaRisultati,
   calcolaHealthStatus,
+  descrizioneLogControllo,
   diagnosticaDeterministica,
+  etichettaTrend,
   formatEuro,
   healthBadgeClasses,
   normalizzaCtrDaApi,
@@ -23,6 +27,8 @@ import {
   priorityBadgeClasses,
   priorityLabel,
   resolveThresholdFromCampaign,
+  thresholdModeDaHealth,
+  trendVsPrecedente,
   type ControlRoomKpis,
 } from "@/lib/control-room";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -30,6 +36,19 @@ import {
   leggiCampagnaDaSupabase,
   leggiCampagneDaSupabase,
 } from "@/lib/campagne-db";
+import {
+  inserisciCampaignCheck,
+  leggiChecksCampagna,
+  leggiUltimiChecksUtente,
+  stessaGiornataLocale,
+  type CampaignCheck,
+} from "@/lib/campaign-checks-db";
+import { logControlloPerformanceSalvato } from "@/lib/campaign-logs";
+import {
+  ControlRoomOverview,
+  ordinaRigheControlRoom,
+} from "@/components/risultati/ControlRoomOverview";
+import { StoricoControlli } from "@/components/risultati/StoricoControlli";
 import {
   logErroreSupabaseDev,
   messaggioErroreSupabase,
@@ -154,17 +173,22 @@ function campiKpiPerObiettivo(
   ];
 }
 
-export default function RisultatiPage() {
+function RisultatiPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   const userIdRef = useRef<string | null>(null);
+  const searchParams = useSearchParams();
+  const campaignIdQuery = searchParams.get("campaignId") ?? "";
 
   const [campagne, setCampagne] = useState<Campagna[]>([]);
   const [caricamentoCampagne, setCaricamentoCampagne] = useState(true);
   const [erroreCampagne, setErroreCampagne] = useState<string | null>(null);
   const [fallbackLocale, setFallbackLocale] = useState(false);
+  const [ultimiChecks, setUltimiChecks] = useState<Map<string, CampaignCheck>>(
+    () => new Map(),
+  );
 
-  const [campagnaId, setCampagnaId] = useState("");
+  const [campagnaId, setCampagnaId] = useState(campaignIdQuery);
   const [manuale, setManuale] = useState(false);
   const [campagnaDettaglio, setCampagnaDettaglio] = useState<Campagna | null>(
     null,
@@ -190,6 +214,13 @@ export default function RisultatiPage() {
   );
   const [caricamentoAi, setCaricamentoAi] = useState(false);
   const [erroreAi, setErroreAi] = useState<string | null>(null);
+  const [notaBuyer, setNotaBuyer] = useState("");
+  const [storicoChecks, setStoricoChecks] = useState<CampaignCheck[]>([]);
+  const [salvataggio, setSalvataggio] = useState(false);
+  const [erroreSalvataggio, setErroreSalvataggio] = useState<string | null>(
+    null,
+  );
+  const [okSalvataggio, setOkSalvataggio] = useState<string | null>(null);
 
   const caricaLista = useCallback(async () => {
     setCaricamentoCampagne(true);
@@ -198,12 +229,20 @@ export default function RisultatiPage() {
     try {
       const lista = await leggiCampagneDaSupabase();
       setCampagne(lista);
+      try {
+        const mappa = await leggiUltimiChecksUtente();
+        setUltimiChecks(mappa);
+      } catch (eCheck) {
+        logErroreSupabaseDev("risultati_ultimi_checks", eCheck);
+        setUltimiChecks(new Map());
+      }
     } catch (e) {
       logErroreSupabaseDev("risultati_liste_campagne", e);
       const locali = getCampaigns();
       const daLocale = fondiCampagne([], locali);
       setCampagne(daLocale);
       setFallbackLocale(daLocale.length > 0);
+      setUltimiChecks(new Map());
       if (daLocale.length === 0) {
         setErroreCampagne(messaggioErroreSupabase(e, "lista"));
       }
@@ -211,6 +250,13 @@ export default function RisultatiPage() {
       setCaricamentoCampagne(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (campaignIdQuery && campaignIdQuery !== campagnaId) {
+      setManuale(false);
+      setCampagnaId(campaignIdQuery);
+    }
+  }, [campaignIdQuery, campagnaId]);
 
   useEffect(() => {
     const uid = user?.id ?? null;
@@ -303,6 +349,26 @@ export default function RisultatiPage() {
     };
   }, [campagnaId, manuale, campagne]);
 
+  useEffect(() => {
+    if (!campagnaId || manuale) {
+      setStoricoChecks([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const lista = await leggiChecksCampagna(campagnaId, 8);
+        if (!cancelled) setStoricoChecks(lista);
+      } catch (e) {
+        logErroreSupabaseDev("risultati_storico_checks", e);
+        if (!cancelled) setStoricoChecks([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [campagnaId, manuale]);
+
   const campagnaAttiva = manuale ? null : campagnaDettaglio;
 
   const kpis: ControlRoomKpis = useMemo(() => {
@@ -342,8 +408,12 @@ export default function RisultatiPage() {
         economic.actual,
         economic.threshold,
         economic.healthMode,
+        {
+          daysActive: parseNum(giorniAttiva),
+          resultsCount: kpis.results,
+        },
       ),
-    [economic.actual, economic.threshold, economic.healthMode],
+    [economic.actual, economic.threshold, economic.healthMode, giorniAttiva, kpis.results],
   );
 
   const datiLimitati = useMemo(
@@ -386,6 +456,9 @@ export default function RisultatiPage() {
     setErroreAi(null);
     setInputMode("kpi");
     setTrascinando(false);
+    setNotaBuyer("");
+    setErroreSalvataggio(null);
+    setOkSalvataggio(null);
   }, []);
 
   function selezionaCampagna(id: string) {
@@ -433,7 +506,8 @@ export default function RisultatiPage() {
           : "",
       ctr: ctrNorm != null && ctrNorm > 0 ? String(ctrNorm) : "",
       cpm: analisi.cpm > 0 ? String(analisi.cpm) : "",
-      cpc: "",
+      cpc:
+        analisi.cpc != null && analisi.cpc > 0 ? String(analisi.cpc) : "",
       frequency: analisi.frequenza > 0 ? String(analisi.frequenza) : "",
       roas:
         analisi.roas != null && analisi.roas > 0 ? String(analisi.roas) : "",
@@ -486,8 +560,8 @@ export default function RisultatiPage() {
         );
       }
 
-      const { error: _err, ...analisiPulita } = data;
-      const analisi = analisiPulita as ScreenshotAnalysisResult;
+      const { error: _err, verdetto: _verdetto, ...resto } = data;
+      const analisi = resto as ScreenshotAnalysisResult;
       setAnalisiAi(analisi);
       applicaKpiDaScreenshot(analisi);
       setInputMode("kpi");
@@ -503,8 +577,102 @@ export default function RisultatiPage() {
     }
   }
 
+  async function salvaControllo() {
+    if (salvataggio) return;
+    if (!campagnaAttiva?.id) {
+      setErroreSalvataggio(
+        "Seleziona una campagna salvata per registrare il controllo.",
+      );
+      return;
+    }
+    const ultimo = storicoChecks[0];
+    if (ultimo && stessaGiornataLocale(ultimo.createdAt)) {
+      setErroreSalvataggio(
+        "Hai già salvato un controllo oggi per questa campagna. Potrai salvarne un altro in una data diversa.",
+      );
+      return;
+    }
+
+    setSalvataggio(true);
+    setErroreSalvataggio(null);
+    setOkSalvataggio(null);
+    try {
+      const salvato = await inserisciCampaignCheck({
+        campaignId: campagnaAttiva.id,
+        daysActive: parseNum(giorniAttiva),
+        spend: kpis.spend,
+        resultsCount: kpis.results,
+        primaryCost: economic.actual,
+        ctr: kpis.ctr,
+        cpm: kpis.cpm,
+        cpc: kpis.cpc,
+        frequency: kpis.frequency,
+        roas: kpis.roas,
+        healthStatus: health.status,
+        signal: diagnosis.signal,
+        actions,
+        note: notaBuyer.trim() || null,
+        objective: economic.objective,
+        threshold: economic.threshold,
+        thresholdMode: thresholdModeDaHealth(economic.healthMode),
+        source: analisiAi ? "SCREENSHOT" : "MANUAL",
+      });
+      setStoricoChecks((prev) => [salvato, ...prev].slice(0, 8));
+      setUltimiChecks((prev) => {
+        const next = new Map(prev);
+        next.set(salvato.campaignId, salvato);
+        return next;
+      });
+      try {
+        await logControlloPerformanceSalvato({
+          campaignId: campagnaAttiva.id,
+          description: descrizioneLogControllo({
+            status: health.status,
+            metricLabel: economic.metricLabel,
+            primaryCost: economic.actual,
+            threshold: economic.threshold,
+          }),
+        });
+      } catch (eLog) {
+        logErroreSupabaseDev("log_controllo_performance", eLog);
+      }
+      setOkSalvataggio("Controllo salvato.");
+    } catch (e) {
+      logErroreSupabaseDev("salva_campaign_check", e);
+      setErroreSalvataggio(
+        e instanceof Error
+          ? e.message
+          : "Impossibile salvare il controllo. Riprova.",
+      );
+    } finally {
+      setSalvataggio(false);
+    }
+  }
+
   const haSelezione = Boolean(campagnaAttiva) || manuale;
+  const mostraOverview = !campagnaId && !manuale;
   const metricLabel = economic.metricLabel;
+  const giaSalvatoOggi = Boolean(
+    storicoChecks[0] && stessaGiornataLocale(storicoChecks[0].createdAt),
+  );
+  const trendStorico =
+    storicoChecks.length >= 2
+      ? trendVsPrecedente(
+          storicoChecks[1].primaryCost,
+          storicoChecks[0].primaryCost,
+        )
+      : null;
+
+  const righeOverview = useMemo(
+    () =>
+      ordinaRigheControlRoom(
+        campagne.map((c) => ({
+          campagna: c,
+          ultimo: ultimiChecks.get(c.id) ?? null,
+        })),
+      ),
+    [campagne, ultimiChecks],
+  );
 
   return (
     <main className="mx-auto w-full max-w-[1400px] px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
@@ -513,18 +681,37 @@ export default function RisultatiPage() {
           Control Room
         </p>
         <h1 className="mt-1 text-2xl font-medium tracking-tight text-[var(--ink)] sm:text-3xl">
-          Controlla come sta andando la campagna
+          {mostraOverview
+            ? "Control Room"
+            : "Controlla come sta andando la campagna"}
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-[var(--ink-muted)]">
-          Confronta i risultati reali con la soglia economica definita prima del
-          lancio e capisci cosa fare dopo.
+          {mostraOverview
+            ? "Tutte le campagne con l’ultimo controllo settimanale. Semaforo, KPI principale e next action."
+            : "Confronta i risultati reali con la soglia economica definita prima del lancio e capisci cosa fare dopo."}
         </p>
-        <p className="mt-3 text-sm font-medium text-[var(--ink)]">
-          Non guardare solo i numeri. Capisci cosa fare dopo.
-        </p>
+        {!mostraOverview ? (
+          <Link
+            href="/risultati"
+            className="mt-3 inline-block text-sm font-medium text-[var(--accent)]"
+          >
+            ← Tutte le campagne
+          </Link>
+        ) : null}
       </header>
 
+      {mostraOverview ? (
+        <ControlRoomOverview
+          righe={righeOverview}
+          caricamento={caricamentoCampagne}
+          errore={erroreCampagne}
+          onRiprova={() => void caricaLista()}
+        />
+      ) : null}
+
       {/* TOP: campagna */}
+      {!mostraOverview ? (
+      <>
       <section className="mt-8 rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">
         <h2 className="text-sm font-medium text-[var(--ink)]">
           Campagna da analizzare
@@ -1081,6 +1268,49 @@ export default function RisultatiPage() {
                 ))}
               </ol>
             </section>
+
+            <section className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">
+              <h3 className="text-sm font-medium text-[var(--ink)]">
+                Nota del media buyer
+              </h3>
+              <p className="mt-1 text-xs text-[var(--ink-muted)]">
+                Opzionale. Esempio: «Creatività nuova lanciata martedì.»
+              </p>
+              <textarea
+                value={notaBuyer}
+                onChange={(e) => setNotaBuyer(e.target.value)}
+                rows={3}
+                className={`${inputClass} mt-3 resize-y`}
+                placeholder="Creatività nuova lanciata martedì."
+              />
+              <button
+                type="button"
+                onClick={() => void salvaControllo()}
+                disabled={
+                  salvataggio || !campagnaAttiva?.id || giaSalvatoOggi
+                }
+                className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-[var(--ink)] px-4 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {salvataggio ? "Salvataggio…" : "Salva controllo"}
+              </button>
+              {!campagnaAttiva?.id ? (
+                <p className="mt-2 text-xs text-[var(--ink-muted)]">
+                  Seleziona una campagna salvata per registrare il controllo.
+                </p>
+              ) : null}
+              {giaSalvatoOggi ? (
+                <p className="mt-2 text-xs text-[var(--ink-muted)]">
+                  Hai già salvato un controllo oggi. Un nuovo check è
+                  disponibile in una data diversa.
+                </p>
+              ) : null}
+              {erroreSalvataggio ? (
+                <p className="mt-2 text-sm text-[#B42318]">{erroreSalvataggio}</p>
+              ) : null}
+              {okSalvataggio ? (
+                <p className="mt-2 text-sm text-[#2D6A4A]">{okSalvataggio}</p>
+              ) : null}
+            </section>
           </div>
         </div>
       ) : (
@@ -1092,29 +1322,36 @@ export default function RisultatiPage() {
         </div>
       )}
 
-      {/* BOTTOM: storico + benchmark */}
       <section
         className={`rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)] ${haSelezione ? "mt-10" : "mt-6"}`}
       >
-        <h2 className="text-lg font-medium text-[var(--ink)]">
-          Storico controlli
-        </h2>
-        <p className="mt-2 text-sm text-[var(--ink-muted)]">
-          Lo storico dei controlli sarà disponibile dopo il primo check salvato.
-        </p>
-        <p className="mt-1 text-xs text-[var(--ink-muted)]">
-          Persistenza su database in arrivo (tabella dedicata). Nessun dato
-          fittizio mostrato qui.
-        </p>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-lg font-medium text-[var(--ink)]">
+            Storico controlli
+          </h2>
+          {trendStorico ? (
+            <p className="text-sm text-[var(--ink-muted)]">
+              vs check precedente:{" "}
+              <span className="font-medium text-[var(--ink)]">
+                {etichettaTrend(trendStorico)}
+              </span>
+            </p>
+          ) : null}
+        </div>
+        <StoricoControlli
+          checks={storicoChecks}
+          metricLabel={metricLabel}
+        />
       </section>
+      </>
+      ) : null}
 
       <section className="mt-8">
         <h2 className="text-lg font-medium text-[var(--ink)]">
           Riferimenti di mercato
         </h2>
         <p className="mt-1 max-w-2xl text-sm text-[var(--ink-muted)]">
-          Range indicativi utili come contesto. La soglia economica del cliente
-          resta il riferimento principale.
+          Valori indicativi, non soglie decisionali.
         </p>
         <div className="mt-4 overflow-x-auto rounded-[var(--radius)] bg-white shadow-[var(--shadow-soft)]">
           <table className="w-full min-w-[640px] text-left text-sm">
@@ -1156,5 +1393,19 @@ export default function RisultatiPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function RisultatiPageRoute() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto w-full max-w-[1400px] px-4 py-8">
+          <p className="text-sm text-[var(--ink-muted)]">Caricamento Control Room…</p>
+        </main>
+      }
+    >
+      <RisultatiPage />
+    </Suspense>
   );
 }

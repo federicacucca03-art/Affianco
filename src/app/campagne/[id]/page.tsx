@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Check, Copy, FileUp } from "lucide-react";
 import type { Campagna } from "@/types/campagne";
 import { formatDataApprovazione } from "@/types/campagne";
-import { giorniAttiviDaCampagna } from "@/data/campagne-store";
 import {
   completaRevisioneCampagnaSuSupabase,
   leggiCampagnaDaSupabase,
@@ -20,136 +18,48 @@ import {
 } from "@/lib/supabase-errori";
 import { hrefModificaConfigurazione } from "@/data/percorsi-nuova-campagna";
 import { PannelloAssetStrategia } from "@/components/campagne/PannelloAssetStrategia";
+import { PannelloDiagnosiPerformance } from "@/components/campagne/PannelloDiagnosiPerformance";
 import { DiarioBordo } from "@/components/campagne/DiarioBordo";
 import {
-  analyzeCampaignData,
-  generaReportWhatsAppCliente,
-  parseMetaCsvReport,
-  type CampaignAnalysisResult,
-  type VerdictStatus,
-} from "@/lib/analyzer";
+  emojiHealth,
+  etichettaHealth,
+  healthBadgeClasses,
+} from "@/lib/control-room";
 import {
-  etichettaSemaforoDiagnosi,
-  registraEventoCampagna,
-} from "@/lib/campaign-logs";
+  leggiUltimoCheckCampagna,
+  type CampaignCheck,
+} from "@/lib/campaign-checks-db";
 import {
-  calculateEcommerceBreakEvenRoas,
-  calculateEcommerceTargetRoas,
   calculateMaxSustainableBookingCpa,
   calculateMaxSustainableCpl,
   calculateMaxSustainableInStoreCpa,
   calculateMaxSustainableRecoveryCpa,
-  calculateRoasReale,
 } from "@/lib/benchmarks";
 
 type TabDettaglio = "asset" | "diagnosi";
 
-type Aggregati = {
-  spesaTotale: number;
-  contatti: number;
-  fatturato?: number;
-  impressions: number;
-  clicks: number;
-  frequenza: number;
-  /** CTR % da inserimento manuale (se > 0 ha priorità sul calcolo da click). */
-  ctrPercent?: number;
-};
-
-type MetricheManual = {
-  spesaTotale: string;
-  contatti: string;
-  fatturato: string;
-  frequenza: string;
-  ctr: string;
-};
-
-const inputClass =
-  "w-full rounded-xl border border-[var(--border)] bg-white px-3.5 py-2.5 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--ink-muted)] focus:border-[var(--accent)]";
-
-const BADGE_STILI: Record<
-  VerdictStatus,
-  { emoji: string; label: string; className: string }
-> = {
-  learning: {
-    emoji: "🟡",
-    label: "In ottimizzazione",
-    className: "bg-[#FFF6E5] text-[#B8860B]",
-  },
-  good: {
-    emoji: "🟢",
-    label: "In target",
-    className: "bg-[#E8F5EE] text-[#3D8B57]",
-  },
-  warning: {
-    emoji: "🟡",
-    label: "In ottimizzazione",
-    className: "bg-[#FFF0E0] text-[#C26A0A]",
-  },
-  alert: {
-    emoji: "🔴",
-    label: "Fuori soglia",
-    className: "bg-[#FDECEC] text-[#C45C5C]",
-  },
-};
-
-function BadgeVerdetto({
-  verdict,
-  fallbackLabel,
-  marginStatus,
-  marginBadgeLabel,
-}: {
-  verdict?: VerdictStatus;
-  fallbackLabel?: string;
-  marginStatus?: CampaignAnalysisResult["marginStatus"];
-  marginBadgeLabel?: string;
-}) {
-  if (marginStatus === "out_of_target") {
+function BadgeHealth({ check }: { check: CampaignCheck | null }) {
+  if (!check) {
     return (
-      <span className="inline-flex items-center gap-2 rounded-full bg-[#FDECEC] px-4 py-2 text-base font-medium text-[#C45C5C]">
-        <span aria-hidden>🔴</span>
-        {marginBadgeLabel || "Fuori soglia"}
+      <span className="inline-flex items-center gap-2 rounded-full bg-[#EEF0F3] px-4 py-2 text-base font-medium text-[#5A6578]">
+        Mai controllata
       </span>
     );
   }
-
-  if (marginStatus === "in_target") {
-    return (
-      <span className="inline-flex items-center gap-2 rounded-full bg-[#E8F5EE] px-4 py-2 text-base font-medium text-[#3D8B57]">
-        <span aria-hidden>🟢</span>
-        {marginBadgeLabel || "In target"}
-      </span>
-    );
-  }
-
-  const stile = verdict
-    ? BADGE_STILI[verdict]
-    : {
-        emoji: "🟡",
-        label: fallbackLabel || "In ottimizzazione",
-        className: "bg-[#FFF6E5] text-[#B8860B]",
-      };
-
   return (
     <span
-      className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-base font-medium ${stile.className}`}
+      className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-base font-medium ${healthBadgeClasses(check.healthStatus)}`}
     >
-      <span aria-hidden>{stile.emoji}</span>
-      {stile.label}
+      <span aria-hidden>{emojiHealth(check.healthStatus)}</span>
+      {etichettaHealth(check.healthStatus)}
     </span>
   );
-}
-
-function azioneConsigliata(
-  analisi: CampaignAnalysisResult,
-): string {
-  return analisi.actionableAdvice;
 }
 
 function titoloCampagnaBreve(campagna: Campagna): string {
   const grezzo =
     campagna.nomeCampagna ||
     "Richieste Contatto";
-  // Preferisce un titolo corto tipo "Richieste Contatto"
   if (/richieste\s+contatto/i.test(grezzo)) return "Richieste Contatto";
   return grezzo;
 }
@@ -159,19 +69,6 @@ export default function DettaglioCampagnaPage() {
   const [campagna, setCampagna] = useState<Campagna | null | undefined>(
     undefined,
   );
-  const [nomeFile, setNomeFile] = useState<string | null>(null);
-  const [trascinando, setTrascinando] = useState(false);
-  const [mostraManuale, setMostraManuale] = useState(false);
-  const [giorniOverride, setGiorniOverride] = useState<number | null>(null);
-  const [manuale, setManuale] = useState<MetricheManual>({
-    spesaTotale: "",
-    contatti: "",
-    fatturato: "",
-    frequenza: "",
-    ctr: "",
-  });
-  const [aggregati, setAggregati] = useState<Aggregati | null>(null);
-  const [copiato, setCopiato] = useState(false);
   const [tabAttivo, setTabAttivo] = useState<TabDettaglio>("diagnosi");
   const [linkCopiato, setLinkCopiato] = useState(false);
   const [erroreLinkApprovazione, setErroreLinkApprovazione] = useState<
@@ -184,20 +81,13 @@ export default function DettaglioCampagnaPage() {
     null,
   );
   const [diarioRefreshKey, setDiarioRefreshKey] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const prevMetricsKeyRef = useRef<string | null>(null);
-  const prevVerdictRef = useRef<string | null>(null);
+  const [ultimoCheck, setUltimoCheck] = useState<CampaignCheck | null>(null);
 
   useEffect(() => {
     let attivo = true;
     setCampagna(undefined);
     setErroreCaricamento(null);
-    setNomeFile(null);
-    setAggregati(null);
-    setMostraManuale(false);
-    setGiorniOverride(null);
-    prevMetricsKeyRef.current = null;
-    prevVerdictRef.current = null;
+    setUltimoCheck(null);
     setDiarioRefreshKey(0);
 
     (async () => {
@@ -223,11 +113,25 @@ export default function DettaglioCampagnaPage() {
     };
   }, [params.id]);
 
-  const giorniAttivi = useMemo(() => {
-    if (!campagna) return 0;
-    if (giorniOverride !== null) return giorniOverride;
-    return giorniAttiviDaCampagna(campagna);
-  }, [campagna, giorniOverride]);
+  useEffect(() => {
+    if (!campagna?.id) {
+      setUltimoCheck(null);
+      return;
+    }
+    let attivo = true;
+    void (async () => {
+      try {
+        const check = await leggiUltimoCheckCampagna(campagna.id);
+        if (attivo) setUltimoCheck(check);
+      } catch (e) {
+        logErroreSupabaseDev("dettaglio_ultimo_check", e);
+        if (attivo) setUltimoCheck(null);
+      }
+    })();
+    return () => {
+      attivo = false;
+    };
+  }, [campagna?.id]);
 
   const maxCplHeader = useMemo(() => {
     if (!campagna) return 0;
@@ -271,252 +175,6 @@ export default function DettaglioCampagnaPage() {
       margine,
     );
   }, [campagna]);
-
-  const economiaEcommerce = useMemo(() => {
-    if (!campagna || campagna.objective !== "ECOMMERCE") return null;
-    const aov = campagna.averageOrderValue ?? campagna.scontrinoMedio ?? 0;
-    const productMargin = campagna.productMargin ?? 0;
-    const cpaMax =
-      campagna.maxSustainableCpa && campagna.maxSustainableCpa > 0
-        ? campagna.maxSustainableCpa
-        : 0;
-    const spesa = aggregati?.spesaTotale ?? 0;
-    const acquisti = aggregati?.contatti ?? 0;
-    const fatturato =
-      aggregati?.fatturato && aggregati.fatturato > 0
-        ? aggregati.fatturato
-        : acquisti > 0 && aov > 0
-          ? acquisti * aov
-          : 0;
-    const roasReale = calculateRoasReale(fatturato, spesa);
-    const haCpaMax = cpaMax > 0;
-    const haAov = aov > 0;
-    const roasBreakEven =
-      haCpaMax && haAov
-        ? calculateEcommerceBreakEvenRoas(aov, cpaMax)
-        : 0;
-    const roasTarget =
-      haCpaMax && haAov
-        ? calculateEcommerceTargetRoas(aov, cpaMax)
-        : 0;
-    return {
-      aov,
-      productMargin,
-      fatturato,
-      roasReale,
-      roasBreakEven,
-      roasTarget,
-      cpaMax,
-      acquisti,
-      spesa,
-      haCpaMax,
-      haAov,
-      roasDisponibili: haCpaMax && haAov,
-    };
-  }, [campagna, aggregati]);
-
-  const analisi = useMemo(() => {
-    if (!campagna || !aggregati) return null;
-    const objective = campagna.objective ?? "LEADS";
-    const base = {
-      nomeCliente: campagna.nomeCliente,
-      citta: campagna.citta || "",
-      spesaTotale: aggregati.spesaTotale,
-      contatti: aggregati.contatti,
-      impressions: aggregati.impressions,
-      clicks: aggregati.clicks,
-      giorniAttivi,
-      frequenza: aggregati.frequenza,
-      ctrPercent: aggregati.ctrPercent,
-      maxCplSustainable: maxCplHeader > 0 ? maxCplHeader : undefined,
-      nomeCampagna: campagna.nomeCampagna,
-    };
-
-    if (objective === "ECOMMERCE") {
-      const aov =
-        campagna.averageOrderValue ?? campagna.scontrinoMedio ?? 70;
-      const productMargin = campagna.productMargin ?? 50;
-      return analyzeCampaignData({
-        ...base,
-        settore: campagna.settore || "E-commerce",
-        scontrinoMedio: aov,
-        tassoConversione: productMargin,
-        targetMargin: campagna.targetMargin ?? 50,
-      });
-    }
-    if (objective === "IN_STORE") {
-      const receipt =
-        campagna.averageReceipt ?? campagna.scontrinoMedio ?? 40;
-      const storeMargin = campagna.storeMargin ?? 40;
-      return analyzeCampaignData({
-        ...base,
-        settore: campagna.settore || "Retail / Negozio",
-        scontrinoMedio: receipt,
-        tassoConversione: storeMargin,
-        targetMargin: campagna.targetMargin ?? 50,
-      });
-    }
-    if (objective === "RETARGETING") {
-      const valore =
-        campagna.recoveryValue ?? campagna.scontrinoMedio ?? 100;
-      const recoveryMargin = campagna.recoveryMargin ?? 50;
-      const sconto = campagna.recoveryDiscount ?? 0;
-      const valoreNetto =
-        valore * (1 - Math.min(100, Math.max(0, sconto)) / 100);
-      return analyzeCampaignData({
-        ...base,
-        settore: campagna.settore || "Retargeting",
-        scontrinoMedio: valoreNetto,
-        tassoConversione: recoveryMargin * 0.6,
-        targetMargin: 0,
-      });
-    }
-    const isBook = objective === "BOOKINGS";
-    const ticket =
-      (isBook
-        ? campagna.bookingServiceValue ?? campagna.scontrinoMedio
-        : campagna.scontrinoMedio) ?? (isBook ? 60 : 1500);
-    const tasso =
-      (isBook
-        ? campagna.showUpRate ?? campagna.tassoConversionePercent
-        : campagna.tassoConversionePercent) ?? (isBook ? 75 : 10);
-
-    return analyzeCampaignData({
-      ...base,
-      settore: campagna.settore || "Dentista",
-      scontrinoMedio: ticket,
-      tassoConversione: tasso,
-      targetMargin: campagna.targetMargin ?? 50,
-    });
-  }, [campagna, aggregati, giorniAttivi, maxCplHeader]);
-
-  useEffect(() => {
-    if (!campagna || !aggregati) return;
-    const metricsKey = JSON.stringify({
-      spesa: aggregati.spesaTotale,
-      contatti: aggregati.contatti,
-      freq: aggregati.frequenza,
-      ctr: aggregati.ctrPercent ?? 0,
-      fat: aggregati.fatturato ?? 0,
-    });
-    if (prevMetricsKeyRef.current === metricsKey) return;
-    prevMetricsKeyRef.current = metricsKey;
-
-    void (async () => {
-      await registraEventoCampagna({
-        campaignId: campagna.id,
-        eventType: "METRICS_UPDATED",
-        title: "Dati reali aggiornati",
-        description: `Spesa ${aggregati.spesaTotale}€ · risultati ${aggregati.contatti}${
-          aggregati.frequenza > 0 ? ` · frequenza ${aggregati.frequenza}` : ""
-        }${
-          aggregati.ctrPercent && aggregati.ctrPercent > 0
-            ? ` · CTR ${aggregati.ctrPercent}%`
-            : ""
-        }`,
-      });
-      setDiarioRefreshKey((k) => k + 1);
-    })();
-  }, [campagna, aggregati]);
-
-  useEffect(() => {
-    if (!campagna || !analisi) return;
-    const chiave = `${analisi.verdict}|${analisi.badgeLabel}|${analisi.marginStatus}`;
-    if (prevVerdictRef.current === null) {
-      prevVerdictRef.current = chiave;
-      return;
-    }
-    if (prevVerdictRef.current === chiave) return;
-    prevVerdictRef.current = chiave;
-
-    const semaforo = etichettaSemaforoDiagnosi(
-      analisi.verdict,
-      analisi.badgeLabel,
-    );
-    void (async () => {
-      await registraEventoCampagna({
-        campaignId: campagna.id,
-        eventType: "DIAGNOSIS_CHANGED",
-        title: `Stato diagnostico: ${semaforo}`,
-        description: `Stato diagnostico cambiato in ${semaforo}. ${analisi.diagnosisText}`,
-      });
-      setDiarioRefreshKey((k) => k + 1);
-    })();
-  }, [campagna, analisi]);
-
-  function gestisciFile(file: File | undefined) {
-    if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".csv")) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const testo = String(reader.result ?? "");
-      const parsed = parseMetaCsvReport(testo);
-      setNomeFile(file.name);
-      setMostraManuale(false);
-      setGiorniOverride(null);
-      setAggregati({
-        spesaTotale: parsed.spesaTotale,
-        contatti: parsed.contatti,
-        impressions: parsed.impressions,
-        clicks: parsed.clicks,
-        frequenza: parsed.frequenza,
-      });
-    };
-    reader.readAsText(file);
-  }
-
-  function applicaManuale() {
-    setGiorniOverride(null);
-    const spesa = Number(manuale.spesaTotale) || 0;
-    const contatti = Number(manuale.contatti) || 0;
-    const fatturato = Number(manuale.fatturato) || 0;
-    const frequenza = Number(manuale.frequenza) || 0;
-    const ctr = Number(manuale.ctr) || 0;
-    setNomeFile(null);
-    setAggregati({
-      spesaTotale: spesa,
-      contatti,
-      fatturato: fatturato > 0 ? fatturato : undefined,
-      impressions: 0,
-      clicks: 0,
-      frequenza,
-      ctrPercent: ctr > 0 ? ctr : undefined,
-    });
-  }
-
-  const reportWhatsApp = useMemo(() => {
-    if (!campagna || !analisi) return null;
-    return generaReportWhatsAppCliente({
-      nomeCliente: campagna.nomeCliente,
-      nomeAzienda: campagna.nomeCliente,
-      nomeCampagna: titoloCampagnaBreve(campagna),
-      spesaTotale: analisi.metrics.spesaTotale,
-      contatti: analisi.metrics.contatti,
-      cplReale: analisi.metrics.cplReale,
-      cplSostenibile: analisi.maxCplSustainable,
-      giorniAttivi,
-      marginStatus: analisi.marginStatus,
-      verdict: analisi.verdict,
-      azioneClienteSintetica: analisi.azioneClienteSintetica,
-      objective: campagna.objective ?? "LEADS",
-      fatturato: economiaEcommerce?.fatturato,
-      roasReale: economiaEcommerce?.roasReale,
-      roasBreakEven: economiaEcommerce?.roasBreakEven,
-      roasTarget: economiaEcommerce?.roasTarget,
-    });
-  }, [campagna, analisi, giorniAttivi, economiaEcommerce]);
-
-  async function copiaReportWhatsApp() {
-    if (!reportWhatsApp) return;
-    try {
-      await navigator.clipboard.writeText(reportWhatsApp);
-      setCopiato(true);
-      window.setTimeout(() => setCopiato(false), 1800);
-    } catch {
-      // Ignora se clipboard non disponibile.
-    }
-  }
 
   async function copiaLinkApprovazione() {
     if (!campagna) return;
@@ -602,39 +260,6 @@ export default function DettaglioCampagnaPage() {
   const settore = campagna.settore || "Attività locale";
   const citta = campagna.citta || "—";
   const budgetGiornaliero = campagna.budgetGiornaliero ?? 20;
-  const consiglio = analisi ? azioneConsigliata(analisi) : null;
-  const faseApprendimento = giorniAttivi < 4;
-  const giornoApprendimento = Math.min(Math.max(giorniAttivi + 1, 1), 4);
-  const evidenziaLearning =
-    analisi?.verdict === "learning" || (analisi && faseApprendimento);
-  const evidenziaAlert =
-    analisi?.verdict === "alert" || analisi?.marginStatus === "out_of_target";
-  const fuoriMargine = analisi?.marginStatus === "out_of_target";
-  const cplSottoSoglia =
-    !!analisi &&
-    analisi.metrics.contatti > 0 &&
-    analisi.maxCplSustainable > 0 &&
-    analisi.metrics.cplReale <= analisi.maxCplSustainable;
-  const cplSopraSoglia =
-    !!analisi &&
-    analisi.metrics.contatti > 0 &&
-    analisi.maxCplSustainable > 0 &&
-    analisi.metrics.cplReale > analisi.maxCplSustainable;
-  const isEcommerce = campagna.objective === "ECOMMERCE";
-  const isInStore = campagna.objective === "IN_STORE";
-  const isBookings = campagna.objective === "BOOKINGS";
-  const isRetargeting = campagna.objective === "RETARGETING";
-  const isAwareness = campagna.objective === "AWARENESS";
-  const badgeRoasProfitto =
-    !!economiaEcommerce &&
-    economiaEcommerce.roasReale > 0 &&
-    economiaEcommerce.roasTarget > 0 &&
-    economiaEcommerce.roasReale >= economiaEcommerce.roasTarget;
-  const badgeRoasPerdita =
-    !!economiaEcommerce &&
-    economiaEcommerce.roasReale > 0 &&
-    economiaEcommerce.roasBreakEven > 0 &&
-    economiaEcommerce.roasReale < economiaEcommerce.roasBreakEven;
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
@@ -706,12 +331,7 @@ export default function DettaglioCampagnaPage() {
               </span>
             </h1>
           </div>
-          <BadgeVerdetto
-            verdict={analisi?.verdict}
-            fallbackLabel={campagna.giudizio}
-            marginStatus={analisi?.marginStatus}
-            marginBadgeLabel={analisi?.marginBadgeLabel}
-          />
+          <BadgeHealth check={ultimoCheck} />
         </div>
 
         <dl className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -821,474 +441,7 @@ export default function DettaglioCampagnaPage() {
           />
         </div>
       ) : (
-        <>
-      {faseApprendimento ? (
-        <section
-          className="mt-6 overflow-hidden rounded-[var(--radius)] border border-[#7BA3D4]/40 bg-gradient-to-br from-[#FFF8E7] via-[#FFF6E5] to-[#E8F1FB] p-5 shadow-[var(--shadow-soft)] sm:p-6"
-          aria-live="polite"
-        >
-          <p className="text-base font-medium tracking-tight text-[#8A6A0A] sm:text-lg">
-            ✋ MANI IN TASCA — Fase di Apprendimento Attiva (Giorno{" "}
-            {giornoApprendimento} di 4)
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-[#3A5A7A]">
-            L&apos;algoritmo di Meta sta calibrando il pubblico. Non modificare
-            budget, target o annunci prima di 4 giorni per non azzerare
-            l&apos;ottimizzazione dell&apos;asta.
-          </p>
-        </section>
-      ) : null}
-
-      {/* 2. Area Import Dati */}
-      <section className="mt-6 rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
-        <h2 className="text-sm font-medium text-[var(--ink)]">
-          Dati settimana · CSV Meta o inserimento manuale
-        </h2>
-        <p className="mt-1 text-xs text-[var(--ink-muted)]">
-          Carica il report sintetico di Ads Manager oppure inserisci Spesa,
-          Contatti, Frequenza e CTR. Il Motore Diagnostico Prescrittivo si
-          aggiorna subito.
-        </p>
-
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => inputRef.current?.click()}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              inputRef.current?.click();
-            }
-          }}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setTrascinando(true);
-          }}
-          onDragLeave={() => setTrascinando(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setTrascinando(false);
-            gestisciFile(e.dataTransfer.files[0]);
-          }}
-          className={`mt-4 flex cursor-pointer flex-col items-center justify-center rounded-[var(--radius)] border-2 border-dashed px-6 py-10 text-center transition-colors ${
-            trascinando
-              ? "border-[var(--accent)] bg-[var(--accent-soft)]"
-              : "border-[var(--border)] bg-[var(--surface-hover)] hover:border-[var(--accent-muted)]"
-          }`}
-        >
-          <FileUp
-            className="h-8 w-8 text-[var(--accent)]"
-            strokeWidth={1.5}
-            aria-hidden
-          />
-          <p className="mt-3 max-w-md text-sm font-medium text-[var(--ink)]">
-            {nomeFile
-              ? nomeFile
-              : "📥 Trascina qui il file CSV esportato da Meta Ads Manager"}
-          </p>
-          <p className="mt-1 text-xs text-[var(--ink-muted)]">
-            {nomeFile
-              ? "File caricato. Puoi sostituirlo con un altro CSV."
-              : "Oppure clicca per selezionare un file .csv"}
-          </p>
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".csv,text/csv"
-            className="hidden"
-            onChange={(e) => {
-              gestisciFile(e.target.files?.[0]);
-              e.target.value = "";
-            }}
-          />
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setMostraManuale((v) => !v)}
-          className="mt-4 text-sm font-medium text-[var(--accent)] transition-opacity hover:opacity-80"
-        >
-          {mostraManuale
-            ? "Nascondi inserimento manuale"
-            : "Inserimento manuale dati settimana"}
-        </button>
-
-        {mostraManuale ? (
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
-                Spesa totale settimana (€)
-              </span>
-              <input
-                type="number"
-                min={0}
-                step={0.01}
-                value={manuale.spesaTotale}
-                onChange={(e) =>
-                  setManuale((m) => ({ ...m, spesaTotale: e.target.value }))
-                }
-                className={inputClass}
-                placeholder="es. 180"
-              />
-            </label>
-            {isEcommerce ? (
-              <>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
-                    Fatturato generato (€)
-                  </span>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={manuale.fatturato}
-                    onChange={(e) =>
-                      setManuale((m) => ({ ...m, fatturato: e.target.value }))
-                    }
-                    className={inputClass}
-                    placeholder="es. 900"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
-                    Numero acquisti / conversioni
-                  </span>
-                  <input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={manuale.contatti}
-                    onChange={(e) =>
-                      setManuale((m) => ({ ...m, contatti: e.target.value }))
-                    }
-                    className={inputClass}
-                    placeholder="es. 12"
-                  />
-                </label>
-              </>
-            ) : (
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
-                  {campagna.objective === "BOOKINGS"
-                    ? "Prenotazioni / conversioni ricevute"
-                    : campagna.objective === "RETARGETING"
-                      ? "Conversioni di recupero"
-                      : campagna.objective === "IN_STORE"
-                        ? "Clienti in negozio / conversioni"
-                        : "Contatti / conversioni ricevuti"}
-                </span>
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={manuale.contatti}
-                  onChange={(e) =>
-                    setManuale((m) => ({ ...m, contatti: e.target.value }))
-                  }
-                  className={inputClass}
-                  placeholder="es. 6"
-                />
-              </label>
-            )}
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
-                Frequenza media Meta
-              </span>
-              <input
-                type="number"
-                min={0}
-                step={0.1}
-                value={manuale.frequenza}
-                onChange={(e) =>
-                  setManuale((m) => ({ ...m, frequenza: e.target.value }))
-                }
-                className={inputClass}
-                placeholder="es. 2.1"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
-                CTR (%)
-              </span>
-              <input
-                type="number"
-                min={0}
-                step={0.01}
-                value={manuale.ctr}
-                onChange={(e) =>
-                  setManuale((m) => ({ ...m, ctr: e.target.value }))
-                }
-                className={inputClass}
-                placeholder="es. 1.2"
-              />
-            </label>
-            <div className="flex items-end sm:col-span-2">
-              <button
-                type="button"
-                onClick={applicaManuale}
-                className="w-full rounded-full bg-[var(--ink)] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 sm:w-auto"
-              >
-                Salva e aggiorna diagnosi
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </section>
-
-      {analisi && consiglio ? (
-        <>
-          {/* 3. Diagnosi Operativa Prescrittiva */}
-          <section className="mt-6 rounded-[var(--radius)] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
-            <p className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
-              Motore Diagnostico Prescrittivo · Cosa fare oggi
-            </p>
-            <h2 className="mt-2 text-xl font-medium text-[var(--ink)]">
-              {analisi.headline}
-            </h2>
-            <p className="mt-3 text-sm leading-relaxed text-[var(--ink)]">
-              <span className="font-medium">Diagnosi: </span>
-              {analisi.diagnosisText}
-            </p>
-
-            {isEcommerce && economiaEcommerce ? (
-              <div
-                className={`mt-5 rounded-xl border p-4 ${
-                  !economiaEcommerce.haCpaMax
-                    ? "border-[var(--border)] bg-[var(--surface-hover)]"
-                    : badgeRoasProfitto
-                      ? "border-[#c6e7c8] bg-[#f0faf1]"
-                      : badgeRoasPerdita
-                        ? "border-[#f5c9b8] bg-[#fff4f0]"
-                        : "border-[#f5e0a8] bg-[#fff9e8]"
-                }`}
-              >
-                {!economiaEcommerce.haCpaMax ? (
-                  <>
-                    <p className="text-sm font-medium text-[var(--ink)]">
-                      Dati economici incompleti
-                    </p>
-                    <p className="mt-2 text-xs text-[var(--ink-muted)]">
-                      CPA Max non disponibile per questa campagna. La soglia
-                      economica salvata al lancio non è presente.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm font-medium text-[var(--ink)]">
-                      {economiaEcommerce.roasReale > 0 &&
-                      economiaEcommerce.roasDisponibili
-                        ? badgeRoasProfitto
-                          ? `🟢 Campagna in profitto diretto (ROAS ${economiaEcommerce.roasReale}x)`
-                          : badgeRoasPerdita
-                            ? `🔴 Campagna in perdita (ROAS sotto il punto di pareggio)`
-                            : `ROAS reale ${economiaEcommerce.roasReale}x · Break-Even ROAS ${economiaEcommerce.roasBreakEven}x · Target ROAS ${economiaEcommerce.roasTarget}x`
-                        : economiaEcommerce.roasDisponibili
-                          ? `Break-Even ROAS ${economiaEcommerce.roasBreakEven}x · Target ROAS ${economiaEcommerce.roasTarget}x`
-                          : "CPA Max disponibile — ROAS: dati economici incompleti (manca AOV)"}
-                    </p>
-                    <p className="mt-2 text-xs text-[var(--ink-muted)]">
-                      CPA Max (Break-Even) {economiaEcommerce.cpaMax}€
-                      {economiaEcommerce.spesa > 0
-                        ? ` · Fatturato ${economiaEcommerce.fatturato}€ su spesa ${economiaEcommerce.spesa}€`
-                        : ""}
-                      {!economiaEcommerce.roasDisponibili
-                        ? " · Break-Even / Target ROAS non calcolabili senza AOV"
-                        : ""}
-                    </p>
-                  </>
-                )}
-              </div>
-            ) : null}
-
-            {fuoriMargine && analisi.marginWarningText ? (
-              <div className="mt-5 rounded-xl border border-[#f5c9b8] bg-[#fff4f0] p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-[#C45C5C]">
-                  Allarme margine
-                </p>
-                <p className="mt-2 text-sm font-medium leading-relaxed text-[var(--ink)]">
-                  {analisi.marginWarningText}
-                </p>
-              </div>
-            ) : analisi.marginStatus === "in_target" ? (
-              <div className="mt-5 rounded-xl border border-[#c6e7c8] bg-[#f0faf1] p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-[#3D8B57]">
-                  Margine sotto controllo
-                </p>
-                <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]">
-                  CPL reale {analisi.metrics.cplReale}€ entro la soglia
-                  sostenibile di {analisi.maxCplSustainable}€: sei in target di
-                  profitto.
-                </p>
-              </div>
-            ) : null}
-
-            <div
-              className={`mt-5 rounded-xl p-4 ${
-                faseApprendimento
-                  ? "border border-[#7BA3D4]/50 bg-[#E8F1FB]"
-                  : evidenziaAlert || cplSopraSoglia
-                    ? "border border-[#f5c9b8] bg-[#fff4f0]"
-                    : evidenziaLearning
-                      ? "border border-[#f5e0a8] bg-[#fff9e8]"
-                      : cplSottoSoglia
-                        ? "border border-[#c6e7c8] bg-[#f0faf1]"
-                        : "border border-[#c6e7c8] bg-[#f0faf1]"
-              }`}
-            >
-              <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-                Azione prescrittiva
-              </p>
-              <p className="mt-2 text-sm font-medium leading-relaxed text-[var(--ink)]">
-                {consiglio}
-              </p>
-              {(analisi.metrics.ctr > 0 || analisi.metrics.frequenza > 0) &&
-              evidenziaAlert ? (
-                <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
-                  Segnali: CTR{" "}
-                  {analisi.metrics.ctr > 0
-                    ? `${analisi.metrics.ctr}%`
-                    : "n/d"}
-                  {analisi.metrics.frequenza > 0
-                    ? ` · Frequenza ${analisi.metrics.frequenza}`
-                    : ""}
-                  {analisi.scostamentoSogliaPercent != null
-                    ? ` · Scostamento +${analisi.scostamentoSogliaPercent}% vs soglia`
-                    : ""}
-                </p>
-              ) : null}
-            </div>
-          </section>
-
-          {/* 4. Confronto metriche */}
-          <section className="mt-6 rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
-            <h2 className="text-sm font-medium text-[var(--ink)]">
-              Metriche vs soglia sostenibile
-            </h2>
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-xl border border-[var(--border)] p-4">
-                <p className="text-xs font-medium text-[var(--ink-muted)]">
-                  Spesa e giorni attivi
-                </p>
-                <p className="mt-2 text-lg font-medium text-[var(--ink)]">
-                  {analisi.metrics.spesaTotale}€
-                </p>
-                <p className="mt-1 text-xs text-[var(--ink-muted)]">
-                  {giorniAttivi}{" "}
-                  {giorniAttivi === 1 ? "giorno attivo" : "giorni attivi"}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-[var(--border)] p-4">
-                <p className="text-xs font-medium text-[var(--ink-muted)]">
-                  {isBookings
-                    ? "Prenotazioni e CPA reale"
-                    : isRetargeting
-                      ? "Recuperi e CPA reale"
-                      : isInStore
-                        ? "Clienti in negozio e CPA reale"
-                        : isEcommerce
-                          ? "Acquisti e CPA reale"
-                          : "Contatti e CPL reale"}
-                </p>
-                <p className="mt-2 text-lg font-medium text-[var(--ink)]">
-                  {analisi.metrics.contatti}{" "}
-                  {isBookings
-                    ? "prenotazioni"
-                    : isRetargeting
-                      ? "recuperi"
-                      : isInStore
-                        ? "clienti"
-                        : isEcommerce
-                          ? "acquisti"
-                          : "contatti"}
-                </p>
-                <p className="mt-1 text-xs text-[var(--ink-muted)]">
-                  {isBookings || isInStore || isEcommerce || isRetargeting
-                    ? "CPA"
-                    : "CPL"}{" "}
-                  reale:{" "}
-                  {analisi.metrics.cplReale > 0
-                    ? `${analisi.metrics.cplReale}€`
-                    : "—"}{" "}
-                  · soglia{" "}
-                  {analisi.maxCplSustainable > 0
-                    ? `${analisi.maxCplSustainable}€`
-                    : "n/d"}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-[var(--border)] p-4">
-                <p className="text-xs font-medium text-[var(--ink-muted)]">
-                  Frequenza
-                </p>
-                <p className="mt-2 text-lg font-medium text-[var(--ink)]">
-                  {analisi.metrics.frequenza > 0
-                    ? analisi.metrics.frequenza
-                    : "—"}
-                </p>
-                <p className="mt-1 text-xs text-[var(--ink-muted)]">
-                  Soglie: &lt;2,5 ok · 2,5–3,5 attenzione · &gt;3,5 fatigue
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-[var(--border)] p-4">
-                <p className="text-xs font-medium text-[var(--ink-muted)]">
-                  CTR
-                </p>
-                <p className="mt-2 text-lg font-medium text-[var(--ink)]">
-                  {analisi.metrics.ctr > 0
-                    ? `${analisi.metrics.ctr}%`
-                    : "—"}
-                </p>
-                <p className="mt-1 text-xs text-[var(--ink-muted)]">
-                  Soglia critica prescrittiva: &lt;1% (aggancio creativo)
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* 5. Report WhatsApp */}
-          {reportWhatsApp ? (
-            <section className="mt-6 mb-8 rounded-[var(--radius)] border border-[#c6e7c8] bg-[#f3faf5] p-5 sm:p-6">
-              <h2 className="text-base font-medium text-[var(--ink)]">
-                📲 Report WhatsApp per il cliente
-              </h2>
-              <p className="mt-1 text-xs text-[var(--ink-muted)]">
-                Testo trasparente e autorevole, pronto da inviare.
-              </p>
-              <pre className="mt-4 whitespace-pre-wrap rounded-xl border border-[var(--border)] bg-white p-4 font-sans text-sm leading-relaxed text-[var(--ink)]">
-                {reportWhatsApp}
-              </pre>
-              <button
-                type="button"
-                onClick={() => void copiaReportWhatsApp()}
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#3D8B57] px-5 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 sm:w-auto"
-              >
-                {copiato ? (
-                  <>
-                    <Check className="h-4 w-4" strokeWidth={2} />
-                    Report copiato!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-4 w-4" strokeWidth={1.75} />
-                    Copia Report WhatsApp
-                  </>
-                )}
-              </button>
-            </section>
-          ) : null}
-        </>
-      ) : (
-        <section className="mt-6 mb-8 rounded-[var(--radius)] bg-[var(--surface-hover)] p-5">
-          <p className="text-sm leading-relaxed text-[var(--ink-muted)]">
-            Carica il CSV Meta o inserisci i dati della settimana (spesa,
-            contatti, frequenza, CTR): il Motore Diagnostico Prescrittivo e il
-            report WhatsApp si aggiornano subito.
-          </p>
-        </section>
-      )}
-        </>
+        <PannelloDiagnosiPerformance campagna={campagna} />
       )}
 
       <DiarioBordo

@@ -27,6 +27,7 @@ Schema esatto:
   "ctr": number (percentuale numerica: 1.2 = 1.2%, NON 0.012),
   "frequenza": number,
   "cpm": number,
+  "cpc": number | null (solo se visibile nello screenshot; non inventare),
   "roas": number | null,
   "faseApprendimento": "in_corso" | "completata" | "limitata",
   "verdetto": "ottimo" | "in_target" | "fuori_target" | "dati_insufficienti",
@@ -40,7 +41,8 @@ Regole verdetto:
 - fuori_target: costo per risultato > targetCpl
 - dati_insufficienti: meno di 3 risultati o spesa < 25€
 
-azioniConsigliate: esattamente 3 azioni pratiche e operative da fare subito su Meta Ads, in italiano.`;
+azioniConsigliate: esattamente 3 azioni pratiche e operative da fare subito su Meta Ads, in italiano.
+cpc: includilo SOLO se il valore è visibile nello screenshot. Se non è visibile, usa null. Non calcolare CPC da altri KPI.`;
 
 function estraiMediaType(base64: string): "image/jpeg" | "image/png" | "image/webp" {
   if (base64.startsWith("/9j/")) return "image/jpeg";
@@ -51,6 +53,13 @@ function estraiMediaType(base64: string): "image/jpeg" | "image/png" | "image/we
 function pulisciBase64(image: string): string {
   const match = image.match(/^data:image\/[\w+.-]+;base64,(.+)$/i);
   return (match?.[1] ?? image).trim();
+}
+
+/** CPC solo se numerico e visibile. Non inventato da fallback. */
+function cpcVisibile(raw: unknown): number | null {
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 function normalizzaAnalisi(
@@ -89,6 +98,7 @@ function normalizzaAnalisi(
     ctr: normalizzaCtrDaApi(Number(raw.ctr) || fallback.ctr) ?? fallback.ctr,
     frequenza: Number(raw.frequenza) || fallback.frequenza,
     cpm: Number(raw.cpm) || fallback.cpm,
+    cpc: cpcVisibile(raw.cpc),
     roas:
       raw.roas === null || raw.roas === undefined
         ? fallback.roas

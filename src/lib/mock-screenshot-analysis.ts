@@ -119,6 +119,7 @@ export function mockScreenshotAnalysis(
     ctr,
     frequenza,
     cpm,
+    cpc: null,
     roas,
     faseApprendimento,
     verdetto,

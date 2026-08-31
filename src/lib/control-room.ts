@@ -289,21 +289,64 @@ export function buildEconomicContext(
   };
 }
 
+/** GREEN se actual ≤ questa frazione della soglia (costo: più basso è meglio). */
+export const HEALTH_GREEN_MAX_RATIO = 0.8;
+
+export type HealthStatusOpts = {
+  daysActive?: number | null;
+  resultsCount?: number | null;
+};
+
+function healthInsufficient(
+  mode: HealthMode,
+  efficiencyNote: string | undefined,
+  explanation: string,
+): HealthResult {
+  return {
+    status: "INSUFFICIENT",
+    label: "Dati insufficienti",
+    explanation,
+    deltaPercent: null,
+    deltaLabel: null,
+    mode,
+    efficiencyNote,
+  };
+}
+
 /**
- * Semaforo economico (costo: più basso è meglio).
- * GREEN: actual <= threshold * 0.90
- * YELLOW: threshold * 0.90 < actual <= threshold
+ * Semaforo V3 (costo: più basso è meglio).
+ * GREEN: actual <= threshold * 0.80
+ * YELLOW: threshold * 0.80 < actual <= threshold
  * RED: actual > threshold
+ * INSUFFICIENT: days_active < 3 OR results_count < 2 (se i valori sono noti)
  */
 export function calcolaHealthStatus(
   actual: number | null,
   threshold: number | null,
   mode: HealthMode = "economic",
+  opts?: HealthStatusOpts,
 ): HealthResult {
   const efficiencyNote =
     mode === "efficiency"
-      ? "Confronto con il CPM pianificato, non soglia economica di break-even."
+      ? "Confronto di efficienza rispetto al CPM pianificato. Non è una soglia di break-even."
       : undefined;
+
+  const days = opts?.daysActive;
+  const results = opts?.resultsCount;
+  if (days != null && days < 3) {
+    return healthInsufficient(
+      mode,
+      efficiencyNote,
+      "La campagna ha ancora pochi giorni di dati. Non è possibile una diagnosi affidabile.",
+    );
+  }
+  if (results != null && results < 2) {
+    return healthInsufficient(
+      mode,
+      efficiencyNote,
+      "Volume risultati ancora troppo basso per una diagnosi affidabile.",
+    );
+  }
 
   if (
     actual == null ||
@@ -329,7 +372,7 @@ export function calcolaHealthStatus(
     Math.round(((actual - threshold) / threshold) * 1000) / 10;
 
   if (mode === "efficiency") {
-    if (actual <= threshold * 0.9) {
+    if (actual <= threshold * HEALTH_GREEN_MAX_RATIO) {
       return {
         status: "GREEN",
         label: "Sotto il piano",
@@ -367,7 +410,7 @@ export function calcolaHealthStatus(
     };
   }
 
-  if (actual <= threshold * 0.9) {
+  if (actual <= threshold * HEALTH_GREEN_MAX_RATIO) {
     return {
       status: "GREEN",
       label: "Sostenibile",
@@ -422,7 +465,7 @@ export function avvisoDatiLimitati(
         "La campagna ha ancora pochi dati. Interpreta la diagnosi con cautela.",
     };
   }
-  if (ris != null && ris < 3) {
+  if (ris != null && ris < 2) {
     return {
       show: true,
       message:
@@ -456,6 +499,16 @@ export function diagnosticaDeterministica(
   const hasFunnelSignals =
     ctrPct != null || cpc != null || frequency != null;
 
+  if (health.status === "INSUFFICIENT") {
+    return {
+      signal: "dati_insufficienti",
+      title: "Dati ancora insufficienti",
+      body: "Dati ancora insufficienti per una diagnosi affidabile.",
+      canDiagnose: false,
+      hint: "Continua a raccogliere dati prima di cambiare budget o creatività.",
+    };
+  }
+
   if (options?.datiLimitati && hasFunnelSignals) {
     return {
       signal: "dati_insufficienti",
@@ -463,16 +516,6 @@ export function diagnosticaDeterministica(
       body: "La campagna ha ancora pochi giorni o pochi risultati. I segnali sotto sono indicativi: verifica di nuovo tra qualche giorno.",
       canDiagnose: true,
       hint: "Segnali indicativi, da interpretare nel contesto della campagna.",
-    };
-  }
-
-  if (health.status === "INSUFFICIENT" && !hasFunnelSignals) {
-    return {
-      signal: "dati_insufficienti",
-      title: "Diagnosi non disponibile",
-      body: "Servono almeno il costo attuale e la soglia economica, oppure KPI di supporto (CTR, CPM, CPC).",
-      canDiagnose: false,
-      hint: "Aggiungi CTR, CPM o CPC per capire meglio dove si sta rompendo la campagna.",
     };
   }
 
@@ -702,21 +745,54 @@ export function azioniConsigliate(
         },
       );
       break;
-    default:
+    case "dati_insufficienti":
       actions.push(
         {
-          text: "Inserisci i KPI principali (spesa, risultati, CTR)",
+          text: "Continua a raccogliere dati prima di giudicare",
           priority: "alta",
         },
         {
-          text: "Oppure carica uno screenshot di Ads Manager",
+          text: "Verifica che il tracking dei risultati sia corretto",
           priority: "media",
         },
         {
-          text: "Seleziona una campagna con soglia economica salvata",
+          text: "Evita modifiche drastiche troppo presto",
           priority: "media",
         },
       );
+      break;
+    default:
+      if (health.status === "INSUFFICIENT") {
+        actions.push(
+          {
+            text: "Continua a raccogliere dati prima di giudicare",
+            priority: "alta",
+          },
+          {
+            text: "Verifica che il tracking dei risultati sia corretto",
+            priority: "media",
+          },
+          {
+            text: "Evita modifiche drastiche troppo presto",
+            priority: "media",
+          },
+        );
+      } else {
+        actions.push(
+          {
+            text: "Inserisci i KPI principali (spesa, risultati, CTR)",
+            priority: "alta",
+          },
+          {
+            text: "Oppure carica uno screenshot di Ads Manager",
+            priority: "media",
+          },
+          {
+            text: "Seleziona una campagna con soglia economica salvata",
+            priority: "media",
+          },
+        );
+      }
   }
 
   if (health.status === "RED" && actions[0]?.priority !== "alta") {
@@ -770,4 +846,112 @@ export function formatEuro(n: number | null | undefined): string {
     minimumFractionDigits: n % 1 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   })} €`;
+}
+
+export type TrendCheck = "migliorato" | "stabile" | "peggiorato";
+
+/** Costo: più basso è meglio (CPL/CPA/CPM). */
+export function trendVsPrecedente(
+  precedente: number | null | undefined,
+  attuale: number | null | undefined,
+): TrendCheck | null {
+  if (
+    precedente == null ||
+    attuale == null ||
+    !Number.isFinite(precedente) ||
+    !Number.isFinite(attuale)
+  ) {
+    return null;
+  }
+  const a = Math.round(attuale * 100) / 100;
+  const b = Math.round(precedente * 100) / 100;
+  if (a === b) return "stabile";
+  return a < b ? "migliorato" : "peggiorato";
+}
+
+export function etichettaTrend(trend: TrendCheck | null): string {
+  if (trend === "migliorato") return "Migliorato";
+  if (trend === "peggiorato") return "Peggiorato";
+  if (trend === "stabile") return "Stabile";
+  return "—";
+}
+
+export function healthStatusOrdine(status: HealthStatus | null): number {
+  switch (status) {
+    case "RED":
+      return 0;
+    case "YELLOW":
+      return 1;
+    case "INSUFFICIENT":
+      return 2;
+    case "GREEN":
+      return 3;
+    default:
+      return 4;
+  }
+}
+
+export function thresholdModeDaHealth(
+  mode: HealthMode,
+): "BREAK_EVEN" | "EFFICIENCY" | "OTHER" {
+  if (mode === "efficiency") return "EFFICIENCY";
+  if (mode === "economic") return "BREAK_EVEN";
+  return "OTHER";
+}
+
+export function emojiHealth(status: HealthStatus | null): string {
+  switch (status) {
+    case "GREEN":
+      return "🟢";
+    case "YELLOW":
+      return "🟡";
+    case "RED":
+      return "🔴";
+    case "INSUFFICIENT":
+      return "⚪";
+    default:
+      return "•";
+  }
+}
+
+export function etichettaHealth(status: HealthStatus | null): string {
+  switch (status) {
+    case "GREEN":
+      return "Sostenibile";
+    case "YELLOW":
+      return "Da monitorare";
+    case "RED":
+      return "Fuori soglia";
+    case "INSUFFICIENT":
+      return "Dati insufficienti";
+    default:
+      return "Mai controllata";
+  }
+}
+
+export function formatDataCheck(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("it-IT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+export function descrizioneLogControllo(input: {
+  status: HealthStatus;
+  metricLabel: string;
+  primaryCost: number | null;
+  threshold: number | null;
+}): string {
+  const kpi =
+    input.primaryCost != null && Number.isFinite(input.primaryCost)
+      ? `${input.metricLabel} ${formatEuro(input.primaryCost)}`
+      : `${input.metricLabel} n/d`;
+  const soglia =
+    input.threshold != null && Number.isFinite(input.threshold)
+      ? `soglia ${formatEuro(input.threshold)}`
+      : "soglia n/d";
+  return `Stato: ${input.status} · ${kpi} · ${soglia}`;
 }

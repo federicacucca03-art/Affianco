@@ -16,6 +16,8 @@ export type ScreenshotAnalysisResult = {
   ctr: number;
   frequenza: number;
   cpm: number;
+  /** Solo se visibile nello screenshot. Non inventato. */
+  cpc?: number | null;
   roas: number | null;
   faseApprendimento: FaseApprendimento;
   verdetto: VerdettoScreenshot;

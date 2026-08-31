@@ -347,6 +347,19 @@ export async function logCampagnaAggiornata(input: {
   });
 }
 
+/** Un solo evento sintetico al salvataggio di un campaign_check. */
+export async function logControlloPerformanceSalvato(input: {
+  campaignId: string;
+  description: string;
+}) {
+  return registraEventoCampagna({
+    campaignId: input.campaignId,
+    eventType: "METRICS_UPDATED",
+    title: "Controllo performance salvato",
+    description: input.description,
+  });
+}
+
 export function etichettaSemaforoDiagnosi(
   verdict: string,
   badgeLabel?: string,
