@@ -21,6 +21,8 @@ type GenerateCopyBody = {
   offer?: string;
   brief?: string;
   clientType?: string;
+  tone?: string;
+  targetAge?: string;
 };
 
 type GenerateCopyResult = {
@@ -31,7 +33,14 @@ type GenerateCopyResult = {
 };
 
 const SYSTEM_PROMPT = `Sei un copywriter senior specializzato in Meta Ads (Facebook/Instagram) per il mercato italiano.
-Scrivi in italiano naturale, persuasivo e concreto: beneficio chiaro, riduzione del rischio, CTA esplicita. Niente fuffa da agenzia.
+Scrivi in italiano naturale, concreto e pubblicabile. Niente fuffa da agenzia.
+
+SOURCE OF TRUTH (in questo ordine, e SOLO queste):
+1. offerta
+2. brief
+3. settore
+4. città
+5. target (tipo cliente / fascia età, se forniti)
 
 REGOLE OBBLIGATORIE:
 1. Rispondi SOLO con JSON valido, senza markdown, senza commenti, senza testo fuori dal JSON.
@@ -42,7 +51,7 @@ REGOLE OBBLIGATORIE:
   "varianteB": "…",
   "varianteC": "…"
 }
-3. Lingua: italiano naturale e grammaticalmente corretto. Tono commerciale ma non spam.
+3. Lingua: italiano naturale e grammaticalmente corretto.
 4. Headline: massimo 5 parole d'impatto. Max 45 caratteri. NON inserire mai l'intero brief né il nome campagna. Niente hashtag, massimo 1 emoji.
 5. NOME ATTIVITÀ vs NOME CAMPAGNA (CRITICO):
    - Usa ESCLUSIVAMENTE il nome attività/cliente fornito.
@@ -51,18 +60,20 @@ REGOLE OBBLIGATORIE:
    - Se la città è indicata, scrivi sempre "a [Città]" (forma naturale).
    - Se la città NON è indicata, scrivi "nella tua zona" — MAI segnaposto tipo [Città].
 7. COPY PURO — VIETATO nei valori JSON prefissi da prompt ("Hook immediato:", "Variante A:", ecc.).
-8. Tre angoli distinti (solo strategia interna):
+8. Tre angoli distinti (strategia interna) NEL TONO SCELTO PER TUTTE:
    - varianteA = Beneficio diretto + offerta esplicita nelle prime righe.
    - varianteB = Autorevolezza / metodo / rassicurazione.
    - varianteC = Empatico / problema → soluzione.
+   Tutte e tre le varianti devono usare lo STESSO tono di voce indicato dall'utente.
 9. CTA finale chiara in ogni variante, coerente con la rotta.
 10. Ogni variante: 2–4 frasi fluide.
 
 VINCOLO CONTENUTO (CRITICO):
-- Usa esclusivamente informazioni presenti nei dati della campagna (brief, offerta, settore, città, nome attività).
-- NON inventare servizi, offerte, tecnologie, prezzi, sconti, promozioni, gratuità o claim non forniti.
-- Se un dettaglio non è nel brief/offerta, NON citarlo (es. niente allineatori, ferretti, scansioni 3D, promo o "gratis" se non esplicitati).
-- Non aggiungere percentuali o vantaggi economici non presenti nei dati.`;
+- Usa esclusivamente informazioni presenti nei dati della campagna.
+- NON inventare: servizi, tecnologie, strumenti, prezzi, sconti, gratuità, promozioni, risultati, garanzie, modalità di pagamento.
+- Se un'informazione non è nei dati, OMETTILA. Non colmare i vuoti con tropi di settore (es. allineatori, ferretti, scansione 3D, check-up gratuito, tasso zero, "servizi locali").
+- Non aggiungere percentuali o vantaggi economici non presenti nei dati.
+- Non usare copy precedente o storico: questa richiesta è l'unica fonte.`;
 
 function etichettaRotta(route: string): string {
   switch (route) {
@@ -85,6 +96,17 @@ function etichettaRotta(route: string): string {
     case "richieste-contatto":
     default:
       return "lead-gen (Lead Generation / Contatti)";
+  }
+}
+
+function etichettaTono(tone: string): string {
+  switch (tone) {
+    case "autorevole":
+      return "Autorevole e professionale: competente, rassicurante, mai aggressivo. Niente urgenza artificiale.";
+    case "empatico":
+      return "Empatico e risoluzione del problema: ascolto, comprensione, soluzione concreta. Niente hype promozionale.";
+    default:
+      return "Diretto e promozionale: chiaro e concreto, beneficio in apertura. Niente promesse di risultato né tono aggressivo.";
   }
 }
 
@@ -172,25 +194,32 @@ export async function POST(request: Request) {
   const offer = String(body.offer ?? "").trim();
   const brief = String(body.brief ?? "").trim();
   const clientType = String(body.clientType ?? "B2C").trim() || "B2C";
+  const tone = String(body.tone ?? "diretto").trim() || "diretto";
+  const targetAge = String(body.targetAge ?? "").trim();
 
   const userPrompt = `Genera headline + 3 varianti copy per Meta Ads (testo per il PUBBLICO).
 
 Rotta attiva (solo per te, NON inserirla nel copy): ${etichettaRotta(route)} (slug: ${route})
 Nome attività da citare (UNICO nome brand consentito): ${clientName || "non specificato"}
-Settore: ${sector || "non specificato"}
-Città inserita dall'utente: ${city || "(vuota)"}
-Locuzione città obbligatoria nei testi: "${cittaPrep}"
-Offerta principale (usa SOLO se fornita, senza inventare altro): ${offer || "non specificata"}
-Brief / prodotto hero (unica fonte di servizi e benefici): ${brief || "non specificato"}
-Tipo cliente: ${clientType}
+
+SOURCE OF TRUTH:
+1. Offerta: ${offer || "non specificata"}
+2. Brief: ${brief || "non specificato"}
+3. Settore: ${sector || "non specificato"}
+4. Città inserita dall'utente: ${city || "(vuota)"} — locuzione obbligatoria nei testi: "${cittaPrep}"
+5. Target: tipo ${clientType}${targetAge ? `, fascia età ${targetAge}` : ""}
+
+Tono di voce OBBLIGATORIO per headline e TUTTE le varianti A/B/C:
+${etichettaTono(tone)}
 
 VINCOLI FINALI:
-- Usa esclusivamente informazioni presenti nei dati della campagna.
-- Non inventare servizi, offerte, tecnologie, prezzi, sconti o gratuità.
+- Usa esclusivamente offerta, brief, settore, città e target. Nient'altro.
+- Non inventare servizi, tecnologie, strumenti, prezzi, sconti, gratuità, promozioni, risultati, garanzie o pagamenti.
+- Se un dato manca, omettilo.
 - Nei valori JSON solo copy pubblicabile.
 - Usa sempre la locuzione "${cittaPrep}".
 - Headline ≤ 5 parole / 45 caratteri.
-- varianteA Beneficio diretto; varianteB Autorevolezza; varianteC Empatico.
+- varianteA Beneficio diretto; varianteB Autorevolezza; varianteC Empatico — tutte nel tono indicato.
 Restituisci solo il JSON richiesto.`;
 
   try {

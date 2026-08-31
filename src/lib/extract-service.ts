@@ -1,5 +1,3 @@
-import { stripAccents } from "@/lib/validate-elevator-pitch";
-
 const STOP_TAIL =
   /\s*(?:a|ad|in|di|da|per|con|su|presso)\s+[A-ZÀ-Ú][\wÀ-ú'’.-]*(?:\s+[A-ZÀ-Ú][\wÀ-ú'’.-]*){0,3}\s*$/u;
 
@@ -13,17 +11,6 @@ const PATTERN_SERVIZIO: RegExp[] = [
   /\bleader\s+(?:in|di|nei|nelle)\s+(.+)$/i,
   /\bsoluzioni?\s+(?:di|per)\s+(.+)$/i,
 ];
-
-const FALLBACK_SETTORE: Record<string, string> = {
-  dentista: "visite odontoiatriche e cure dentali",
-  palestra: "allenamento personalizzato e corsi fitness",
-  estetista: "trattamenti estetici viso e corpo",
-  ristorante: "cucina di qualità e tavoli riservati",
-  artigiano: "lavori artigianali su misura",
-  avvocato: "consulenza legale e assistenza",
-  commercialista: "contabilità e consulenza fiscale",
-  immobiliare: "compravendita e affitto immobili",
-};
 
 function pulisciFrammento(raw: string): string {
   let s = raw
@@ -50,7 +37,7 @@ function pulisciFrammento(raw: string): string {
 
 /**
  * Estrae il servizio principale dall'elevator pitch / brief cliente.
- * Esempio: "…pellicole di controllo solare e rivestimenti per vetrate…"
+ * Se il brief non basta, usa il nome settore così com'è — senza inventare servizi.
  */
 export function estraiServizioPrincipale(
   elevatorPitch: string,
@@ -78,13 +65,5 @@ export function estraiServizioPrincipale(
     if (intero.split(/\s+/).length >= 4) return intero;
   }
 
-  const chiave = stripAccents((settore ?? "").toLowerCase().trim());
-  for (const [k, label] of Object.entries(FALLBACK_SETTORE)) {
-    if (chiave.includes(k)) return label;
-  }
-
-  const settoreTrim = (settore ?? "").trim();
-  if (settoreTrim) return settoreTrim;
-
-  return "servizi locali";
+  return (settore ?? "").trim();
 }

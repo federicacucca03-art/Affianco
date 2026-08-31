@@ -3308,7 +3308,8 @@ export function FormConfigurazione({
                   key={opzione.value}
                   type="button"
                   onClick={() => onCambiaTonoVoce?.(opzione.value)}
-                  className={`flex-1 rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                  disabled={copyAiLoading}
+                  className={`flex-1 rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                     attivo
                       ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
                       : "border-[var(--border)] bg-white text-[var(--ink-muted)] hover:border-[var(--accent-muted)]"
@@ -3319,6 +3320,10 @@ export function FormConfigurazione({
               );
             })}
           </div>
+          <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
+            Seleziona il tono: Affianco adatterà le varianti mantenendo
+            invariati offerta e contenuti.
+          </p>
         </div>
 
         {onRigeneraVarianti ? (
@@ -3331,10 +3336,6 @@ export function FormConfigurazione({
             >
               {copyAiLoading ? "Rigenerazione in corso…" : "Rigenera varianti"}
             </button>
-            <p className="mt-1.5 text-xs text-[var(--ink-muted)]">
-              Rigenera headline e varianti A/B/C solo quando lo chiedi
-              esplicitamente.
-            </p>
           </div>
         ) : null}
 

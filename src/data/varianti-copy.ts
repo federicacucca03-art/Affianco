@@ -133,13 +133,10 @@ export function titoloAnnuncioLeads(
   citta: string,
   settore: string = "",
   offerta: string = "",
-  pitch: string = "",
+  _pitch: string = "",
 ): string {
-  if (isNichiaDentaleLead(settore, servizio, offerta, pitch)) {
-    return "Sorriso Perfetto Senza Ferretti ✨";
-  }
   const base = normalizzaTestoCopy(
-    (servizio || settore || offerta || "Contattaci ora").trim(),
+    (offerta || servizio || settore || "Contattaci ora").trim(),
   );
   const parole = base.split(/\s+/).filter(Boolean).slice(0, 5);
   let titolo = parole.join(" ");
@@ -188,6 +185,7 @@ function offertaEffettiva(
     return "";
   }
   const base = (settore ?? "").trim() || servizio;
+  if (!base) return "";
   return `${base} ${cittaPrep}`;
 }
 
@@ -271,48 +269,26 @@ function servizioEffettivo(
   }
   const offer = (frontEndOffer ?? "").trim();
   const estratto = estraiServizioPrincipale(pitch, settore);
-  const fallback = "servizi locali";
   if (
     estratto &&
-    estratto !== "servizi locali" &&
     estratto !== "prodotti online" &&
     estratto !== "il tuo servizio specifico"
   ) {
     return estratto;
   }
   if (offer) return offer;
-  if (settore.trim()) return settore.trim();
-  return fallback;
+  return settore.trim();
 }
 
-/** CTA finale tipica lead-gen locale. */
+/** CTA finale tipica lead-gen locale. Nessuna promo/gratuità inventata. */
 function chiusuraLeadGen(
   offerta: string,
   cittaPrep: string,
-  settore: string,
-  servizio: string,
-  pitch: string,
 ): string {
-  const corpus = `${offerta} ${cittaPrep} ${settore} ${servizio} ${pitch}`.toLowerCase();
-  const dentale =
-    /dent|ortodon|allineator|sorriso|ferrett|invisalign|check-?up|scansione\s*3d/.test(
-      corpus,
-    );
-  if (dentale) {
-    return `Prenota il tuo check-up gratuito in clinica ${cittaPrep}.`;
-  }
-  return `Tocca «Iscriviti» e richiedi info su ${offerta} ${cittaPrep}.`;
-}
-
-function isNichiaDentaleLead(
-  settore: string,
-  servizio: string,
-  offerta: string,
-  pitch: string,
-): boolean {
-  return /dent|ortodon|allineator|sorriso|ferrett|invisalign|check-?up|scansione\s*3d/.test(
-    `${settore} ${servizio} ${offerta} ${pitch}`.toLowerCase(),
-  );
+  const coda = offerta.trim()
+    ? ` su ${offerta.trim()} ${cittaPrep}`.replace(/\s+/g, " ").trimEnd()
+    : ` ${cittaPrep}`;
+  return `Tocca «Iscriviti» e richiedi info${coda}.`;
 }
 
 /**
@@ -327,56 +303,25 @@ const LEAD_TONI: Record<
     ea: "Variante A - Beneficio Diretto & Promo",
     eb: "Variante B - Autorevolezza & Garanzia",
     ec: "Variante C - Empatico & Risoluzione Problema",
-    a: "{offerta} {cittaPrep}! Con {nome} il beneficio su {servizio} è subito chiaro: promo concreta, zero giri di parole. {chiusura}",
-    b: "{cittaPrep}, {nome} unisce metodo professionale e percorsi rassicuranti. Approfitta di {offerta}, con pagamenti agevolati a tasso zero quando previsti. {chiusura}",
-    c: "Se qualcosa ti frena — un disagio, un dubbio — non sei solo. {nome} {cittaPrep} propone {servizio} in modo comodo e discreto, con {offerta}. {chiusura}",
+    a: "{offerta} {cittaPrep} con {nome}. Beneficio chiaro fin dalle prime righe. {chiusura}",
+    b: "{cittaPrep}, {nome} propone {offerta} con un approccio professionale e trasparente. {chiusura}",
+    c: "{nome} {cittaPrep} ascolta il tuo caso e parte da {offerta}. {chiusura}",
   },
   autorevole: {
     ea: "Variante A - Beneficio Diretto & Promo",
     eb: "Variante B - Autorevolezza & Garanzia",
     ec: "Variante C - Empatico & Risoluzione Problema",
-    a: "{offerta} su {servizio} con {nome} {cittaPrep}: beneficio diretto e promo in evidenza fin dalla prima riga. {chiusura}",
-    b: "{nome} {cittaPrep} lavora con tecnologia digitale, risultati chiari e garanzie concrete. {offerta}, con pagamenti semplificati a tasso zero dove disponibili. {chiusura}",
-    c: "Rimandare non risolve. {cittaPrep}, {nome} ascolta il tuo caso su {servizio} e propone {offerta} con un percorso trasparente. {chiusura}",
+    a: "{offerta} con {nome} {cittaPrep}: il punto di partenza è chiaro fin dalla prima riga. {chiusura}",
+    b: "{nome} {cittaPrep} lavora con metodo e trasparenza. {offerta}. {chiusura}",
+    c: "{cittaPrep}, {nome} ascolta il tuo caso e propone {offerta} con un percorso chiaro. {chiusura}",
   },
   empatico: {
     ea: "Variante A - Beneficio Diretto & Promo",
     eb: "Variante B - Autorevolezza & Garanzia",
     ec: "Variante C - Empatico & Risoluzione Problema",
-    a: "Vuoi un cambiamento concreto? {offerta} {cittaPrep} con {nome}: {servizio} con beneficio immediato e una promo pensata per te. {chiusura}",
-    b: "Ti accompagniamo con metodo digitale, trasparenza e soluzioni discrete. {cittaPrep}, {nome} rende semplice anche il pagamento a tasso zero. Scopri {offerta}. {chiusura}",
-    c: "Capita di non sentirsi a proprio agio. {cittaPrep}, {nome} propone un percorso comodo su {servizio}, partendo da {offerta}. {chiusura}",
-  },
-};
-
-/** Varianti dentali: copy fluido, senza prefissi da prompt. */
-const LEAD_TONI_DENTALE: Record<
-  TonoVoce,
-  { a: string; b: string; c: string; ea: string; eb: string; ec: string }
-> = {
-  diretto: {
-    ea: "Variante A - Beneficio Diretto & Promo",
-    eb: "Variante B - Autorevolezza & Garanzia",
-    ec: "Variante C - Empatico & Risoluzione Problema",
-    a: "{offerta} {cittaPrep}! Con {nome} parti dalla scansione 3D e dalla promo sugli allineatori invisibili: beneficio immediato, zero giri di parole. {chiusura}",
-    b: "{cittaPrep}, {nome} usa tecnologia digitale: niente ferretti metallici visibili e pagamenti agevolati a tasso zero. Scopri {offerta}. {chiusura}",
-    c: "Se non ti senti a tuo agio a sorridere, non sei solo. {nome} {cittaPrep} ti aiuta ad allineare i denti in modo invisibile e comodo, con {offerta}. {chiusura}",
-  },
-  autorevole: {
-    ea: "Variante A - Beneficio Diretto & Promo",
-    eb: "Variante B - Autorevolezza & Garanzia",
-    ec: "Variante C - Empatico & Risoluzione Problema",
-    a: "{offerta}: scansione 3D e promo allineatori invisibili con {nome} {cittaPrep}. Beneficio chiaro fin dalla prima riga. {chiusura}",
-    b: "{nome} {cittaPrep} propone un percorso digitale senza ferretti metallici visibili, risultati chiari e rate a tasso zero. {offerta}. {chiusura}",
-    c: "Il disagio di nascondere il sorriso ha una via d'uscita discreta. {cittaPrep}, {nome} propone allineatori invisibili con {offerta}. {chiusura}",
-  },
-  empatico: {
-    ea: "Variante A - Beneficio Diretto & Promo",
-    eb: "Variante B - Autorevolezza & Garanzia",
-    ec: "Variante C - Empatico & Risoluzione Problema",
-    a: "Vuoi un sorriso più sereno? {offerta} {cittaPrep} con {nome}: scansione 3D e promo sugli allineatori invisibili. {chiusura}",
-    b: "Tecnologia digitale, assenza di ferretti metallici visibili e pagamenti a tasso zero. {cittaPrep}, {nome} rende tutto più semplice. Scopri {offerta}. {chiusura}",
-    c: "Capita di non sorridere nelle foto. {cittaPrep}, {nome} ti ascolta e propone un percorso invisibile e confortevole, partendo da {offerta}. {chiusura}",
+    a: "Stai valutando il passo successivo? {offerta} {cittaPrep} con {nome}. {chiusura}",
+    b: "{cittaPrep}, {nome} ti accompagna con chiarezza. Scopri {offerta}. {chiusura}",
+    c: "{cittaPrep}, {nome} parte da {offerta} e ascolta il tuo caso. {chiusura}",
   },
 };
 
@@ -694,11 +639,7 @@ export function generaVariantiCopy(
   const isAwarenessObj = obj === "AWARENESS";
   const settore =
     (opts.settore ?? "").trim() ||
-    (obj === "ECOMMERCE"
-      ? "e-commerce"
-      : isRetargetingObj || isAwarenessObj
-        ? ""
-        : "servizi locali");
+    (obj === "ECOMMERCE" ? "e-commerce" : "");
   const nome =
     pulisciNomeAttivitaPubblico(opts.nomeCliente ?? "") ||
     (isAwarenessObj
@@ -766,7 +707,7 @@ export function generaVariantiCopy(
   const cta = etichettaCtaPrenotazione(opts.bookingChannel);
   const chiusura =
     obj === "LEADS"
-      ? chiusuraLeadGen(offerta, cittaPrep, settore, servizio, pitch)
+      ? chiusuraLeadGen(offerta, cittaPrep)
       : chiusuraCtaPrenotazione(opts.bookingChannel);
   const puntoForza =
     obj === "IN_STORE"
@@ -815,9 +756,7 @@ export function generaVariantiCopy(
 
   let pack: PackCopy;
   if (obj === "LEADS") {
-    pack = isNichiaDentaleLead(settore, servizio, offerta, pitch)
-      ? LEAD_TONI_DENTALE[tono]
-      : LEAD_TONI[tono];
+    pack = LEAD_TONI[tono];
   } else if (obj === "BOOKINGS") {
     pack = { ...BOOK_TONI[tono] };
     if (!haPostiNumerici) {

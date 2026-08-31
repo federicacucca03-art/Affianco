@@ -105,7 +105,7 @@ function configDaParametri(
   campagna: string | null,
   citta: string | null,
   settore: string | null,
-  elevatorPitch: string = "",
+  _elevatorPitch: string = "",
 ): ConfigurazioneContatti {
   const nomeCliente = pulisciNomeAttivitaPubblico(cliente?.trim() || "");
   const cittaTesto = citta?.trim() || "";
@@ -120,32 +120,7 @@ function configDaParametri(
     cittaTesto || (objective === "ECOMMERCE" ? "Italia" : "");
   const benchmark = getBenchmarkForNiche(settorePerCopy, cittaPerCopy);
   const budgetGiornaliero = benchmark.recommendedDailyBudgetMin;
-  const varianti = generaVariantiCopy({
-    settore: settorePerCopy,
-    nomeCliente,
-    citta: cittaPerCopy,
-    elevatorPitch,
-    objective,
-  });
-
-  const servizio = estraiServizioPrincipale(
-    elevatorPitch,
-    settorePerCopy || undefined,
-  );
-  const titoloAnnuncio =
-    objective === "ECOMMERCE"
-      ? titoloAnnuncioEcommerce(servizio || settorePerCopy, "")
-      : objective === "LEADS"
-        ? titoloAnnuncioLeads(
-            servizio,
-            cittaPerCopy,
-            settorePerCopy,
-            "",
-            elevatorPitch,
-          )
-        : cittaPerCopy
-          ? `${servizio.charAt(0).toUpperCase()}${servizio.slice(1)} a ${cittaPerCopy}`
-          : servizio.charAt(0).toUpperCase() + servizio.slice(1);
+  const titoloAnnuncio = "";
 
   return {
     ...defaultConfigurazioneContatti,
@@ -160,9 +135,9 @@ function configDaParametri(
         : budgetGiornaliero,
     raggioKm:
       objective === "AWARENESS" ? 10 : benchmark.recommendedRadiusKm,
-    varianteA: varianti[0].testo,
-    varianteB: varianti[1].testo,
-    varianteC: varianti[2].testo,
+    varianteA: "",
+    varianteB: "",
+    varianteC: "",
     titoloAnnuncio,
     tassoConversionePercent:
       objective === "BOOKINGS"
@@ -626,6 +601,9 @@ export function PercorsoContatti({
     setRetargetingAudienceSource("CART");
     setDataEventoApertura("");
     setTonoVoce("diretto");
+    setWizardStep(1);
+    copyAiGiaEseguitoRef.current = false;
+    stepPrecedenteRef.current = null;
     setScontrinoMedio(
       isRetargeting
         ? 100
@@ -739,7 +717,15 @@ export function PercorsoContatti({
   );
 
   function cambiaTonoVoce(tono: TonoVoce) {
+    if (tono === tonoVoce) return;
+    if (variantiManuali) {
+      const ok = window.confirm(
+        "Cambiando tono sovrascriverai le modifiche manuali al testo. Continuare?",
+      );
+      if (!ok) return;
+    }
     setTonoVoce(tono);
+    void generaCopyConAi(tono);
   }
 
   function rigeneraVariantiCopy() {
@@ -809,11 +795,12 @@ export function PercorsoContatti({
     }));
   }
 
-  async function generaCopyConAi() {
+  async function generaCopyConAi(tonoOverride?: TonoVoce) {
     copyAiAbortRef.current?.abort();
     const controller = new AbortController();
     copyAiAbortRef.current = controller;
     const timeoutId = window.setTimeout(() => controller.abort(), 45_000);
+    const tonoRichiesto = tonoOverride ?? tonoVoce;
 
     setCopyAiLoading(true);
     setCopyAiErrore(null);
@@ -831,6 +818,8 @@ export function PercorsoContatti({
           offer: frontEndOffer,
           brief: elevatorPitch,
           clientType: targetType,
+          tone: tonoRichiesto,
+          targetAge,
         }),
       });
 
@@ -851,7 +840,7 @@ export function PercorsoContatti({
         );
       }
 
-      setVariantiManuali(true);
+      setVariantiManuali(false);
       setConfig((prev) => ({
         ...prev,
         titoloAnnuncio: pulisciHeadlineBreve(
@@ -894,16 +883,27 @@ export function PercorsoContatti({
         (config.varianteC ?? "").trim(),
     );
     if (copyAiGiaEseguitoRef.current || haCopy) return;
+
+    const haBrief = Boolean(elevatorPitch.trim());
+    const haOfferta = Boolean(frontEndOffer.trim());
+    const haSettore = Boolean((contesto.settore ?? "").trim());
+    const haDati =
+      isPercorsoLeads
+        ? haBrief && haOfferta && haSettore
+        : haOfferta && (haBrief || haSettore);
+    if (!haDati) return;
+
     copyAiGiaEseguitoRef.current = true;
     void generaCopyConAi();
-
-    return () => {
-      if (copyAiAbortRef.current) {
-        copyAiAbortRef.current.abort("navigate");
-      }
-    };
     // Solo all'ingresso nello step 3, una volta per sessione se il copy è vuoto.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wizardStep]);
+
+  useEffect(() => {
+    if (wizardStep === 3) return;
+    if (copyAiAbortRef.current) {
+      copyAiAbortRef.current.abort("navigate");
+    }
   }, [wizardStep]);
 
   const strategicScore = useMemo(() => {

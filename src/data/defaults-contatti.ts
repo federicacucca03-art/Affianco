@@ -1,5 +1,4 @@
 import type { ConfigurazioneContatti } from "@/types/campagne";
-import { generaVariantiCopy } from "@/data/varianti-copy";
 
 export function meseAnnoCorrente(data = new Date()): string {
   const grezzo = data.toLocaleDateString("it-IT", {
@@ -57,8 +56,6 @@ export function nomeCampagnaAwareness(
   return `${cliente} - Apertura / Lancio - ${meseAnnoCorrente(data)}`;
 }
 
-const variantiDefault = generaVariantiCopy("servizi locali", "", "");
-
 export const defaultConfigurazioneContatti: ConfigurazioneContatti = {
   nomeCliente: "",
   nomeCampagna: nomeCampagnaContatti(""),
@@ -70,9 +67,9 @@ export const defaultConfigurazioneContatti: ConfigurazioneContatti = {
   genere: "Tutti",
   targetingBroad: true,
   posizionamentiAdvantage: true,
-  varianteA: variantiDefault[0].testo,
-  varianteB: variantiDefault[1].testo,
-  varianteC: variantiDefault[2].testo,
+  varianteA: "",
+  varianteB: "",
+  varianteC: "",
   titoloAnnuncio: "",
   scontrinoMedio: 0,
   tassoConversionePercent: 10,
