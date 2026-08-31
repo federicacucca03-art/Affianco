@@ -1346,6 +1346,7 @@ function RisultatiPage() {
       </>
       ) : null}
 
+      {!mostraOverview ? (
       <section className="mt-8">
         <h2 className="text-lg font-medium text-[var(--ink)]">
           Riferimenti di mercato
@@ -1392,6 +1393,7 @@ function RisultatiPage() {
           </table>
         </div>
       </section>
+      ) : null}
     </main>
   );
 }
