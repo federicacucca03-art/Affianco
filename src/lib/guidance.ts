@@ -1,0 +1,478 @@
+import type { ConversionRateSource } from "@/lib/conversion-rate";
+import type { LaunchReadinessResult } from "@/lib/launch-readiness";
+import type { WizardStep } from "@/lib/pre-lancio-check";
+import {
+  LABEL_STRATEGIA_DA_RIVEDERE,
+  LABEL_STRATEGIA_SOLIDA,
+  type StrategicScoreResult,
+} from "@/lib/strategic-score";
+import type { CampagnaObjective, TargetAgeBand } from "@/types/campagne";
+
+/**
+ * Guidance Layer V2 — calcolata al volo, non persistita.
+ *
+ * Priorità visiva (1 principale + max 2 secondari):
+ * BLOCKER > WARNING > INFO soglia > SUGGESTION > INFO lieve.
+ */
+
+export type GuidanceLevel = "INFO" | "SUGGESTION" | "WARNING" | "BLOCKER";
+
+export type GuidanceItem = {
+  id: string;
+  level: GuidanceLevel;
+  title: string;
+  description: string;
+  reason?: string;
+  actionLabel?: string;
+  field?: string;
+  step: WizardStep;
+};
+
+export type GuidanceSet = {
+  principale: GuidanceItem | null;
+  secondari: GuidanceItem[];
+};
+
+export const MAX_GUIDANCE_SECONDARI = 2;
+
+/**
+ * Offerta presente ma troppo corta per essere specifica.
+ * Soglia deterministica: meno di 24 caratteri (spazi trimmati).
+ * Non pretente di capire il mercato: misura solo la specificità testuale.
+ */
+export const OFFERTA_CORTA_MAX_CHARS = 24;
+
+/**
+ * Brief assente o troppo corto per guidare copy e tono.
+ * Soglia: meno di 40 caratteri (spazi trimmati).
+ */
+export const BRIEF_CORTO_MAX_CHARS = 40;
+
+/**
+ * Budget giornaliero «molto inferiore» alla soglia sostenibile.
+ * 0,25 = il budget copre meno di un quarto della soglia CPL/CPA.
+ * È una regola educativa, non un giudizio sul budget «giusto».
+ */
+export const BUDGET_PRUDENTE_RAPPORTO = 0.25;
+
+function roundEuro(valore: number): number {
+  return Math.round(valore);
+}
+
+function isPercorsoLead(objective?: CampagnaObjective): boolean {
+  return !objective || objective === "LEADS";
+}
+
+function etichettaCosto(objective?: CampagnaObjective): "lead" | "CPA" {
+  return isPercorsoLead(objective) ? "lead" : "CPA";
+}
+
+function pesoItem(item: GuidanceItem): number {
+  if (item.level === "BLOCKER") return 500;
+  if (item.level === "WARNING") {
+    if (item.id === "economia-cr-unknown") return 420;
+    if (item.id === "economia-cr-estimated") return 410;
+    return 400;
+  }
+  // La soglia economica è l'insight principale quando non ci sono warning.
+  if (item.id === "economia-soglia") return 300;
+  if (item.level === "SUGGESTION") return 200;
+  if (item.id === "economia-cr-real") return 50;
+  return 100;
+}
+
+export function ordinaGuidance(items: GuidanceItem[]): GuidanceItem[] {
+  return [...items].sort((a, b) => pesoItem(b) - pesoItem(a));
+}
+
+export function selezionaGuidanceDaMostrare(
+  items: GuidanceItem[],
+): GuidanceSet {
+  const ordinati = ordinaGuidance(items);
+  const principale = ordinati[0] ?? null;
+  const secondari = ordinati.slice(1, 1 + MAX_GUIDANCE_SECONDARI);
+  return { principale, secondari };
+}
+
+export function haGuidanceDaMostrare(items: GuidanceItem[]): boolean {
+  return selezionaGuidanceDaMostrare(items).principale != null;
+}
+
+export type GuidanceEconomicaInput = {
+  ticket?: number | null;
+  conversionRate?: number | null;
+  conversionRateSource?: ConversionRateSource;
+  margine?: number | null;
+  budgetGiornaliero?: number | null;
+  maxSustainableCpl?: number | null;
+  objective?: CampagnaObjective;
+};
+
+export function generaGuidanceEconomica(
+  input: GuidanceEconomicaInput,
+): GuidanceItem[] {
+  const items: GuidanceItem[] = [];
+  const soglia =
+    input.maxSustainableCpl != null &&
+    Number.isFinite(input.maxSustainableCpl) &&
+    input.maxSustainableCpl > 0
+      ? roundEuro(input.maxSustainableCpl)
+      : null;
+  const budget =
+    input.budgetGiornaliero != null &&
+    Number.isFinite(input.budgetGiornaliero) &&
+    input.budgetGiornaliero > 0
+      ? input.budgetGiornaliero
+      : 0;
+  const fonte = input.conversionRateSource;
+  const labelCosto = etichettaCosto(input.objective);
+
+  if (soglia != null) {
+    items.push({
+      id: "economia-soglia",
+      level: "INFO",
+      title:
+        labelCosto === "lead"
+          ? `Puoi sostenere fino a circa ${soglia}€ per lead.`
+          : `Puoi sostenere fino a circa ${soglia}€ di CPA.`,
+      description:
+        "Questa è la soglia economica massima stimata con i dati inseriti.",
+      reason:
+        "Deriva da ticket, tasso di conversione e margine già calcolati. Non è una previsione del costo su Meta.",
+      field: "maxSustainableCpl",
+      step: 2,
+    });
+  }
+
+  if (fonte === "REAL") {
+    items.push({
+      id: "economia-cr-real",
+      level: "INFO",
+      title: "Stai usando un dato reale.",
+      description:
+        "Il tasso di conversione arriva da risultati già osservati, non da una stima.",
+      field: "conversionRateSource",
+      step: 2,
+    });
+  } else if (fonte === "ESTIMATED") {
+    items.push({
+      id: "economia-cr-estimated",
+      level: "WARNING",
+      title: "Il dato più fragile è il tasso di conversione.",
+      description:
+        "La soglia dipende da una stima. Quando avrai dati reali, aggiornala.",
+      reason:
+        "Una stima sposta la soglia sostenibile. Non è un giudizio sulla campagna.",
+      field: "conversionRateSource",
+      step: 2,
+    });
+  } else if (fonte === "UNKNOWN") {
+    items.push({
+      id: "economia-cr-unknown",
+      level: "WARNING",
+      title: "Affidabilità economica limitata.",
+      description: "Manca una base reale per il tasso di conversione.",
+      reason:
+        "Senza un tasso noto i numeri di sostenibilità restano indicativi.",
+      field: "conversionRateSource",
+      step: 2,
+    });
+  }
+
+  if (
+    soglia != null &&
+    budget > 0 &&
+    budget < soglia * BUDGET_PRUDENTE_RAPPORTO
+  ) {
+    items.push({
+      id: "economia-budget-prudente",
+      level: "SUGGESTION",
+      title: "Partenza prudente.",
+      description:
+        "Con questo budget potrebbe servire più tempo per raccogliere abbastanza risultati prima di giudicare la campagna.",
+      reason: `Il budget giornaliero (${roundEuro(budget)}€) è molto inferiore alla soglia sostenibile (${soglia}€). Non è un budget sbagliato: implica tempi più lunghi.`,
+      field: "budgetGiornaliero",
+      step: 2,
+    });
+  }
+
+  return items;
+}
+
+export type GuidanceStep1Input = {
+  frontEndOffer?: string | null;
+  elevatorPitch?: string | null;
+  targetAge?: TargetAgeBand | string | null;
+  etaMin?: number | null;
+  etaMax?: number | null;
+};
+
+function etaEstremamenteAmpia(input: GuidanceStep1Input): boolean {
+  const band = (input.targetAge ?? "").trim().toLowerCase();
+  if (band === "all" || band === "tutte" || band === "tutte le età") {
+    return true;
+  }
+  const min = input.etaMin;
+  const max = input.etaMax;
+  if (
+    min != null &&
+    max != null &&
+    Number.isFinite(min) &&
+    Number.isFinite(max) &&
+    min <= 18 &&
+    max >= 65
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function generaGuidanceStep1(
+  input: GuidanceStep1Input,
+): GuidanceItem[] {
+  const items: GuidanceItem[] = [];
+  const offerta = (input.frontEndOffer ?? "").trim();
+  const brief = (input.elevatorPitch ?? "").trim();
+
+  // Offerta vuota: il wizard già blocca il Continua. Non duplicare.
+  if (offerta.length > 0 && offerta.length < OFFERTA_CORTA_MAX_CHARS) {
+    items.push({
+      id: "step1-offerta-generica",
+      level: "SUGGESTION",
+      title: "Rendi l'offerta più specifica.",
+      description:
+        "Un'offerta più concreta (cosa include, per chi, quale beneficio) aiuta Affianco a scrivere e a valutare la campagna.",
+      field: "frontEndOffer",
+      step: 1,
+    });
+  }
+
+  if (brief.length < BRIEF_CORTO_MAX_CHARS) {
+    items.push({
+      id: "step1-brief-corto",
+      level: "SUGGESTION",
+      title: "Il brief può guidare meglio Affianco.",
+      description:
+        "Spiega chi vuoi raggiungere, quale problema risolvi e con quale tono vuoi comunicare.",
+      field: "elevatorPitch",
+      step: 1,
+    });
+  }
+
+  if (etaEstremamenteAmpia(input)) {
+    items.push({
+      id: "step1-eta-ampia",
+      level: "SUGGESTION",
+      title: "Il target è molto ampio.",
+      description:
+        "Verifica che questa fascia sia davvero coerente con l'offerta.",
+      field: "targetAge",
+      step: 1,
+    });
+  }
+
+  return items;
+}
+
+export type RaccomandazioneLancioStato =
+  | "READY_TO_LAUNCH"
+  | "READY_WITH_CAUTION"
+  | "NOT_READY";
+
+export type RaccomandazioneLancio = {
+  stato: RaccomandazioneLancioStato;
+  title: string;
+  description: string;
+  reasons: string[];
+  actions: string[];
+};
+
+const IDS_TECNICI_LANCIO = new Set([
+  "pageId",
+  "destinazione",
+  "export",
+  "creativita",
+]);
+
+function economiaCalcolabile(
+  score: StrategicScoreResult,
+  objective?: CampagnaObjective,
+): boolean {
+  if (objective === "AWARENESS") {
+    return score.economia.budgetGiornaliero > 0;
+  }
+  if (score.economia.conversionRateSource === "UNKNOWN") return false;
+  return score.economia.maxCplCalcolabile && score.economia.numeriAffidabili;
+}
+
+function warningCriticiAperti(
+  score: StrategicScoreResult,
+): boolean {
+  const fonte = score.economia.conversionRateSource;
+  return (
+    fonte === "ESTIMATED" ||
+    fonte === "UNKNOWN" ||
+    score.avvisoSprecoBudget
+  );
+}
+
+function tagliaTre(voci: string[]): string[] {
+  return voci.filter(Boolean).slice(0, 3);
+}
+
+export type RaccomandaLancioInput = {
+  strategicScore: StrategicScoreResult;
+  launchReadiness: LaunchReadinessResult;
+  haErroriBloccantiPreLancio?: boolean;
+  guidanceBlockers?: GuidanceItem[];
+  objective?: CampagnaObjective;
+};
+
+/**
+ * Combina Strategic Score V2 + Launch Readiness + errori diagnosi.
+ * Non modifica gli score: produce solo una raccomandazione di lancio.
+ */
+export function raccomandaLancio(
+  input: RaccomandaLancioInput,
+): RaccomandazioneLancio {
+  const { strategicScore, launchReadiness, objective } = input;
+  const blockers = (input.guidanceBlockers ?? []).filter(
+    (item) => item.level === "BLOCKER",
+  );
+  const tecniciMancanti = launchReadiness.items.filter(
+    (item) => IDS_TECNICI_LANCIO.has(item.id) && !item.ok,
+  );
+  const approvalMancante = launchReadiness.items.find(
+    (item) => item.id === "approvazione" && !item.ok,
+  );
+  const economiaOk = economiaCalcolabile(strategicScore, objective);
+  const strategiaSolida = strategicScore.label === LABEL_STRATEGIA_SOLIDA;
+  const strategiaDaRivedere =
+    strategicScore.label === LABEL_STRATEGIA_DA_RIVEDERE;
+
+  const reasonsNotReady: string[] = [];
+  const actionsNotReady: string[] = [];
+
+  if (input.haErroriBloccantiPreLancio) {
+    reasonsNotReady.push(
+      "Ci sono elementi da correggere nella diagnosi pre-lancio.",
+    );
+    actionsNotReady.push("Torna alla diagnosi e sistema i punti in rosso.");
+  }
+  if (blockers.length > 0) {
+    reasonsNotReady.push(blockers[0].title);
+    if (blockers[0].actionLabel) {
+      actionsNotReady.push(blockers[0].actionLabel);
+    }
+  }
+  if (!economiaOk) {
+    reasonsNotReady.push("L'economia non è ancora calcolabile.");
+    actionsNotReady.push(
+      "Completa ticket, tasso di conversione e margine nello step Economia.",
+    );
+  }
+  for (const item of tecniciMancanti) {
+    reasonsNotReady.push(item.mancante ?? `${item.label} mancante`);
+    if (item.id === "pageId") {
+      actionsNotReady.push("Inserisci l'ID Pagina Facebook.");
+    } else if (item.id === "destinazione") {
+      actionsNotReady.push(
+        item.mancante?.includes("Modulo")
+          ? "Inserisci l'ID Modulo Contatti."
+          : "Completa la destinazione della campagna.",
+      );
+    } else if (item.id === "export") {
+      actionsNotReady.push("Completa copy e titolo per l'export.");
+    } else if (item.id === "creativita") {
+      actionsNotReady.push("Carica almeno una creatività.");
+    }
+  }
+
+  const notReadyTecnicoOBlocco =
+    input.haErroriBloccantiPreLancio ||
+    blockers.length > 0 ||
+    !economiaOk ||
+    tecniciMancanti.length > 0;
+
+  if (notReadyTecnicoOBlocco) {
+    const soloTecnico =
+      tecniciMancanti.length > 0 &&
+      !input.haErroriBloccantiPreLancio &&
+      blockers.length === 0 &&
+      economiaOk;
+    return {
+      stato: "NOT_READY",
+      title: "Non lancerei ancora.",
+      description: soloTecnico
+        ? strategiaSolida
+          ? "La strategia è solida, ma mancano elementi operativi per il lancio."
+          : "Prima sistemerei questi elementi."
+        : "Prima sistemerei questi elementi.",
+      reasons: tagliaTre(reasonsNotReady),
+      actions: tagliaTre(actionsNotReady),
+    };
+  }
+
+  const reasonsCaution: string[] = [];
+  const actionsCaution: string[] = [];
+
+  if (!launchReadiness.isReady && approvalMancante) {
+    reasonsCaution.push(
+      approvalMancante.mancante ?? "Approvazione cliente mancante",
+    );
+    actionsCaution.push("Fai approvare la campagna al cliente.");
+  } else if (!launchReadiness.isReady) {
+    reasonsCaution.push("La configurazione operativa non è ancora completa.");
+    actionsCaution.push("Completa gli elementi ancora aperti in Prontezza al lancio.");
+  }
+
+  if (warningCriticiAperti(strategicScore)) {
+    if (strategicScore.economia.conversionRateSource === "ESTIMATED") {
+      reasonsCaution.push(
+        "Il tasso di conversione è una stima: la soglia va riletta con dati reali.",
+      );
+      actionsCaution.push("Aggiorna il tasso quando avrai risultati veri.");
+    }
+    if (strategicScore.avvisoSprecoBudget) {
+      reasonsCaution.push(
+        "Il riferimento di mercato supera la soglia sostenibile.",
+      );
+    }
+  }
+
+  if (!strategiaSolida) {
+    reasonsCaution.push(
+      strategiaDaRivedere
+        ? "La strategia va ancora riletta prima di spendere."
+        : "La strategia è una buona base, non ancora solida.",
+    );
+  }
+
+  const caution =
+    !launchReadiness.isReady ||
+    warningCriticiAperti(strategicScore) ||
+    !strategiaSolida;
+
+  if (caution) {
+    return {
+      stato: "READY_WITH_CAUTION",
+      title: "Quasi pronta.",
+      description:
+        "La strategia è solida, ma ci sono ancora elementi da completare o verificare.",
+      reasons: tagliaTre(reasonsCaution),
+      actions: tagliaTre(actionsCaution),
+    };
+  }
+
+  return {
+    stato: "READY_TO_LAUNCH",
+    title: "Puoi lanciare.",
+    description:
+      "La strategia e la configurazione operativa sono complete.",
+    reasons: tagliaTre([
+      "Strategic Score in stato solido.",
+      "Prontezza al lancio completa.",
+    ]),
+    actions: [],
+  };
+}

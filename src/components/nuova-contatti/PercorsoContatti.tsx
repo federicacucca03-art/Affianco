@@ -87,6 +87,8 @@ import {
   type WizardStep,
 } from "@/lib/pre-lancio-check";
 import { calculateStrategicScore } from "@/lib/strategic-score";
+import { raccomandaLancio } from "@/lib/guidance";
+import { RaccomandazioneLancio } from "@/components/nuova-contatti/AffiancoSuggerisce";
 import { calculateLaunchReadiness } from "@/lib/launch-readiness";
 import { estraiServizioPrincipale } from "@/lib/extract-service";
 import { etaDaTargetAgeBand } from "@/types/campagne";
@@ -1597,6 +1599,22 @@ export function PercorsoContatti({
     ],
   );
 
+  const raccomandazioneLancio = useMemo(
+    () =>
+      raccomandaLancio({
+        strategicScore,
+        launchReadiness,
+        haErroriBloccantiPreLancio: Boolean(diagnosi.haErroriBloccanti),
+        objective: objectiveEffettivo,
+      }),
+    [
+      strategicScore,
+      launchReadiness,
+      diagnosi.haErroriBloccanti,
+      objectiveEffettivo,
+    ],
+  );
+
   function azioneRapidaDiagnosi(tipo: PreLancioAzioneRapida) {
     if (tipo === "espandi-raggio") {
       setConfig((prev) => ({ ...prev, raggioKm: 15 }));
@@ -2444,6 +2462,9 @@ export function PercorsoContatti({
               <>
                 {wizardStep === 6 ? (
                   <>
+                  <RaccomandazioneLancio result={raccomandazioneLancio} />
+                  <StrategicScoreCard result={strategicScore} />
+                  <LaunchReadinessCard result={launchReadiness} />
                   <CardLinkApprovazione
                     onCopia={() => void copiaLinkApprovazione()}
                     inCorso={linkApprovazioneInCorso}
@@ -2733,12 +2754,6 @@ export function PercorsoContatti({
                 isPercorsoRetargeting ||
                 isPercorsoAwareness) ? (
                 <ChecklistMeta />
-              ) : null}
-              {wizardStep === 6 ? (
-                <>
-                  <StrategicScoreCard result={strategicScore} />
-                  <LaunchReadinessCard result={launchReadiness} />
-                </>
               ) : null}
               {wizardStep === 2 ? (
                 <PannelloPerche

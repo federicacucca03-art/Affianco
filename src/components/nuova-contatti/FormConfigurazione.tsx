@@ -65,8 +65,13 @@ import { SelettoreSettore } from "@/components/nuova-contatti/SelettoreSettore";
 import type { Cliente } from "@/types/clienti";
 import type { DeconstructAdResult } from "@/types/deconstruct-ad";
 import { BottoneCompilaAffianco } from "@/components/nuova-contatti/BottoneCompilaAffianco";
+import { AffiancoSuggerisce } from "@/components/nuova-contatti/AffiancoSuggerisce";
 import { LegendaCplDidattica } from "@/components/nuova-contatti/LegendaCplDidattica";
 import { SpiegazioneCalcoloCpl } from "@/components/nuova-contatti/SpiegazioneCalcoloCpl";
+import {
+  generaGuidanceEconomica,
+  generaGuidanceStep1,
+} from "@/lib/guidance";
 import { consiglioStrategicoNicchia } from "@/lib/consiglio-nicchia";
 import { testiPasso1Wizard } from "@/data/wizard-step1-config";
 import {
@@ -715,6 +720,45 @@ export function FormConfigurazione({
         })
       : null;
 
+  const guidanceStep1 = useMemo(
+    () =>
+      generaGuidanceStep1({
+        frontEndOffer,
+        elevatorPitch,
+        targetAge,
+        etaMin: config.etaMin,
+        etaMax: config.etaMax,
+      }),
+    [frontEndOffer, elevatorPitch, targetAge, config.etaMin, config.etaMax],
+  );
+
+  const sogliaGuidance =
+    targetCplStudio > 0 ? targetCplStudio : null;
+  const guidanceEconomica = useMemo(
+    () =>
+      generaGuidanceEconomica({
+        ticket: valoreVisita > 0 ? valoreVisita : null,
+        conversionRate: showUp > 0 ? showUp : null,
+        conversionRateSource: isPercorsoLeads
+          ? conversionRateSource
+          : undefined,
+        margine: targetMargin,
+        budgetGiornaliero: config.budgetGiornaliero,
+        maxSustainableCpl: sogliaGuidance,
+        objective: objectiveEffettivo,
+      }),
+    [
+      valoreVisita,
+      showUp,
+      isPercorsoLeads,
+      conversionRateSource,
+      targetMargin,
+      config.budgetGiornaliero,
+      sogliaGuidance,
+      objectiveEffettivo,
+    ],
+  );
+
   const boxes =
     varianti ??
     metaVarianti(
@@ -901,6 +945,7 @@ export function FormConfigurazione({
   return (
     <div className="min-w-0 space-y-6">
       {mostra([1]) ? (
+      <>
       <section
         key={
           isEcommerce
@@ -1815,6 +1860,8 @@ export function FormConfigurazione({
           </div>
         </div>
       </section>
+      <AffiancoSuggerisce items={guidanceStep1} />
+      </>
       ) : null}
 
       {mostra([2]) ? (
@@ -3043,6 +3090,8 @@ export function FormConfigurazione({
           </div>
         </dl>
       </section>
+
+      <AffiancoSuggerisce items={guidanceEconomica} />
 
       <section className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">
         <h2 className="text-sm font-medium text-[var(--ink)]">
