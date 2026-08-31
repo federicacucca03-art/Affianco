@@ -66,6 +66,13 @@ import type { Cliente } from "@/types/clienti";
 import type { DeconstructAdResult } from "@/types/deconstruct-ad";
 import { BottoneCompilaAffianco } from "@/components/nuova-contatti/BottoneCompilaAffianco";
 import { AffiancoSuggerisce } from "@/components/nuova-contatti/AffiancoSuggerisce";
+import {
+  InlineGuidance,
+  guidanceInlineBrief,
+  guidanceInlineEta,
+  guidanceInlineOfferta,
+  guidanceStep1NonInline,
+} from "@/components/nuova-contatti/InlineGuidance";
 import { LegendaCplDidattica } from "@/components/nuova-contatti/LegendaCplDidattica";
 import { SpiegazioneCalcoloCpl } from "@/components/nuova-contatti/SpiegazioneCalcoloCpl";
 import {
@@ -735,6 +742,10 @@ export function FormConfigurazione({
       }),
     [frontEndOffer, elevatorPitch, targetAge, config.etaMin, config.etaMax],
   );
+  const guidanceOfferta = guidanceInlineOfferta(guidanceStep1);
+  const guidanceBrief = guidanceInlineBrief(guidanceStep1);
+  const guidanceEta = guidanceInlineEta(guidanceStep1);
+  const guidanceStep1Residua = guidanceStep1NonInline(guidanceStep1);
 
   const sogliaGuidance =
     targetCplStudio > 0 ? targetCplStudio : null;
@@ -1168,6 +1179,7 @@ export function FormConfigurazione({
                 className={`${erroriPasso1?.elevatorPitch ? inputErroreClass : inputClass} resize-y`}
                 aria-invalid={erroriPasso1?.elevatorPitch ? true : undefined}
               />
+              <InlineGuidance item={guidanceBrief} />
               {erroriPasso1?.elevatorPitch ? (
                 <p className="mt-2 text-xs text-[#C45C5C]">
                   Campo obbligatorio:{" "}
@@ -1290,6 +1302,7 @@ export function FormConfigurazione({
               className={`${erroriPasso1?.frontEndOffer ? inputErroreClass : inputClass} resize-y`}
               aria-invalid={erroriPasso1?.frontEndOffer ? true : undefined}
             />
+            <InlineGuidance item={guidanceOfferta} />
           </Campo>
           {settoreIntel?.ganciConsigliati?.length && !isPercorsoAwareness ? (
             <div className="-mt-1 space-y-2">
@@ -1792,6 +1805,7 @@ export function FormConfigurazione({
                       );
                     })}
                   </div>
+                  <InlineGuidance item={guidanceEta} />
                 </>
               )}
             </div>
@@ -1838,6 +1852,7 @@ export function FormConfigurazione({
                 className={`${erroriPasso1?.elevatorPitch ? inputErroreClass : inputClass} resize-y`}
                 aria-invalid={erroriPasso1?.elevatorPitch ? true : undefined}
               />
+              <InlineGuidance item={guidanceBrief} />
               {erroriPasso1?.elevatorPitch ? (
                 <p className="mt-2 text-xs text-[#C45C5C]">
                   Campo obbligatorio: compila il brief prodotto / collezione.
@@ -1864,7 +1879,7 @@ export function FormConfigurazione({
           </div>
         </div>
       </section>
-      <AffiancoSuggerisce items={guidanceStep1} />
+      <AffiancoSuggerisce items={guidanceStep1Residua} />
       </>
       ) : null}
 
