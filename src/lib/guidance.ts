@@ -87,6 +87,9 @@ function pesoItem(item: GuidanceItem): number {
   if (item.id === "creative-ratio-non-ideale") return 197;
   if (item.id === "creative-landscape") return 196;
   if (item.id === "creative-manca-9-16") return 195;
+  if (item.id === "creative-vision-relevance-high") return 250;
+  if (item.id === "creative-vision-relevance-medium") return 248;
+  if (item.id === "creative-vision-relevance-unknown") return 240;
   if (item.level === "SUGGESTION") return 200;
   if (item.id === "economia-cr-real") return 50;
   return 100;

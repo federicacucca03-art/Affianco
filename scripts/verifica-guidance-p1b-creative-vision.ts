@@ -18,7 +18,10 @@ import {
 } from "@/lib/analyze-creative";
 import { tokenDaAuthorization } from "@/lib/api-auth";
 import {
+  ID_CREATIVE_VISION_RELEVANCE_HIGH,
   ID_CREATIVE_VISION_RELEVANCE_LOW,
+  ID_CREATIVE_VISION_RELEVANCE_MEDIUM,
+  ID_CREATIVE_VISION_RELEVANCE_UNKNOWN,
   ID_CREATIVE_VISION_RISK_HARD,
   ID_CREATIVE_VISION_RISK_WARNING,
   findingsRischioDaVisibleText,
@@ -38,6 +41,9 @@ const esiti: Record<string, boolean> = {
   RELEVANCE: true,
   "VISIBLE TEXT": true,
   "RISK REUSE": true,
+  "HIGH FEEDBACK": true,
+  "MEDIUM FEEDBACK": true,
+  "UNKNOWN FEEDBACK": true,
   "P1A MERGE": true,
   "VIDEO DEFER": true,
   "ERROR NON-BLOCKING": true,
@@ -230,9 +236,29 @@ const claimWarn: CreativeVisionAnalysis = {
 
 const gHigh = mergeP1(high);
 mark(
-  "RELEVANCE",
-  gHigh.p1b.length === 0,
-  "HIGH: silenzio vision (nessun item P1B)",
+  "HIGH FEEDBACK",
+  gHigh.p1b.length === 1 &&
+    gHigh.p1b[0]?.id === ID_CREATIVE_VISION_RELEVANCE_HIGH &&
+    gHigh.p1b[0]?.level === "INFO" &&
+    gHigh.p1b[0]?.title === "Il visual è coerente con l'offerta." &&
+    gHigh.p1b[0]?.description === "Non sono emersi elementi da rivedere.",
+  "CASE B: HIGH → feedback positivo, no warning",
+);
+
+const medium: CreativeVisionAnalysis = {
+  relevance: "MEDIUM",
+  relevanceReason: "Visual correlato ma generico.",
+  visibleText: [],
+};
+const gMed = mergeP1(medium);
+mark(
+  "MEDIUM FEEDBACK",
+  gMed.p1b.length === 1 &&
+    gMed.p1b[0]?.id === ID_CREATIVE_VISION_RELEVANCE_MEDIUM &&
+    gMed.p1b[0]?.level !== "WARNING" &&
+    gMed.p1b[0]?.title === "Il visual è coerente, ma piuttosto generico." &&
+    gMed.p1b[0]?.description === "Visual correlato ma generico.",
+  "CASE D: MEDIUM → feedback neutro, no warning forte",
 );
 
 const gLow = mergeP1(low);
@@ -241,11 +267,21 @@ mark(
   gLow.p1b.length === 1 &&
     gLow.p1b[0]?.id === ID_CREATIVE_VISION_RELEVANCE_LOW &&
     gLow.p1b[0]?.title === "Il visual sembra poco coerente con l'offerta.",
-  "LOW: warning coerenza",
+  "CASE F: LOW: warning coerenza",
 );
 
 const gUnk = mergeP1(unknown);
-mark("RELEVANCE", gUnk.p1b.length === 0, "UNKNOWN: silenzio, no warning forte");
+mark(
+  "UNKNOWN FEEDBACK",
+  gUnk.p1b.length === 1 &&
+    gUnk.p1b[0]?.id === ID_CREATIVE_VISION_RELEVANCE_UNKNOWN &&
+    gUnk.p1b[0]?.level === "INFO" &&
+    gUnk.p1b[0]?.title === "Analisi completata." &&
+    (gUnk.p1b[0]?.description ?? "").includes(
+      "Non ho abbastanza elementi per valutare con sicurezza",
+    ),
+  "CASE E: UNKNOWN → Analisi completata, no warning",
+);
 
 const findingsHard = findingsRischioDaVisibleText(
   claimHard.visibleText,
@@ -273,8 +309,9 @@ mark(
 const gWarn = mergeP1(claimWarn);
 mark(
   "RISK REUSE",
-  gWarn.p1b[0]?.id === ID_CREATIVE_VISION_RISK_WARNING,
-  "contextual warning visivo (torna a sorridere, unsupported)",
+  gWarn.p1b[0]?.id === ID_CREATIVE_VISION_RISK_WARNING &&
+    !idsDi(gWarn.p1b).includes(ID_CREATIVE_VISION_RELEVANCE_HIGH),
+  "CASE G: HIGH + risk → warning, niente feedback positivo",
 );
 
 const shownMix = selezionaGuidanceDaMostrare(gHard.merged);
@@ -288,17 +325,33 @@ mark(
     mixIds.includes(ID_CREATIVE_VISION_RISK_WARNING) &&
     mixIds.indexOf(ID_CREATIVE_VISION_RISK_HARD) <
       mixIds.indexOf(ID_CREATIVE_VISION_RISK_WARNING) &&
+    !idsDi(gHard.p1b).includes(ID_CREATIVE_VISION_RELEVANCE_MEDIUM) &&
     1 + shownMix.secondari.length <= 3,
-  "priorità risk > relevance > P1A; max 3",
+  "CASE G: risk HARD prioritario; max 3; no MEDIUM feedback con risk",
 );
 
 const gNull = mergeP1(null);
+mark(
+  "HIGH FEEDBACK",
+  gNull.p1b.length === 0 &&
+    !JSON.stringify(gNull.merged).includes("Il visual è coerente con l'offerta."),
+  "CASE A: IDLE → nessun feedback positivo vision",
+);
 mark(
   "P1A MERGE",
   gNull.p1b.length === 0 &&
     gNull.p1a.some((i) => i.id === ID_CREATIVE_MANCA_9_16) &&
     gNull.merged.length === gNull.p1a.length,
   "senza analisi P1B: solo P1A",
+);
+
+const shownHigh = selezionaGuidanceDaMostrare(gHigh.merged);
+mark(
+  "P1A MERGE",
+  shownHigh.principale?.id === ID_CREATIVE_VISION_RELEVANCE_HIGH &&
+    shownHigh.secondari.some((s) => s.id === ID_CREATIVE_MANCA_9_16) &&
+    1 + shownHigh.secondari.length <= 3,
+  "CASE C: HIGH + manca 9:16 nella stessa card, max 3",
 );
 
 const shownLow = selezionaGuidanceDaMostrare(gLow.merged);
@@ -357,11 +410,24 @@ const testi = [
   JSON.stringify(gLow.p1b),
   JSON.stringify(gHard.p1b),
 ].join("\n");
+const FORBIDDEN_UX = [
+  "creatività perfetta",
+  "creativita perfetta",
+  "pronta a performare",
+  "ottima creatività",
+  "ottima creativita",
+  "alta qualità",
+  "alta qualita",
+  "convertirà bene",
+  "convertira bene",
+  "score creativo",
+];
 mark(
   "NO PERFORMANCE CLAIMS",
   !haPerformance(testi) &&
+    !FORBIDDEN_UX.some((p) => testi.toLowerCase().includes(p)) &&
     routeSrc.includes("Vietato: performance, CTR, CPL, estetica"),
-  "no CTR/CPL/performance copy in P1B UI/helper",
+  "no CTR/CPL/performance/hype copy in P1B UI/helper",
 );
 
 mark(
