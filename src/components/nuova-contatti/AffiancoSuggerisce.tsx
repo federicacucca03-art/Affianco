@@ -7,6 +7,7 @@ import {
   type GuidanceLevel,
   type RaccomandazioneLancio,
 } from "@/lib/guidance";
+import { StatoChip, type StatoChipKind } from "@/components/nuova-contatti/StatoChip";
 
 type AffiancoSuggerisceProps = {
   items: GuidanceItem[];
@@ -113,21 +114,18 @@ export function AffiancoSuggerisce({
 
 const STILE_RACCOMANDAZIONE: Record<
   RaccomandazioneLancio["stato"],
-  { card: string; badge: string; etichetta: string }
+  { kind: StatoChipKind; etichetta: string }
 > = {
   READY_TO_LAUNCH: {
-    card: "border-[#c6e7c8] bg-[#f0faf1]",
-    badge: "bg-white/80 text-[#1f7a3a]",
+    kind: "ok",
     etichetta: "Puoi lanciare",
   },
   READY_WITH_CAUTION: {
-    card: "border-[#f5e0a8] bg-[#fff9e8]",
-    badge: "bg-white/80 text-[#9a6700]",
+    kind: "watch",
     etichetta: "Con cautela",
   },
   NOT_READY: {
-    card: "border-[#f5c9b8] bg-[#fff4f0]",
-    badge: "bg-white/80 text-[#c2410c]",
+    kind: "critico",
     etichetta: "Non ancora",
   },
 };
@@ -139,16 +137,12 @@ export function RaccomandazioneLancio({
 }) {
   const stile = STILE_RACCOMANDAZIONE[result.stato];
   return (
-    <section
-      className={`rounded-[var(--radius)] border p-5 shadow-[var(--shadow-soft)] ${stile.card}`}
-    >
-      <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+    <section className="aff-panel-white p-5 sm:p-6">
+      <p className="text-[13px] font-medium text-[var(--primary)]">
         Affianco suggerisce
       </p>
-      <span
-        className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${stile.badge}`}
-      >
-        {stile.etichetta}
+      <span className="mt-2 inline-flex">
+        <StatoChip kind={stile.kind} label={stile.etichetta} />
       </span>
       <h2 className="mt-2 text-xl font-medium tracking-tight text-[var(--ink)]">
         {result.title}

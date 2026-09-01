@@ -2,9 +2,11 @@
 
 import type {
   PreLancioAzioneRapida,
+  PreLancioCheckItem,
   PreLancioDiagnosi,
   PreLancioSeverita,
 } from "@/lib/pre-lancio-check";
+import { StatoChip, type StatoChipKind } from "@/components/nuova-contatti/StatoChip";
 
 type Props = {
   diagnosi: PreLancioDiagnosi;
@@ -37,30 +39,25 @@ function sottotitoloSeverita(severita: PreLancioSeverita): string {
   }
 }
 
-function stileCard(severita: PreLancioSeverita): string {
+function chipDaSeverita(severita: PreLancioSeverita): StatoChipKind {
   switch (severita) {
     case "ok":
-      return "border-[#c6e7c8] bg-[#f0faf1]";
+      return "ok";
     case "consiglio":
-      return "border-[#f5e0a8] bg-[#fff9e8]";
+      return "watch";
     case "errore":
-      return "border-[#f5c9b8] bg-[#fff4f0]";
+      return "critico";
     default:
-      return "border-[var(--border)] bg-[var(--surface-hover)]";
+      return "info";
   }
 }
 
-function emojiSeverita(severita: PreLancioSeverita): string {
-  switch (severita) {
-    case "ok":
-      return "🟢";
-    case "consiglio":
-      return "🟡";
-    case "errore":
-      return "🔴";
-    default:
-      return "ℹ️";
-  }
+function severitaDi(check: PreLancioCheckItem): PreLancioSeverita {
+  if (check.severita) return check.severita;
+  if (check.level === "ok") return "ok";
+  if (check.level === "warning") return "errore";
+  if (check.level === "tip") return "consiglio";
+  return "info";
 }
 
 function CardControlloOperativo({
@@ -77,16 +74,15 @@ function CardControlloOperativo({
   onAzione?: (tipo: PreLancioAzioneRapida) => void;
 }) {
   return (
-    <li
-      className={`rounded-xl border px-4 py-3.5 ${stileCard(severita)}`}
-    >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 flex-1">
+    <li className="aff-panel-white px-4 py-3.5">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start sm:gap-4">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-medium text-[var(--ink)]">{titolo}</p>
-            <span className="text-xs font-medium text-[var(--ink-muted)]">
-              {emojiSeverita(severita)} {etichettaSeverita(severita)}
-            </span>
+            <StatoChip
+              kind={chipDaSeverita(severita)}
+              label={etichettaSeverita(severita)}
+            />
           </div>
           <p className="mt-1.5 text-sm leading-relaxed text-[var(--ink)]">
             {motivazione}
@@ -101,7 +97,7 @@ function CardControlloOperativo({
           <button
             type="button"
             onClick={() => onAzione(azione.tipo)}
-            className="shrink-0 rounded-full border border-[var(--ink)]/15 bg-white px-3.5 py-2 text-xs font-medium text-[var(--ink)] shadow-sm transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
+            className="shrink-0 rounded-full bg-white px-3.5 py-2 text-xs font-medium text-[var(--ink)] shadow-[var(--shadow-card)] transition-opacity hover:opacity-90"
           >
             {azione.etichetta}
           </button>
@@ -118,27 +114,28 @@ function LayoutLegacy({
   diagnosi: PreLancioDiagnosi;
   onAzioneRapida?: (tipo: PreLancioAzioneRapida) => void;
 }) {
-  const badgeTone =
+  const toneKind =
     diagnosi.tone === "green"
-      ? "bg-[#E8F5EE] text-[#3D8B57]"
+      ? "ok"
       : diagnosi.tone === "yellow"
-        ? "bg-[#FFF6E5] text-[#9A6700]"
-        : "bg-[#FFF0F0] text-[#C45C5C]";
+        ? "watch"
+        : "critico";
 
-  const emoji =
-    diagnosi.tone === "green" ? "🟢" : diagnosi.tone === "yellow" ? "🟡" : "🟠";
+  const inEvidenza = diagnosi.checks.filter((c) => c.level !== "ok");
+  const okChecks = diagnosi.checks.filter((c) => c.level === "ok");
 
   return (
     <>
-      <div
-        className={`mt-5 inline-flex items-center rounded-full px-4 py-2 text-sm font-medium ${badgeTone}`}
-      >
-        {emoji} Prontezza Campagna: {diagnosi.score}% — {diagnosi.label}
+      <div className="mt-5">
+        <StatoChip
+          kind={toneKind}
+          label={`Prontezza campagna: ${diagnosi.score}% — ${diagnosi.label}`}
+        />
       </div>
 
       {diagnosi.stimaAppuntamenti ? (
-        <div className="mt-4 rounded-xl border border-[#c6e7c8] bg-[#f0faf1] px-4 py-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-[#3D8B57]">
+        <div className="aff-panel-lilac mt-4 px-4 py-4">
+          <p className="text-[13px] font-medium text-[var(--primary)]">
             Stima Appuntamenti Settimanali
           </p>
           <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]">
@@ -152,8 +149,8 @@ function LayoutLegacy({
       ) : null}
 
       {diagnosi.stimaOrdini ? (
-        <div className="mt-4 rounded-xl border border-[#c6e7c8] bg-[#f0faf1] px-4 py-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-[#3D8B57]">
+        <div className="aff-panel-lilac mt-4 px-4 py-4">
+          <p className="text-[13px] font-medium text-[var(--primary)]">
             Stima Conversioni &amp; Ordini
           </p>
           <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]">
@@ -167,7 +164,7 @@ function LayoutLegacy({
       ) : null}
 
       {diagnosi.stimaCoperturaRetargeting ? (
-        <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface-hover)] px-4 py-4">
+        <div className="aff-panel-lilac mt-4 px-4 py-4">
           <p className="text-sm leading-relaxed text-[var(--ink-muted)]">
             ℹ️ Copertura retargeting: configurazione a pubblico caldo — verifica
             pixel e audience in Meta prima del lancio.
@@ -175,35 +172,59 @@ function LayoutLegacy({
         </div>
       ) : null}
 
-      <ul className="mt-5 space-y-3">
-        {diagnosi.checks.map((check) => {
-          const bordo =
-            check.level === "warning"
-              ? "border-[#f5c9b8] bg-[#fff4f0]"
-              : check.level === "tip"
-                ? "border-[#f0e0a8] bg-[#fffaf0]"
-                : "border-[#c6e7c8] bg-[#f0faf1]";
-          return (
-            <li
-              key={check.id}
-              className={`rounded-xl border px-4 py-3 text-sm leading-relaxed text-[var(--ink)] ${bordo}`}
-            >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="min-w-0 flex-1">{check.messaggio}</p>
+      {inEvidenza.length > 0 ? (
+        <ul className="mt-5 space-y-3">
+          {inEvidenza.map((check) => (
+            <li key={check.id} className="aff-panel-white px-4 py-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                <div className="flex flex-wrap items-start gap-2">
+                  <StatoChip
+                    kind={
+                      check.level === "warning"
+                        ? "critico"
+                        : check.level === "tip"
+                          ? "watch"
+                          : "info"
+                    }
+                  />
+                  <p className="min-w-0 flex-1 text-sm leading-relaxed text-[var(--ink)]">
+                    {check.messaggio}
+                  </p>
+                </div>
                 {check.azione && onAzioneRapida ? (
                   <button
                     type="button"
                     onClick={() => onAzioneRapida(check.azione!.tipo)}
-                    className="shrink-0 rounded-full border border-[var(--ink)]/15 bg-white px-3.5 py-2 text-xs font-medium text-[var(--ink)] shadow-sm transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                    className="shrink-0 rounded-full bg-white px-3.5 py-2 text-xs font-medium text-[var(--ink)] shadow-[var(--shadow-card)]"
                   >
                     {check.azione.etichetta}
                   </button>
                 ) : null}
               </div>
             </li>
-          );
-        })}
-      </ul>
+          ))}
+        </ul>
+      ) : null}
+
+      {okChecks.length > 0 ? (
+        <details className="aff-panel-lilac mt-4 px-4 py-3">
+          <summary className="cursor-pointer text-[13px] font-medium text-[var(--ink)]">
+            {okChecks.length}{" "}
+            {okChecks.length === 1 ? "controllo OK" : "controlli OK"}
+          </summary>
+          <ul className="mt-2 space-y-2">
+            {okChecks.map((check) => (
+              <li
+                key={check.id}
+                className="flex flex-wrap items-start gap-2 text-[13px] leading-relaxed text-[var(--ink-muted)]"
+              >
+                <StatoChip kind="ok" />
+                <span className="min-w-0 flex-1">{check.messaggio}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
 
       {diagnosi.saturazione ? (
         <BoxStimaSaturazione diagnosi={diagnosi} />
@@ -216,8 +237,8 @@ function BoxStimaSaturazione({ diagnosi }: { diagnosi: PreLancioDiagnosi }) {
   if (!diagnosi.saturazione) return null;
   const isInstore = diagnosi.objective === "IN_STORE";
   return (
-    <div className="mt-5 rounded-xl border border-[#c6d8f0] bg-[#f3f7fc] px-4 py-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
+    <div className="aff-panel-lilac mt-5 px-4 py-4">
+      <p className="text-[13px] font-medium text-[var(--primary)]">
         {isInstore
           ? "STIMA · Pressione sul pubblico"
           : "Stima saturazione pubblico"}
@@ -241,7 +262,7 @@ function BoxStimaSaturazione({ diagnosi }: { diagnosi: PreLancioDiagnosi }) {
         </p>
       ) : isInstore ? (
         <dl className="mt-3 space-y-1.5 text-sm text-[var(--ink)]">
-          <div className="flex items-baseline justify-between gap-3">
+          <div className="grid grid-cols-1 gap-1 sm:grid-cols-[12rem_1fr] sm:items-baseline">
             <dt className="text-[var(--ink-muted)]">STIMA · Bacino</dt>
             <dd className="font-medium">
               ~
@@ -251,7 +272,7 @@ function BoxStimaSaturazione({ diagnosi }: { diagnosi: PreLancioDiagnosi }) {
               persone
             </dd>
           </div>
-          <div className="flex items-baseline justify-between gap-3">
+          <div className="grid grid-cols-1 gap-1 sm:grid-cols-[12rem_1fr] sm:items-baseline">
             <dt className="text-[var(--ink-muted)]">STIMA · Impressions/giorno</dt>
             <dd className="font-medium">
               ~
@@ -260,7 +281,7 @@ function BoxStimaSaturazione({ diagnosi }: { diagnosi: PreLancioDiagnosi }) {
               ).toLocaleString("it-IT")}
             </dd>
           </div>
-          <div className="flex items-baseline justify-between gap-3">
+          <div className="grid grid-cols-1 gap-1 sm:grid-cols-[12rem_1fr] sm:items-baseline">
             <dt className="text-[var(--ink-muted)]">STIMA · Giorni al bacino</dt>
             <dd className="font-medium">
               ~{diagnosi.saturazione.giorniSaturazione} giorni
@@ -290,9 +311,16 @@ function BoxStimaSaturazione({ diagnosi }: { diagnosi: PreLancioDiagnosi }) {
 
 export function DiagnosiPreLancio({ diagnosi, onAzioneRapida }: Props) {
   const operativo = diagnosi.layoutOperativo === true;
+  const checks = diagnosi.checks;
+  const inEvidenza = checks.filter((c) => {
+    const s = severitaDi(c);
+    return s === "consiglio" || s === "errore";
+  });
+  const okChecks = checks.filter((c) => severitaDi(c) === "ok");
+  const infoChecks = checks.filter((c) => severitaDi(c) === "info");
 
   return (
-    <section className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
+    <section className="aff-panel-white p-5 sm:p-6">
       {operativo ? (
         <header>
           <h2 className="text-base font-medium text-[var(--ink)]">
@@ -314,7 +342,7 @@ export function DiagnosiPreLancio({ diagnosi, onAzioneRapida }: Props) {
         </header>
       ) : (
         <>
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
+          <p className="text-[13px] font-medium text-[var(--primary)]">
             Pre-Flight Check
           </p>
           <h2 className="mt-1 text-base font-medium text-[var(--ink)]">
@@ -328,56 +356,81 @@ export function DiagnosiPreLancio({ diagnosi, onAzioneRapida }: Props) {
       )}
 
       {operativo && diagnosi.riepilogo ? (
-        <div className="mt-5 flex flex-wrap gap-3">
-          <span className="rounded-full border border-[#c6e7c8] bg-[#f0faf1] px-3 py-1.5 text-sm text-[var(--ink)]">
-            <span className="font-medium">{diagnosi.riepilogo.ok}</span>{" "}
-            controlli OK
-          </span>
-          <span className="rounded-full border border-[#f5e0a8] bg-[#fff9e8] px-3 py-1.5 text-sm text-[var(--ink)]">
-            <span className="font-medium">{diagnosi.riepilogo.consigli}</span>{" "}
-            consigli
-          </span>
-          <span className="rounded-full border border-[#f5c9b8] bg-[#fff4f0] px-3 py-1.5 text-sm text-[var(--ink)]">
-            <span className="font-medium">{diagnosi.riepilogo.errori}</span>{" "}
-            {diagnosi.riepilogo.errori === 1
-              ? "elemento da correggere"
-              : "elementi da correggere"}
-          </span>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <StatoChip
+            kind="ok"
+            label={`${diagnosi.riepilogo.ok} controlli OK`}
+          />
+          <StatoChip
+            kind="watch"
+            label={`${diagnosi.riepilogo.consigli} consigli`}
+          />
+          <StatoChip
+            kind="critico"
+            label={`${diagnosi.riepilogo.errori} ${
+              diagnosi.riepilogo.errori === 1
+                ? "elemento da correggere"
+                : "elementi da correggere"
+            }`}
+          />
         </div>
       ) : null}
 
       {operativo ? (
         <>
-          <ul className="mt-5 space-y-3">
-            {diagnosi.checks.map((check) => {
-              const severita = check.severita ?? "consiglio";
-              if (severita === "info") {
-                return (
-                  <li
-                    key={check.id}
-                    className="rounded-xl border border-[var(--border)] bg-[var(--surface-hover)] px-4 py-3 text-sm leading-relaxed text-[var(--ink-muted)]"
-                  >
-                    ℹ️ {check.titolo ?? check.messaggio}
-                    {check.motivazione ? (
-                      <span className="mt-1 block text-[var(--ink)]">
-                        {check.motivazione}
-                      </span>
-                    ) : null}
-                  </li>
-                );
-              }
-              return (
+          {inEvidenza.length > 0 ? (
+            <ul className="mt-5 space-y-3">
+              {inEvidenza.map((check) => (
                 <CardControlloOperativo
                   key={check.id}
                   titolo={check.titolo ?? check.id}
-                  severita={severita}
+                  severita={severitaDi(check)}
                   motivazione={check.motivazione ?? check.messaggio}
                   azione={check.azione}
                   onAzione={onAzioneRapida}
                 />
-              );
-            })}
-          </ul>
+              ))}
+            </ul>
+          ) : null}
+
+          {okChecks.length > 0 ? (
+            <details className="aff-panel-lilac mt-4 px-4 py-3">
+              <summary className="cursor-pointer text-[13px] font-medium text-[var(--ink)]">
+                {okChecks.length}{" "}
+                {okChecks.length === 1 ? "controllo OK" : "controlli OK"}
+              </summary>
+              <ul className="mt-2 space-y-2">
+                {okChecks.map((check) => (
+                  <li
+                    key={check.id}
+                    className="flex flex-wrap items-center gap-2 text-[13px] text-[var(--ink-muted)]"
+                  >
+                    <StatoChip kind="ok" />
+                    <span>{check.titolo ?? check.messaggio}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+
+          {infoChecks.length > 0 ? (
+            <ul className="mt-3 space-y-2">
+              {infoChecks.map((check) => (
+                <li
+                  key={check.id}
+                  className="aff-panel-lilac px-4 py-3 text-sm leading-relaxed text-[var(--ink-muted)]"
+                >
+                  <StatoChip kind="info" />
+                  <span className="ml-2">{check.titolo ?? check.messaggio}</span>
+                  {check.motivazione ? (
+                    <span className="mt-1 block text-[var(--ink)]">
+                      {check.motivazione}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
           {diagnosi.saturazione ? (
             <BoxStimaSaturazione diagnosi={diagnosi} />
@@ -385,12 +438,12 @@ export function DiagnosiPreLancio({ diagnosi, onAzioneRapida }: Props) {
 
           {diagnosi.stimaModelloAwareness &&
           diagnosi.stimaModelloAwareness.impressions > 0 ? (
-            <div className="mt-5 rounded-xl border border-[#c6d8f0] bg-[#f3f7fc] px-4 py-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
+            <div className="aff-panel-lilac mt-5 px-4 py-4">
+              <p className="text-[13px] font-medium text-[var(--primary)]">
                 STIMA DEL MODELLO
               </p>
               <dl className="mt-3 space-y-1.5 text-sm text-[var(--ink)]">
-                <div className="flex items-baseline justify-between gap-3">
+                <div className="grid grid-cols-1 gap-1 sm:grid-cols-[12rem_1fr] sm:items-baseline">
                   <dt className="text-[var(--ink-muted)]">
                     STIMA · Impression
                   </dt>
@@ -401,7 +454,7 @@ export function DiagnosiPreLancio({ diagnosi, onAzioneRapida }: Props) {
                     ).toLocaleString("it-IT")}
                   </dd>
                 </div>
-                <div className="flex items-baseline justify-between gap-3">
+                <div className="grid grid-cols-1 gap-1 sm:grid-cols-[12rem_1fr] sm:items-baseline">
                   <dt className="text-[var(--ink-muted)]">
                     STIMA · Copertura indicativa
                   </dt>
@@ -422,8 +475,8 @@ export function DiagnosiPreLancio({ diagnosi, onAzioneRapida }: Props) {
           ) : null}
 
           {diagnosi.istruzioniMeta ? (
-            <div className="mt-5 rounded-xl border border-[var(--border)] bg-[var(--surface-hover)] px-4 py-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+            <div className="aff-panel-lilac mt-5 px-4 py-4">
+              <p className="text-[13px] font-medium text-[var(--ink-muted)]">
                 {diagnosi.istruzioniMeta.titolo}
               </p>
               <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-[var(--ink)]">

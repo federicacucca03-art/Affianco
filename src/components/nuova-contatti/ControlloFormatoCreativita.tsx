@@ -2,6 +2,10 @@
 
 import type { CreativitaAsset } from "@/lib/creativita";
 import { aspectRatioMetaOk } from "@/lib/creativita";
+import {
+  chipDaEmoji,
+  RigaDiagnostica,
+} from "@/components/nuova-contatti/StatoChip";
 
 type Props = {
   creativita: CreativitaAsset[];
@@ -14,20 +18,6 @@ type Voce = {
   emoji: "🟢" | "🟡" | "⚪";
   messaggio: string;
 };
-
-function Riga({ voce }: { voce: Voce }) {
-  return (
-    <li className="flex items-start justify-between gap-3 text-xs leading-relaxed">
-      <span className="text-[var(--ink-muted)]">{voce.label}</span>
-      <span className="min-w-0 text-right text-[var(--ink)]">
-        <span className="mr-1.5" aria-hidden>
-          {voce.emoji}
-        </span>
-        {voce.messaggio}
-      </span>
-    </li>
-  );
-}
 
 export function ControlloFormatoCreativita({
   creativita,
@@ -123,16 +113,21 @@ export function ControlloFormatoCreativita({
   }
 
   return (
-    <div className="rounded-xl border border-[#c6d8f0] bg-[#f8fafc] p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
+    <div className="aff-panel-lilac p-5">
+      <p className="text-[13px] font-medium text-[var(--primary)]">
         Controllo formato
       </p>
-      <p className="mt-1 text-xs leading-relaxed text-[var(--ink-muted)]">
+      <p className="mt-1 text-[13px] leading-relaxed text-[var(--ink-muted)]">
         Verifica aspect ratio e compatibilità feed — nessun blocco automatico.
       </p>
-      <ul className="mt-3 space-y-2.5 border-t border-[#c6d8f0] pt-3">
+      <ul className="mt-4 overflow-hidden rounded-[16px] bg-white px-4">
         {voci.map((voce) => (
-          <Riga key={voce.label} voce={voce} />
+          <RigaDiagnostica
+            key={voce.label}
+            voce={voce.label}
+            kind={chipDaEmoji(voce.emoji)}
+            spiegazione={voce.messaggio}
+          />
         ))}
       </ul>
     </div>

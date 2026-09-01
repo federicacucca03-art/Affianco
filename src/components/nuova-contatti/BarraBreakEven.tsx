@@ -38,42 +38,30 @@ export function BarraBreakEven({
           {etichettaCosto} target vs break-even
         </p>
         <div
-          className="mt-2 flex h-3 overflow-hidden rounded-full bg-[#EEF0F3]"
+          className="mt-2 flex h-3 overflow-hidden rounded-full bg-[var(--lavender-muted)]"
           role="img"
           aria-label={`${etichettaCosto} target ${targetProfitto}€, break-even ${breakEven}€`}
         >
           <div
-            className="h-full bg-[#3D8B57] transition-all"
+            className="h-full bg-[var(--green-soft)] transition-all"
             style={{ width: `${verdePct}%` }}
             title={`${etichettaCosto} target di riferimento: ${targetProfitto}€`}
           />
           <div
-            className="h-full bg-[#E6A817] transition-all"
+            className="h-full bg-[var(--yellow-soft)] transition-all"
             style={{ width: `${arancioPct}%` }}
             title={`Fino a break-even: ${breakEven}€`}
           />
         </div>
         <div className="mt-2 flex flex-wrap items-start justify-between gap-2 text-xs">
-          <div className="flex items-center gap-1.5 text-[var(--ink)]">
-            <span
-              className="inline-block h-2.5 w-2.5 rounded-sm bg-[#3D8B57]"
-              aria-hidden
-            />
-            <span>
-              Verde · {etichettaCosto} target:{" "}
-              <span className="font-medium">{targetProfitto}€</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 text-[var(--ink)]">
-            <span
-              className="inline-block h-2.5 w-2.5 rounded-sm bg-[#E6A817]"
-              aria-hidden
-            />
-            <span>
-              Arancio · Break-even teorico:{" "}
-              <span className="font-medium">{breakEven}€</span>
-            </span>
-          </div>
+          <span className="text-[var(--ink)]">
+            {etichettaCosto} target:{" "}
+            <span className="font-medium">{targetProfitto}€</span>
+          </span>
+          <span className="text-[var(--ink)]">
+            Break-even teorico:{" "}
+            <span className="font-medium">{breakEven}€</span>
+          </span>
         </div>
         <p className="mt-1.5 text-xs leading-relaxed text-[var(--ink-muted)]">
           Sotto {targetProfitto}€ di {etichettaCosto} resti entro la soglia con
@@ -83,7 +71,7 @@ export function BarraBreakEven({
         {riferimentoMercato &&
         riferimentoMercato.min > 0 &&
         riferimentoMercato.max > 0 ? (
-          <p className="mt-2 rounded-lg border border-[#c6d8f0] bg-[#f3f7fc] px-3 py-2 text-xs leading-relaxed text-[var(--ink)]">
+          <p className="mt-2 rounded-[14px] bg-[var(--lavender-muted)]/70 px-3 py-2 text-xs leading-relaxed text-[var(--ink)]">
             Asta Meta{" "}
             {riferimentoMercato.etichetta
               ? `· ${riferimentoMercato.etichetta}`
@@ -101,8 +89,8 @@ export function BarraBreakEven({
         <div
           className={`rounded-xl border px-3.5 py-3 text-sm leading-relaxed ${
             alert.tone === "warning"
-              ? "border-[#f5c9b8] bg-[#fff4f0] text-[var(--ink)]"
-              : "border-[#c6e7c8] bg-[#f0faf1] text-[var(--ink)]"
+              ? "border-0 bg-[var(--yellow-soft)]/80 text-[var(--ink)]"
+              : "border-0 bg-[var(--lavender-muted)] text-[var(--ink)]"
           }`}
         >
           {alert.messaggio}

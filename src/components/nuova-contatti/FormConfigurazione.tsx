@@ -2189,8 +2189,8 @@ export function FormConfigurazione({
                     </div>
                   </div>
                 ) : (
-                <div className="rounded-xl border border-[#c6e7c8] bg-[#f0faf1] p-4">
-                  <p className="text-xs font-medium uppercase tracking-wide text-[#3D8B57]">
+                <div className="aff-panel-lilac p-4">
+                  <p className="text-[13px] font-medium text-[var(--primary)]">
                     Copertura e Frequenza Locale
                   </p>
                   <p className="mt-2 text-2xl font-medium tracking-tight text-[var(--ink)]">
@@ -2322,8 +2322,8 @@ export function FormConfigurazione({
               {valoreVisita > 0 &&
               margineProdotto > 0 &&
               cpaMaxAcquisto > 0 ? (
-                <div className="rounded-xl border border-[#c6e7c8] bg-[#f0faf1] p-4">
-                  <p className="text-xs font-medium uppercase tracking-wide text-[#3D8B57]">
+                <div className="aff-panel-lilac p-4">
+                  <p className="text-[13px] font-medium text-[var(--primary)]">
                     {isPercorsoEcommerce
                       ? "Limiti economici della campagna"
                       : "ROAS & CPA Max in tempo reale"}
@@ -2906,8 +2906,8 @@ export function FormConfigurazione({
           {isRetargeting &&
           valoreVisita > 0 &&
           cpaRecupero > 0 ? (
-            <div className="rounded-xl border border-[#c6e7c8] bg-[#f0faf1] p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-[#3D8B57]">
+            <div className="aff-panel-lilac p-4">
+              <p className="text-[13px] font-medium text-[var(--primary)]">
                 {isPercorsoRetargeting
                   ? "CPA Max sostenibile"
                   : "CPA Massima Sostenibile di Recupero"}
@@ -2925,7 +2925,7 @@ export function FormConfigurazione({
                     Il calcolo applica il buffer operativo previsto dal modello
                     Affianco (×0,6). Non è un benchmark Meta.
                   </p>
-                  <p className="mt-3 border-t border-[#c6e7c8] pt-3 text-xs leading-relaxed text-[var(--ink)]">
+                  <p className="mt-3 border-t border-[var(--border)] pt-3 text-xs leading-relaxed text-[var(--ink)]">
                     Valore netto:{" "}
                     <span className="font-medium">{valoreNettoRecupero}€</span>
                     {" · "}
@@ -2949,8 +2949,8 @@ export function FormConfigurazione({
           valoreVisita > 0 &&
           utilePerScontrino > 0 &&
           cpaInStore > 0 ? (
-            <div className="rounded-xl border border-[#c6e7c8] bg-[#f0faf1] p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-[#3D8B57]">
+            <div className="aff-panel-lilac p-4">
+              <p className="text-[13px] font-medium text-[var(--primary)]">
                 {isPercorsoInstore
                   ? "CPA Max sostenibile"
                   : "CPA In-Store Sostenibile"}
@@ -2967,7 +2967,7 @@ export function FormConfigurazione({
                   <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
                     Non è una previsione del costo che Meta genererà.
                   </p>
-                  <p className="mt-3 border-t border-[#c6e7c8] pt-3 text-xs leading-relaxed text-[var(--ink)]">
+                  <p className="mt-3 border-t border-[var(--border)] pt-3 text-xs leading-relaxed text-[var(--ink)]">
                     Utile per scontrino:{" "}
                     <span className="font-medium">{utilePerScontrino}€</span>
                     {" · "}
@@ -2987,8 +2987,8 @@ export function FormConfigurazione({
             </div>
           ) : null}
           {isBookings && valoreVisita > 0 && cpaSostenibile > 0 ? (
-            <div className="rounded-xl border border-[#c6e7c8] bg-[#f0faf1] p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-[#3D8B57]">
+            <div className="aff-panel-lilac p-4">
+              <p className="text-[13px] font-medium text-[var(--primary)]">
                 {ltvEconomics
                   ? "CPA e LTV — Prenotazioni"
                   : isPercorsoBookings
@@ -3022,7 +3022,7 @@ export function FormConfigurazione({
                     {ltvEconomics.valoreNettoCliente}€ · Break-even LTV{" "}
                     {ltvEconomics.breakEvenCpl}€
                   </p>
-                  <p className="mt-2 rounded-lg border border-[#c6e7c8] bg-white/70 px-3 py-2.5 text-sm leading-relaxed text-[var(--ink)]">
+                  <p className="mt-2 rounded-[16px] bg-white px-3 py-2.5 text-sm leading-relaxed text-[var(--ink)]">
                     Un acquisito al CPA limite di{" "}
                     <span className="font-medium">
                       {ltvEconomics.cplSostenibileLtv}€
@@ -3080,19 +3080,19 @@ export function FormConfigurazione({
           !isAwareness &&
           valoreVisita > 0 &&
           (cplPrimoAcquistoLeads > 0 || ltvEconomics) ? (
-            <div className="rounded-xl border border-[#c6e7c8] bg-[#f0faf1] p-4 sm:p-5">
-              <p className="text-xs font-medium uppercase tracking-wide text-[#3D8B57]">
+            <div className="aff-panel-lilac p-4 sm:p-5">
+              <p className="text-[13px] font-medium text-[var(--primary)]">
                 {ltvEconomics
                   ? "CPL e LTV — Sostenibilità acquisizione"
                   : "CPL target di riferimento"}
               </p>
               {conversionRateSource === "ESTIMATED" && !ltvEconomics ? (
-                <p className="mt-2 inline-flex rounded-full bg-[#fff6e5] px-2.5 py-0.5 text-xs font-medium text-[#9a6700]">
+                <p className="mt-2 inline-flex rounded-full bg-[var(--yellow-soft)] px-2.5 py-0.5 text-xs font-medium text-[#6b5420]">
                   Calcolo basato su una stima
                 </p>
               ) : null}
               {conversionRateSource === "REAL" && !ltvEconomics ? (
-                <p className="mt-2 inline-flex rounded-full bg-[#e8f4ec] px-2.5 py-0.5 text-xs font-medium text-[#3D8B57]">
+                <p className="mt-2 inline-flex rounded-full bg-[var(--green-soft)] px-2.5 py-0.5 text-xs font-medium text-[#2d6a4a]">
                   Dato reale
                 </p>
               ) : null}
@@ -3118,7 +3118,7 @@ export function FormConfigurazione({
                         {ltvEconomics.cplPrimoAcquisto}€
                       </p>
                     </div>
-                    <div className="rounded-xl border border-[#c6e7c8] bg-white/50 px-3 py-3">
+                    <div className="rounded-[16px] bg-white px-3 py-3">
                       <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
                         CPL target · LTV ({ltvEconomics.anniPermanenza}{" "}
                         {ltvEconomics.anniPermanenza === 1 ? "anno" : "anni"})
@@ -3128,7 +3128,7 @@ export function FormConfigurazione({
                       </p>
                     </div>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2 border-t border-[#c6e7c8] pt-3">
+                  <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2 border-t border-[var(--border)] pt-3">
                     <p className="text-xs text-[var(--ink-muted)]">
                       Break-even teorico (LTV)
                     </p>
@@ -3629,7 +3629,7 @@ export function FormConfigurazione({
             !isPercorsoInstore &&
             !isPercorsoRetargeting &&
             hookOk ? (
-            <p className="mt-2 text-xs text-[#3D8B57]">
+            <p className="mt-2 text-xs text-[#2d6a4a]">
               {isEcommerce
                 ? "✅ Hook mobile ok: Prodotto e Offerta visibili prima del 'Altro'."
                 : isRetargeting

@@ -24,7 +24,7 @@ export function SpiegazioneCalcoloCpl({
   const spendShare = 100 - targetMargin;
 
   return (
-    <div className="mt-4 border-t border-[#c6e7c8] pt-3">
+    <div className="mt-4 border-t border-[var(--border)] pt-3">
       <button
         type="button"
         className="flex w-full items-center justify-between gap-2 text-left text-xs font-medium text-[var(--accent)] hover:opacity-80"

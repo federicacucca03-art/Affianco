@@ -1,6 +1,7 @@
 "use client";
 
 import type { ControlloMessaggioRisultato } from "@/lib/controllo-messaggio";
+import { chipDaEmoji, RigaDiagnostica } from "@/components/nuova-contatti/StatoChip";
 
 type Props = {
   risultato: ControlloMessaggioRisultato;
@@ -13,28 +14,6 @@ type Props = {
     | "retargeting"
     | "awareness";
 };
-
-function RigaControllo({
-  label,
-  emoji,
-  messaggio,
-}: {
-  label: string;
-  emoji: string;
-  messaggio: string;
-}) {
-  return (
-    <li className="flex items-start justify-between gap-3 text-xs leading-relaxed">
-      <span className="text-[var(--ink-muted)]">{label}</span>
-      <span className="min-w-0 text-right text-[var(--ink)]">
-        <span className="mr-1.5" aria-hidden>
-          {emoji}
-        </span>
-        {messaggio}
-      </span>
-    </li>
-  );
-}
 
 export function ControlloMessaggio({ risultato, variant = "leads" }: Props) {
   const titolo =
@@ -58,25 +37,23 @@ export function ControlloMessaggio({ risultato, variant = "leads" }: Props) {
         : "Verifiche automatiche su hook, beneficio, CTA e lunghezza — rivedi e correggi prima del lancio.";
 
   return (
-    <div className="mt-4 rounded-xl border border-[#c6d8f0] bg-[#f8fafc] p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
-        {titolo}
-      </p>
-      <p className="mt-1 text-xs leading-relaxed text-[var(--ink-muted)]">
+    <div className="aff-panel-lilac mt-4 p-5">
+      <p className="text-[13px] font-medium text-[var(--primary)]">{titolo}</p>
+      <p className="mt-1 text-[13px] leading-relaxed text-[var(--ink-muted)]">
         {sottotitolo}
       </p>
-      <ul className="mt-3 space-y-2.5 border-t border-[#c6d8f0] pt-3">
+      <ul className="mt-4 overflow-hidden rounded-[16px] bg-white px-4">
         {risultato.voci.map((voce) => (
-          <RigaControllo
+          <RigaDiagnostica
             key={voce.id}
-            label={voce.label}
-            emoji={voce.emoji}
-            messaggio={voce.messaggio}
+            voce={voce.label}
+            kind={chipDaEmoji(voce.emoji)}
+            spiegazione={voce.messaggio}
           />
         ))}
       </ul>
       {risultato.notaLunghezza ? (
-        <p className="mt-3 border-t border-[#c6d8f0] pt-3 text-xs leading-relaxed text-[var(--ink-muted)]">
+        <p className="mt-3 text-[13px] leading-relaxed text-[var(--ink-muted)]">
           {risultato.notaLunghezza}
         </p>
       ) : null}

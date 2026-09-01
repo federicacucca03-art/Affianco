@@ -299,7 +299,7 @@ export function PannelloPerche({
           </h2>
 
           {isAwareness ? (
-            <div className="mt-4 rounded-xl border border-[#c6e7c8] bg-[#f0faf1] p-4">
+            <div className="mt-4 aff-panel-lilac p-4">
               {isPercorsoAwareness ? (
                 <>
                   <p className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
@@ -344,7 +344,7 @@ export function PannelloPerche({
                         Stima in base a budget di lancio {budgetLancio}€ e CPM{" "}
                         {cpmLocale}€.
                       </p>
-                      <p className="mt-3 border-t border-[#c6e7c8] pt-3 text-sm leading-relaxed text-[var(--ink)]">
+                      <p className="mt-3 border-t border-[var(--border)] pt-3 text-sm leading-relaxed text-[var(--ink)]">
                         Frequenza Target: ~
                         {FREQUENZA_AWARENESS_DEFAULT}x per ogni residente nel
                         raggio di {raggio} km
@@ -381,7 +381,7 @@ export function PannelloPerche({
               </p>
             </div>
           ) : (
-            <div className="mt-4 rounded-xl border border-[#c6e7c8] bg-[#f0faf1] p-4">
+            <div className="mt-4 aff-panel-lilac p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
                 {ltvEconomics
                   ? isBookings
@@ -407,7 +407,7 @@ export function PannelloPerche({
                     {ltvEconomics.anniPermanenza === 1 ? "anno" : "anni"}{" "}
                     (primo acquisto: {ltvEconomics.cplPrimoAcquisto}€).
                   </p>
-                  <p className="mt-3 border-t border-[#c6e7c8] pt-3 text-sm leading-relaxed text-[var(--ink)]">
+                  <p className="mt-3 border-t border-[var(--border)] pt-3 text-sm leading-relaxed text-[var(--ink)]">
                     Un acquisito al {isBookings ? "CPA" : "CPL"} limite di{" "}
                     <span className="font-medium">
                       {ltvEconomics.cplSostenibileLtv}€
@@ -450,7 +450,7 @@ export function PannelloPerche({
                     </p>
                   ) : null}
                   {numericScontrino > 0 && maxCpl > 0 ? (
-                    <div className="mt-3 space-y-1.5 border-t border-[#c6e7c8] pt-3 text-xs leading-relaxed text-[var(--ink)]">
+                    <div className="mt-3 space-y-1.5 border-t border-[var(--border)] pt-3 text-xs leading-relaxed text-[var(--ink)]">
                       <p>
                         {isRetargeting
                           ? "Valore Netto"

@@ -7,62 +7,23 @@ import {
   PESI_STRATEGIC_SCORE,
 } from "@/lib/strategic-score";
 import { etichettaConversionRateSource } from "@/lib/conversion-rate";
+import { RigaDiagnostica, StatoChip } from "@/components/nuova-contatti/StatoChip";
 
 type Props = {
   result: StrategicScoreResult;
 };
 
-const TONE_STYLES = {
-  green: {
-    card: "border-[#c6e7c8] bg-[#f0faf1]",
-    score: "text-[#1f7a3a]",
-  },
-  yellow: {
-    card: "border-[#f5e0a8] bg-[#fff9e8]",
-    score: "text-[#9a6700]",
-  },
-  orange: {
-    card: "border-[#f5c9b8] bg-[#fff4f0]",
-    score: "text-[#c2410c]",
-  },
-  neutral: {
-    card: "border-[var(--border)] bg-white",
-    score: "text-[var(--ink)]",
-  },
-} as const;
-
-function RigaFattore({
-  ok,
-  label,
-  punti,
-  max,
-}: {
-  ok: boolean;
-  label: string;
-  punti: number;
-  max: number;
-}) {
-  return (
-    <li className="flex items-start justify-between gap-3 text-xs leading-relaxed">
-      <span className="text-[var(--ink-muted)]">
-        <span className="mr-1.5" aria-hidden>
-          {ok ? "✓" : "○"}
-        </span>
-        {label}
-      </span>
-      <span
-        className={`shrink-0 tabular-nums ${ok ? "text-[var(--ink)]" : "text-[var(--ink-muted)]"}`}
-      >
-        +{punti}/{max}
-      </span>
-    </li>
-  );
+function chipDaTone(tone: StrategicScoreResult["tone"]) {
+  if (tone === "green") return "ok" as const;
+  if (tone === "yellow") return "watch" as const;
+  if (tone === "orange") return "critico" as const;
+  return "info" as const;
 }
 
 export function StrategicScoreCard({ result }: Props) {
-  const stile = TONE_STYLES[result.tone];
   const b = result.breakdown;
   const eco = result.economia;
+  const chip = chipDaTone(result.tone);
 
   const fattori = [
     {
@@ -104,16 +65,15 @@ export function StrategicScoreCard({ result }: Props) {
   );
 
   return (
-    <section
-      className={`rounded-[var(--radius)] border p-5 shadow-[var(--shadow-soft)] ${stile.card}`}
-    >
-      <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-        Strategic Score
-      </p>
+    <section className="aff-panel-white p-5 sm:p-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-[13px] font-medium text-[var(--primary)]">
+          Strategic Score
+        </p>
+        <StatoChip kind={chip} label={result.label} />
+      </div>
       {result.mostraPunteggio ? (
-        <p
-          className={`mt-2 text-4xl font-medium tracking-tight tabular-nums ${stile.score}`}
-        >
+        <p className="mt-3 text-4xl font-medium tracking-tight tabular-nums text-[var(--ink)]">
           {result.score}
           <span className="text-lg font-normal text-[var(--ink-muted)]">
             {" "}
@@ -121,59 +81,58 @@ export function StrategicScoreCard({ result }: Props) {
           </span>
         </p>
       ) : (
-        <p className="mt-2 text-lg font-medium text-[var(--ink)]">
+        <p className="mt-3 text-lg font-medium text-[var(--ink)]">
           {result.label}
         </p>
       )}
-      {result.mostraPunteggio ? (
-        <p className="mt-2 text-sm font-medium text-[var(--ink)]">
-          {result.label}
-        </p>
-      ) : null}
 
       {eco.conversionRateSource === "REAL" ? (
-        <p className="mt-2 text-xs font-medium text-[#1f7a3a]">Dato reale</p>
+        <p className="mt-2">
+          <StatoChip kind="ok" label="Dato reale" />
+        </p>
       ) : null}
       {eco.conversionRateSource === "ESTIMATED" ? (
-        <p className="mt-2 text-xs leading-relaxed text-[#9a6700]">
+        <p className="mt-2 text-[13px] leading-relaxed text-[var(--ink-muted)]">
           {CAVEAT_STIMA}
         </p>
       ) : null}
       {eco.conversionRateSource === "UNKNOWN" ? (
-        <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
+        <p className="mt-2 text-[13px] leading-relaxed text-[var(--ink-muted)]">
           Tasso di conversione non disponibile — i numeri non sono ancora
           certi.
         </p>
       ) : null}
 
-      <ul className="mt-4 space-y-2 border-t border-black/5 pt-3">
+      <ul className="mt-4 overflow-hidden rounded-[16px] bg-[var(--lavender-muted)]/45 px-4">
         {fattori.map((f) => (
-          <RigaFattore
+          <RigaDiagnostica
             key={f.label}
-            ok={f.ok}
-            label={f.label}
-            punti={f.punti}
-            max={f.max}
+            voce={f.label}
+            kind={f.ok ? "ok" : "watch"}
+            spiegazione={`+${f.punti}/${f.max}`}
           />
         ))}
       </ul>
 
       {eco.benchmarkBudgetMin != null ? (
-        <p className="mt-3 text-xs leading-relaxed text-[var(--ink-muted)]">
+        <p className="mt-3 text-[13px] leading-relaxed text-[var(--ink-muted)]">
           Per realtà simili a {eco.citta || "questa zona"} il benchmark
           indicativo parte da circa {eco.benchmarkBudgetMin}€/giorno.
         </p>
       ) : null}
 
       {result.avvisoSprecoBudget ? (
-        <p className="mt-3 text-xs font-medium leading-relaxed text-[#c2410c]">
-          {LABEL_RISCHIO_SPRECO_BUDGET}: il CPL di mercato tipico supera la
-          soglia sostenibile.
+        <p className="mt-3 flex flex-wrap items-start gap-2 text-[13px] font-medium leading-relaxed text-[var(--ink)]">
+          <StatoChip kind="critico" />
+          <span>
+            {LABEL_RISCHIO_SPRECO_BUDGET}: il CPL di mercato tipico supera la
+            soglia sostenibile.
+          </span>
         </p>
       ) : null}
 
       {suggestionsVisibili.length > 0 ? (
-        <ul className="mt-3 space-y-1.5 border-t border-black/5 pt-3">
+        <ul className="mt-3 space-y-1.5 border-t border-[var(--border)] pt-3">
           {suggestionsVisibili
             .filter(
               (s) =>
@@ -183,7 +142,7 @@ export function StrategicScoreCard({ result }: Props) {
             .map((suggerimento) => (
               <li
                 key={suggerimento}
-                className="text-xs leading-relaxed text-[var(--ink-muted)]"
+                className="text-[13px] leading-relaxed text-[var(--ink-muted)]"
               >
                 {suggerimento}
               </li>
@@ -192,7 +151,7 @@ export function StrategicScoreCard({ result }: Props) {
       ) : null}
 
       {eco.conversionRateSource ? (
-        <p className="mt-3 text-[10px] uppercase tracking-wide text-[var(--ink-muted)]">
+        <p className="mt-3 text-[11px] text-[var(--ink-muted)]">
           Fonte conversione:{" "}
           {etichettaConversionRateSource(eco.conversionRateSource)}
         </p>
