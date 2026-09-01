@@ -48,6 +48,13 @@ import {
 } from "@/lib/campaign-checks-db";
 import { logControlloPerformanceSalvato } from "@/lib/campaign-logs";
 import {
+  avvisiConteggiFunnel,
+  deriveFunnelMetrics,
+  etichettaTassoClickRisultato,
+  formatFunnelPercent,
+  parseOptionalNonNegativeInteger,
+} from "@/lib/funnel-metrics";
+import {
   ControlRoomOverview,
   ordinaRigheControlRoom,
 } from "@/components/risultati/ControlRoomOverview";
@@ -130,6 +137,8 @@ function emptyKpiStrings() {
     cpc: "",
     frequency: "",
     roas: "",
+    clicks: "",
+    impressions: "",
   };
 }
 
@@ -142,7 +151,67 @@ function etichettaCampagnaDropdown(c: Campagna): string {
   return nome || cliente || "Campagna";
 }
 
-function campiKpiPerObiettivo(
+function testoKpiDerivato(
+  key: keyof ReturnType<typeof emptyKpiStrings>,
+  funnel: ReturnType<typeof deriveFunnelMetrics>,
+): string | null {
+  if (key === "ctr" && funnel.sources.ctr === "derived") {
+    return formatFunnelPercent(funnel.ctr);
+  }
+  if (key === "cpc" && funnel.sources.cpc === "derived") {
+    return formatEuro(funnel.cpc);
+  }
+  if (key === "cpm" && funnel.sources.cpm === "derived") {
+    return formatEuro(funnel.cpm);
+  }
+  return null;
+}
+
+function CampoKpiForm({
+  label,
+  derived,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  derived: string | null;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  if (derived) {
+    return (
+      <div className="block min-w-0">
+        <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
+          {label}
+        </span>
+        <p className={`${inputClass} bg-[var(--surface)]`}>{derived}</p>
+        <p className="mt-1 text-[11px] text-[var(--ink-muted)]">
+          Calcolato automaticamente
+        </p>
+      </div>
+    );
+  }
+  return (
+    <label className="block min-w-0">
+      <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
+        {label}
+      </span>
+      <input
+        type="number"
+        min={0}
+        step="any"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={inputClass}
+        placeholder={placeholder}
+      />
+    </label>
+  );
+}
+
+function campiBloccoRisultato(
   objective: CampagnaObjective,
   metricLabel: string,
 ): ReadonlyArray<readonly [keyof ReturnType<typeof emptyKpiStrings>, string]> {
@@ -152,23 +221,26 @@ function campiKpiPerObiettivo(
     ["spend", "Spesa (€)"],
     ["results", "Risultati"],
   ];
+  if (objective === "AWARENESS") {
+    return [...base, ["cpm", "CPM (€)"]];
+  }
+  return [...base, ["costPerResult", `${metricLabel} (€)`]];
+}
 
+function campiBloccoDiagnostica(
+  objective: CampagnaObjective,
+): ReadonlyArray<readonly [keyof ReturnType<typeof emptyKpiStrings>, string]> {
   if (objective === "AWARENESS") {
     return [
-      ...base,
-      ["cpm", "CPM (€)"],
       ["ctr", "CTR (%)"],
       ["cpc", "CPC (€)"],
       ["frequency", "Frequenza"],
     ];
   }
-
   return [
-    ...base,
-    ["costPerResult", `${metricLabel} (€)`],
     ["ctr", "CTR (%)"],
-    ["cpm", "CPM (€)"],
     ["cpc", "CPC (€)"],
+    ["cpm", "CPM (€)"],
     ["frequency", "Frequenza"],
     ...(objective === "ECOMMERCE"
       ? ([["roas", "ROAS (x)"]] as const)
@@ -374,6 +446,46 @@ function RisultatiPage() {
 
   const campagnaAttiva = manuale ? null : campagnaDettaglio;
 
+  const conteggiFunnel = useMemo(() => {
+    const clicksParse = parseOptionalNonNegativeInteger(kpiForm.clicks);
+    const impressionsParse = parseOptionalNonNegativeInteger(
+      kpiForm.impressions,
+    );
+    const errors: string[] = [];
+    if (!clicksParse.ok) errors.push(clicksParse.error);
+    if (!impressionsParse.ok) errors.push(impressionsParse.error);
+    const clicks = clicksParse.ok ? clicksParse.value : null;
+    const impressions = impressionsParse.ok ? impressionsParse.value : null;
+    return {
+      clicks,
+      impressions,
+      errors: [...new Set(errors)],
+      warnings: avvisiConteggiFunnel(clicks, impressions),
+    };
+  }, [kpiForm.clicks, kpiForm.impressions]);
+
+  const funnelMetrics = useMemo(() => {
+    const spend = parseNum(kpiForm.spend);
+    const results = parseNum(kpiForm.results);
+    return deriveFunnelMetrics({
+      spend,
+      results,
+      clicks: conteggiFunnel.clicks,
+      impressions: conteggiFunnel.impressions,
+      manualCtr: parseCtrInput(kpiForm.ctr),
+      manualCpc: parseNum(kpiForm.cpc),
+      manualCpm: parseNum(kpiForm.cpm),
+    });
+  }, [
+    kpiForm.spend,
+    kpiForm.results,
+    kpiForm.ctr,
+    kpiForm.cpc,
+    kpiForm.cpm,
+    conteggiFunnel.clicks,
+    conteggiFunnel.impressions,
+  ]);
+
   const kpis: ControlRoomKpis = useMemo(() => {
     const spend = parseNum(kpiForm.spend);
     const results = parseNum(kpiForm.results);
@@ -384,13 +496,16 @@ function RisultatiPage() {
       spend,
       results,
       costPerResult: costManual ?? costAuto,
-      ctr: parseCtrInput(kpiForm.ctr),
-      cpm: parseNum(kpiForm.cpm),
-      cpc: parseNum(kpiForm.cpc),
+      ctr: funnelMetrics.ctr,
+      cpm: funnelMetrics.cpm,
+      cpc: funnelMetrics.cpc,
       frequency: parseNum(kpiForm.frequency),
       roas: roasManual ?? analisiAi?.roas ?? null,
+      clicks: conteggiFunnel.clicks,
+      impressions: conteggiFunnel.impressions,
+      conversionRate: funnelMetrics.conversionRate,
     };
-  }, [kpiForm, analisiAi]);
+  }, [kpiForm, analisiAi, funnelMetrics, conteggiFunnel]);
 
   const sogliaOverride = parseNum(sogliaManuale);
 
@@ -514,6 +629,8 @@ function RisultatiPage() {
       frequency: analisi.frequenza > 0 ? String(analisi.frequenza) : "",
       roas:
         analisi.roas != null && analisi.roas > 0 ? String(analisi.roas) : "",
+      clicks: "",
+      impressions: "",
     });
   }
 
@@ -596,6 +713,11 @@ function RisultatiPage() {
       return;
     }
 
+    if (conteggiFunnel.errors.length > 0) {
+      setErroreSalvataggio(conteggiFunnel.errors[0] ?? null);
+      return;
+    }
+
     setSalvataggio(true);
     setErroreSalvataggio(null);
     setOkSalvataggio(null);
@@ -609,6 +731,8 @@ function RisultatiPage() {
         ctr: kpis.ctr,
         cpm: kpis.cpm,
         cpc: kpis.cpc,
+        clicks: conteggiFunnel.clicks,
+        impressions: conteggiFunnel.impressions,
         frequency: kpis.frequency,
         roas: kpis.roas,
         healthStatus: health.status,
@@ -1065,31 +1189,30 @@ function RisultatiPage() {
                     Non tutti i campi sono obbligatori. Se inserisci spesa e
                     risultati, il {metricLabel} si calcola automaticamente.
                   </p>
-                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <label className="block sm:col-span-2">
-                      <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
-                        Giorni attiva (opzionale)
-                      </span>
-                      <input
-                        type="number"
-                        min={1}
-                        step={1}
-                        value={giorniAttiva}
-                        onChange={(e) => setGiorniAttiva(e.target.value)}
-                        className={inputClass}
-                        placeholder="Es. 5"
-                      />
-                    </label>
-                    {campiKpiPerObiettivo(economic.objective, metricLabel).map(
+                  <label className="mt-4 block">
+                    <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
+                      Giorni attiva (opzionale)
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={giorniAttiva}
+                      onChange={(e) => setGiorniAttiva(e.target.value)}
+                      className={inputClass}
+                      placeholder="Es. 5"
+                    />
+                  </label>
+                  <p className="mt-4 text-[11px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+                    Risultato
+                  </p>
+                  <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {campiBloccoRisultato(economic.objective, metricLabel).map(
                       ([key, label]) => (
-                      <label key={key} className="block">
-                        <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
-                          {label}
-                        </span>
-                        <input
-                          type="number"
-                          min={0}
-                          step="any"
+                        <CampoKpiForm
+                          key={key}
+                          label={label}
+                          derived={testoKpiDerivato(key, funnelMetrics)}
                           value={
                             key === "costPerResult" &&
                             kpiForm.costPerResult === "" &&
@@ -1097,22 +1220,112 @@ function RisultatiPage() {
                               ? String(costoCalcolato)
                               : kpiForm[key]
                           }
-                          onChange={(e) =>
-                            setKpiForm((prev) => ({
-                              ...prev,
-                              [key]: e.target.value,
-                            }))
+                          onChange={(value) =>
+                            setKpiForm((prev) => ({ ...prev, [key]: value }))
                           }
-                          className={inputClass}
                           placeholder={
                             key === "costPerResult" && costoCalcolato != null
                               ? `Auto: ${costoCalcolato}`
                               : undefined
                           }
                         />
-                      </label>
-                    ))}
+                      ),
+                    )}
                   </div>
+                  <p className="mt-4 text-[11px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+                    Diagnostica
+                  </p>
+                  <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {campiBloccoDiagnostica(economic.objective).map(
+                      ([key, label]) => (
+                        <CampoKpiForm
+                          key={key}
+                          label={label}
+                          derived={testoKpiDerivato(key, funnelMetrics)}
+                          value={kpiForm[key]}
+                          onChange={(value) =>
+                            setKpiForm((prev) => ({ ...prev, [key]: value }))
+                          }
+                        />
+                      ),
+                    )}
+                  </div>
+                  {funnelMetrics.mismatches.length > 0 ? (
+                    <p className="mt-3 text-xs leading-relaxed text-[var(--ink-muted)]">
+                      {funnelMetrics.mismatches.map((m) => m.message).join(" ")}
+                    </p>
+                  ) : null}
+                  <details className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+                    <summary className="cursor-pointer text-xs font-medium text-[var(--ink-muted)]">
+                      Metriche di funnel
+                    </summary>
+                    <p className="mt-2 text-xs text-[var(--ink-muted)]">
+                      {economic.objective === "AWARENESS"
+                        ? "Facoltative · le impression aiutano a contestualizzare il CPM"
+                        : "Facoltative · migliorano la precisione della diagnosi"}
+                    </p>
+                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <label className="block min-w-0">
+                        <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
+                          Click
+                        </span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          value={kpiForm.clicks}
+                          onChange={(e) =>
+                            setKpiForm((prev) => ({
+                              ...prev,
+                              clicks: e.target.value,
+                            }))
+                          }
+                          className={inputClass}
+                          placeholder="Opzionale"
+                        />
+                      </label>
+                      <label className="block min-w-0">
+                        <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
+                          Impression
+                        </span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          value={kpiForm.impressions}
+                          onChange={(e) =>
+                            setKpiForm((prev) => ({
+                              ...prev,
+                              impressions: e.target.value,
+                            }))
+                          }
+                          className={inputClass}
+                          placeholder="Opzionale"
+                        />
+                      </label>
+                    </div>
+                    {etichettaTassoClickRisultato(economic.objective) &&
+                    funnelMetrics.conversionRate != null ? (
+                      <p className="mt-3 text-xs text-[var(--ink-muted)]">
+                        {etichettaTassoClickRisultato(economic.objective)}
+                        {": "}
+                        {formatFunnelPercent(funnelMetrics.conversionRate)}
+                      </p>
+                    ) : null}
+                    {conteggiFunnel.errors.length > 0 ? (
+                      <p className="mt-2 text-xs text-[#B42318]">
+                        {conteggiFunnel.errors[0]}
+                      </p>
+                    ) : null}
+                    {conteggiFunnel.warnings.map((w) => (
+                      <p
+                        key={w}
+                        className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]"
+                      >
+                        {w}
+                      </p>
+                    ))}
+                  </details>
                 </div>
               ) : (
                 <div className="mt-5">

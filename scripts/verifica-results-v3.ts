@@ -26,6 +26,11 @@ import {
   type ControlRoomKpis,
 } from "@/lib/control-room";
 import type { Campagna } from "@/types/campagne";
+import {
+  avvisiConteggiFunnel,
+  deriveFunnelMetrics,
+  parseOptionalNonNegativeInteger,
+} from "@/lib/funnel-metrics";
 
 const ROOT = process.cwd();
 
@@ -71,6 +76,9 @@ async function main() {
       cpc: null,
       frequency: null,
       roas: null,
+      clicks: null,
+      impressions: null,
+      conversionRate: null,
       ...partial,
     };
   }
@@ -656,21 +664,344 @@ async function main() {
       checksDb.includes("impressions: input.impressions ?? null"),
       "insert persiste impressions",
     ) &&
-    assert(checksDb.includes('.select("*")'), "select * include nuove colonne") &&
-    assert(
-      !legge("src/app/risultati/page.tsx").includes('["clicks"'),
-      "M0.3A nessuna UI clicks nel form",
-    ) &&
-    assert(
-      !legge("src/lib/control-room.ts").includes("clicks:"),
-      "M0.3A nessun cambio engine ControlRoomKpis",
-    );
+    assert(checksDb.includes('.select("*")'), "select * include nuove colonne");
 
+  const funnelLib = legge("src/lib/funnel-metrics.ts");
   const risultati = legge("src/app/risultati/page.tsx");
+  const controlRoomSrc = legge("src/lib/control-room.ts");
   const campagnaPage = legge("src/app/campagne/[id]/page.tsx");
   const pannello = legge("src/components/campagne/PannelloDiagnosiPerformance.tsx");
   const screenshotRoute = legge("src/app/api/analyze-screenshot/route.ts");
   const screenshotType = legge("src/types/screenshot-analysis.ts");
+
+  const caseA03b = deriveFunnelMetrics({
+    spend: null,
+    results: null,
+    clicks: null,
+    impressions: null,
+    manualCtr: 1.4,
+    manualCpc: 2,
+    manualCpm: 18,
+  });
+  const caseB03b = deriveFunnelMetrics({
+    spend: 200,
+    results: null,
+    clicks: 100,
+    impressions: 10_000,
+    manualCtr: null,
+    manualCpc: null,
+    manualCpm: null,
+  });
+  const caseC03b = deriveFunnelMetrics({
+    spend: 200,
+    results: 0,
+    clicks: 0,
+    impressions: 10_000,
+    manualCtr: null,
+    manualCpc: null,
+    manualCpm: null,
+  });
+  const caseD03b = deriveFunnelMetrics({
+    spend: 200,
+    results: null,
+    clicks: 100,
+    impressions: null,
+    manualCtr: 1.4,
+    manualCpc: null,
+    manualCpm: 18,
+  });
+  const caseE03b = deriveFunnelMetrics({
+    spend: 200,
+    results: null,
+    clicks: 100,
+    impressions: 10_000,
+    manualCtr: 4,
+    manualCpc: 5,
+    manualCpm: 50,
+  });
+  const caseF03b = deriveFunnelMetrics({
+    spend: null,
+    results: 10,
+    clicks: 100,
+    impressions: null,
+    manualCtr: null,
+    manualCpc: null,
+    manualCpm: null,
+  });
+  const parseEmpty = parseOptionalNonNegativeInteger("");
+  const parseZero = parseOptionalNonNegativeInteger("0");
+  const parseDecimal = parseOptionalNonNegativeInteger("1.5");
+  const warnOver = avvisiConteggiFunnel(110, 100);
+
+  const persistEmpty = payloadNuovoCampaignCheck(
+    {
+      campaignId: "c1",
+      daysActive: 7,
+      spend: 200,
+      resultsCount: 2,
+      primaryCost: 100,
+      ctr: caseA03b.ctr,
+      cpm: caseA03b.cpm,
+      cpc: caseA03b.cpc,
+      frequency: null,
+      roas: null,
+      clicks: parseEmpty.ok ? parseEmpty.value : 0,
+      impressions: parseEmpty.ok ? parseEmpty.value : 0,
+      healthStatus: "GREEN",
+      signal: null,
+      actions: [],
+      note: null,
+      objective: "LEADS",
+      threshold: 80,
+      thresholdMode: "BREAK_EVEN",
+      source: "MANUAL",
+    },
+    "u1",
+  );
+  const persistZero = payloadNuovoCampaignCheck(
+    {
+      campaignId: "c1",
+      daysActive: 7,
+      spend: 200,
+      resultsCount: 2,
+      primaryCost: 100,
+      ctr: caseC03b.ctr,
+      cpm: caseC03b.cpm,
+      cpc: caseC03b.cpc,
+      frequency: null,
+      roas: null,
+      clicks: parseZero.ok ? parseZero.value : null,
+      impressions: 10_000,
+      healthStatus: "GREEN",
+      signal: null,
+      actions: [],
+      note: null,
+      objective: "LEADS",
+      threshold: 80,
+      thresholdMode: "BREAK_EVEN",
+      source: "MANUAL",
+    },
+    "u1",
+  );
+  const persistCanonical = payloadNuovoCampaignCheck(
+    {
+      campaignId: "c1",
+      daysActive: 7,
+      spend: 200,
+      resultsCount: 2,
+      primaryCost: 100,
+      ctr: caseE03b.ctr,
+      cpm: caseE03b.cpm,
+      cpc: caseE03b.cpc,
+      frequency: null,
+      roas: null,
+      clicks: 100,
+      impressions: 10_000,
+      healthStatus: "GREEN",
+      signal: null,
+      actions: [],
+      note: null,
+      objective: "LEADS",
+      threshold: 80,
+      thresholdMode: "BREAK_EVEN",
+      source: "MANUAL",
+    },
+    "u1",
+  );
+
+  const healthAwBase = calcolaHealthStatus(20, 12.5, "efficiency", {
+    daysActive: 10,
+    resultsCount: 5,
+  });
+  const healthAwWithCounts = calcolaHealthStatus(20, 12.5, "efficiency", {
+    daysActive: 10,
+    resultsCount: 5,
+  });
+  const kpisAw = kpis({
+    spend: 200,
+    cpm: 20,
+    ctr: 1,
+    cpc: 2,
+    clicks: 100,
+    impressions: 10_000,
+    conversionRate: 10,
+    results: 5,
+  });
+  const diagAw = diagnosticaDeterministica(
+    kpisAw,
+    healthAwWithCounts,
+    buildEconomicContext(
+      {
+        id: "aw",
+        nomeCliente: "Aw",
+        iniziali: "AW",
+        stato: "Attiva",
+        giudizio: "Ancora presto",
+        objective: "AWARENESS",
+        nomeCampagna: "Aw",
+        estimatedCpm: 12.5,
+      } as Campagna,
+      kpisAw,
+      12.5,
+      "AWARENESS",
+    ),
+  );
+
+  const mixedOld = deriveFunnelMetrics({
+    spend: 200,
+    results: 10,
+    clicks: null,
+    impressions: null,
+    manualCtr: 1.4,
+    manualCpc: 2,
+    manualCpm: 18,
+  });
+  const mixedNew = deriveFunnelMetrics({
+    spend: 200,
+    results: 10,
+    clicks: 100,
+    impressions: 10_000,
+    manualCtr: null,
+    manualCpc: null,
+    manualCpm: null,
+  });
+  const mixedMapOld = mappaCampaignCheckDaRow(rowCheck());
+  const mixedMapNew = mappaCampaignCheckDaRow(
+    rowCheck({ clicks: 100, impressions: 10_000, ctr: 1, cpc: 2, cpm: 20 }),
+  );
+
+  const caseA03bOk =
+    assert(caseA03b.ctr === 1.4, "M0.3B CASE A CTR manual") &&
+    assert(caseA03b.cpc === 2, "M0.3B CASE A CPC manual") &&
+    assert(caseA03b.cpm === 18, "M0.3B CASE A CPM manual") &&
+    assert(caseA03b.sources.ctr === "manual", "M0.3B CASE A source manual");
+  const caseB03bOk =
+    assert(caseB03b.ctr === 1, "M0.3B CASE B CTR 1") &&
+    assert(caseB03b.cpc === 2, "M0.3B CASE B CPC 2") &&
+    assert(caseB03b.cpm === 20, "M0.3B CASE B CPM 20") &&
+    assert(caseB03b.sources.ctr === "derived", "M0.3B CASE B derived");
+  const caseC03bOk =
+    assert(caseC03b.ctr === 0, "M0.3B CASE C CTR 0") &&
+    assert(caseC03b.cpc === null, "M0.3B CASE C CPC null") &&
+    assert(caseC03b.cpm === 20, "M0.3B CASE C CPM 20") &&
+    assert(caseC03b.conversionRate === null, "M0.3B CASE C CR null");
+  const caseD03bOk =
+    assert(caseD03b.cpc === 2, "M0.3B CASE D CPC derived") &&
+    assert(caseD03b.ctr === 1.4, "M0.3B CASE D CTR fallback") &&
+    assert(caseD03b.cpm === 18, "M0.3B CASE D CPM fallback");
+  const caseE03bOk =
+    assert(caseE03b.ctr === 1, "M0.3B CASE E canonical CTR") &&
+    assert(caseE03b.cpc === 2, "M0.3B CASE E canonical CPC") &&
+    assert(caseE03b.cpm === 20, "M0.3B CASE E canonical CPM") &&
+    assert(caseE03b.mismatches.length === 3, "M0.3B CASE E 3 mismatch") &&
+    assert(
+      caseE03b.mismatches.some((m) => m.message.includes("CTR ricalcolato")),
+      "M0.3B CASE E CTR warning copy",
+    );
+  const caseF03bOk = assert(
+    caseF03b.conversionRate === 10,
+    "M0.3B CASE F CR 10",
+  );
+  const caseG03bOk =
+    assert(parseEmpty.ok && parseEmpty.value === null, "M0.3B CASE G empty → null") &&
+    assert(persistEmpty.clicks === null, "M0.3B CASE G persist clicks null") &&
+    assert(
+      persistEmpty.impressions === null,
+      "M0.3B CASE G persist impressions null",
+    );
+  const caseH03bOk =
+    assert(parseZero.ok && parseZero.value === 0, "M0.3B CASE H parse 0") &&
+    assert(persistZero.clicks === 0, "M0.3B CASE H persist 0");
+  const caseI03bOk = assert(
+    !parseDecimal.ok,
+    "M0.3B CASE I decimal clicks fail",
+  );
+  const caseJ03bOk =
+    assert(warnOver.length > 0, "M0.3B CASE J warning clicks > impressions") &&
+    assert(
+      parseOptionalNonNegativeInteger("110").ok &&
+        parseOptionalNonNegativeInteger("100").ok,
+      "M0.3B CASE J save still valid integers",
+    );
+  const caseK03bOk =
+    assert(
+      healthAwBase.status === healthAwWithCounts.status,
+      "M0.3B CASE K health invariato",
+    ) &&
+    assert(healthAwWithCounts.mode === "efficiency", "M0.3B CASE K CPM mode") &&
+    assert(
+      !diagAw.evidence.some((e) =>
+        e.toLowerCase().includes("click → risultato"),
+      ),
+      "M0.3B CASE K AWARENESS no CR in diagnosis evidence",
+    );
+  const caseL03bOk =
+    assert(mixedOld.ctr === 1.4, "M0.3B CASE L legacy CTR fallback") &&
+    assert(mixedNew.ctr === 1, "M0.3B CASE L new derived CTR") &&
+    assert(mixedMapOld?.clicks === null, "M0.3B CASE L old map clicks null") &&
+    assert(mixedMapNew?.clicks === 100, "M0.3B CASE L new map clicks") &&
+    assert(mixedMapOld != null && mixedMapNew != null, "M0.3B CASE L no crash");
+
+  const persistCanonicalOk =
+    assert(persistCanonical.ctr === 1, "M0.3B persist canonical CTR") &&
+    assert(persistCanonical.cpc === 2, "M0.3B persist canonical CPC") &&
+    assert(persistCanonical.cpm === 20, "M0.3B persist canonical CPM") &&
+    assert(
+      !funnelLib.includes("conversion_rate"),
+      "M0.3B CR non ha colonna DB",
+    );
+
+  const m03bUiOk =
+    assert(risultati.includes("Metriche di funnel"), "UI sezione funnel") &&
+    assert(risultati.includes("Facoltative"), "funnel microcopy secondaria") &&
+    assert(risultati.includes("campiBloccoRisultato"), "gerarchia blocco risultato") &&
+    assert(
+      risultati.includes("campiBloccoDiagnostica"),
+      "gerarchia blocco diagnostica",
+    ) &&
+    assert(
+      risultati.includes("Calcolato automaticamente"),
+      "UX derived read-only",
+    ) &&
+    assert(risultati.includes("kpiForm.clicks"), "UI stato clicks") &&
+    assert(risultati.includes("kpiForm.impressions"), "UI stato impressions") &&
+    assert(
+      !risultati.includes('["clicks"'),
+      "clicks non nei KPI principali",
+    ) &&
+    assert(
+      !screenshotRoute.includes("clicks") &&
+        !screenshotType.includes("clicks"),
+      "M0.3C screenshot non toccato",
+    ) &&
+    assert(
+      controlRoomSrc.includes("conversionRate: number | null"),
+      "ControlRoomKpis.conversionRate",
+    ) &&
+    assert(
+      funnelLib.includes("export function deriveFunnelMetrics"),
+      "helper canonico unico",
+    ) &&
+    assert(
+      !controlRoomSrc.includes("clicks / impressions"),
+      "formule non duplicate in control-room",
+    );
+
+  const m03bOk =
+    caseA03bOk &&
+    caseB03bOk &&
+    caseC03bOk &&
+    caseD03bOk &&
+    caseE03bOk &&
+    caseF03bOk &&
+    caseG03bOk &&
+    caseH03bOk &&
+    caseI03bOk &&
+    caseJ03bOk &&
+    caseK03bOk &&
+    caseL03bOk &&
+    persistCanonicalOk &&
+    m03bUiOk;
 
   const unifiedOk =
     assert(risultati.includes("calcolaHealthStatus"), "/risultati usa control-room") &&
@@ -857,6 +1188,19 @@ async function main() {
   sezione("M0.2.1 UI SEMANTICS", m021Ok);
   sezione("M0.2.2 APPROVAL SEMANTICS", m022Ok);
   sezione("M0.3A CLICKS IMPRESSIONS SCHEMA", m03aOk);
+  sezione("M0.3B FUNNEL DERIVATION", m03bOk);
+  console.log(`M0.3B CASE A: ${caseA03bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3B CASE B: ${caseB03bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3B CASE C: ${caseC03bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3B CASE D: ${caseD03bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3B CASE E: ${caseE03bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3B CASE F: ${caseF03bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3B CASE G: ${caseG03bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3B CASE H: ${caseH03bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3B CASE I: ${caseI03bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3B CASE J: ${caseJ03bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3B CASE K: ${caseK03bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3B CASE L: ${caseL03bOk ? "PASS" : "FAIL"}`);
   console.log(`M0.3A CASE A: ${caseA03 ? "PASS" : "FAIL"}`);
   console.log(`M0.3A CASE B: ${caseB03 ? "PASS" : "FAIL"}`);
   console.log(`M0.3A CASE C: ${caseC03 ? "PASS" : "FAIL"}`);

@@ -64,11 +64,16 @@ export type ControlRoomKpis = {
   results: number | null;
   /** Costo per risultato (CPL/CPA) — può essere calcolato da spend/results. */
   costPerResult: number | null;
+  /** CTR/CPC/CPM già canonici (derived preferred, manual fallback). */
   ctr: number | null;
   cpm: number | null;
   cpc: number | null;
   frequency: number | null;
   roas: number | null;
+  clicks: number | null;
+  impressions: number | null;
+  /** Runtime only: results/clicks × 100. Non persistito. */
+  conversionRate: number | null;
 };
 
 export type EconomicContext = {
@@ -254,7 +259,7 @@ export function valutaCompleteness(
   if (hasCtr && hasCpc && hasCpm && hasFreq && roasOk) {
     return "INTERMEDIATE";
   }
-  // FULL è riservato a metriche P0/P1 non ancora persistite (click, impression, …).
+  // FULL resta riservato. clicks/impressions non alzano completeness a FULL.
   return "MINIMUM";
 }
 
@@ -806,6 +811,19 @@ export function diagnosticaDeterministica(
   }
 
   if (sopraSoglia && ctrHealthy && cpcNotElevated) {
+    const postClickEvidence = [
+      "CTR in linea col riferimento iniziale",
+      "CPC non elevato rispetto alla soglia",
+    ];
+    if (
+      economic.objective !== "AWARENESS" &&
+      kpis.conversionRate != null &&
+      Number.isFinite(kpis.conversionRate)
+    ) {
+      postClickEvidence.push(
+        `Tasso click → risultato calcolato: ${kpis.conversionRate.toFixed(2)}%`,
+      );
+    }
     return packDiagnosis({
       ...base,
       signal: "conversione_post_click",
@@ -815,7 +833,7 @@ export function diagnosticaDeterministica(
       hint: "Non è una conclusione sulla landing: è un’ipotesi da verificare su form, offerta e flusso.",
       area: "POST_CLICK",
       confidence: "MEDIUM",
-      evidence: ["CTR in linea col riferimento iniziale", "CPC non elevato rispetto alla soglia"],
+      evidence: postClickEvidence,
     });
   }
 
