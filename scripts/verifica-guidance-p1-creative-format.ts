@@ -14,18 +14,18 @@ import {
   ID_CREATIVE_MANCA_9_16,
   ID_CREATIVE_RATIO_NON_IDEALE,
   generaGuidanceCreativita,
+  haFormatoOrizzontale,
+  haRatioNonIdeale,
   type CreativeFormatSnapshot,
 } from "@/lib/qualita-creativita";
 
 let falliti = 0;
 const esiti: Record<string, boolean> = {
-  "ASSET MISSING GUIDANCE": true,
+  "DUPLICATE RATIO REMOVED": true,
   "9:16 GUIDANCE": true,
-  "LANDSCAPE GUIDANCE": true,
-  "RATIO GUIDANCE": true,
+  LANDSCAPE: true,
+  "ASSET MISSING": true,
   "SILENT GOOD CASE": true,
-  "UI CARD": true,
-  "NO PERFORMANCE CLAIMS": true,
   REGRESSIONS: true,
 };
 
@@ -84,26 +84,28 @@ function testiGuidance(items: { title: string; description: string }[]): string 
     .toLowerCase();
 }
 
-console.log("=== ASSET MISSING GUIDANCE ===");
-const gVuoto = generaGuidanceCreativita({
-  creativita: [],
+function idsDi(items: { id: string }[]): string[] {
+  return items.map((i) => i.id);
+}
+
+console.log("=== DUPLICATE RATIO REMOVED ===");
+mark(
+  "DUPLICATE RATIO REMOVED",
+  haRatioNonIdeale([RATIO_STRANO]),
+  "CASE 1: la diagnosi tecnica ratio resta vera",
+);
+const gRatio = generaGuidanceCreativita({
+  creativita: [RATIO_STRANO],
   objective: "LEADS",
 });
 mark(
-  "ASSET MISSING GUIDANCE",
-  gVuoto.length === 1 &&
-    gVuoto[0]?.id === ID_CREATIVE_ASSET_ASSENTE &&
-    gVuoto[0].level === "SUGGESTION" &&
-    gVuoto[0].title === "Aggiungi una creatività." &&
-    gVuoto[0].field === "creativita" &&
-    gVuoto[0].step === 4,
-  "TEST 1: LEADS senza asset → SUGGESTION, non BLOCKER",
-);
-mark(
-  "ASSET MISSING GUIDANCE",
-  generaGuidanceCreativita({ creativita: [], objective: "ECOMMERCE" })
-    .length === 0,
-  "ECOMMERCE senza asset: nessuna guidance missing (solo LEADS)",
+  "DUPLICATE RATIO REMOVED",
+  gRatio.length === 1 &&
+    gRatio[0]?.id === ID_CREATIVE_MANCA_9_16 &&
+    gRatio[0].title === "Ti manca una versione verticale." &&
+    !idsDi(gRatio).includes(ID_CREATIVE_RATIO_NON_IDEALE) &&
+    !testiGuidance(gRatio).includes("può essere adattato meglio"),
+  "CASE 1: Affianco mostra SOLO manca 9:16, non il ratio del checker",
 );
 
 console.log("\n=== 9:16 GUIDANCE ===");
@@ -116,8 +118,8 @@ mark(
   gSolo11.length === 1 &&
     gSolo11[0]?.id === ID_CREATIVE_MANCA_9_16 &&
     gSolo11[0].title === "Ti manca una versione verticale." &&
-    !/ctr|conversion|perform/i.test(testiGuidance(gSolo11)),
-  "TEST 2: solo 1:1 → manca 9:16, nessun claim performance",
+    !idsDi(gSolo11).includes(ID_CREATIVE_RATIO_NON_IDEALE),
+  "CASE 2: solo 1:1 → Ti manca una versione verticale.",
 );
 
 console.log("\n=== SILENT GOOD CASE ===");
@@ -136,54 +138,60 @@ const g45e916 = generaGuidanceCreativita({
 mark(
   "SILENT GOOD CASE",
   gBuono.length === 0 && gSolo916.length === 0 && g45e916.length === 0,
-  "TEST 3: 1:1+9:16, solo 9:16, 4:5+9:16 → silenzio",
+  "CASE 3: 1:1+9:16, solo 9:16, 4:5+9:16 → silenzio",
 );
 
-console.log("\n=== LANDSCAPE GUIDANCE ===");
+console.log("\n=== ASSET MISSING ===");
+const gVuoto = generaGuidanceCreativita({
+  creativita: [],
+  objective: "LEADS",
+});
+mark(
+  "ASSET MISSING",
+  gVuoto.length === 1 &&
+    gVuoto[0]?.id === ID_CREATIVE_ASSET_ASSENTE &&
+    gVuoto[0].level === "SUGGESTION" &&
+    gVuoto[0].title === "Aggiungi una creatività." &&
+    gVuoto[0].field === "creativita" &&
+    gVuoto[0].step === 4,
+  "CASE 4: LEADS senza asset → Aggiungi una creatività.",
+);
+mark(
+  "ASSET MISSING",
+  generaGuidanceCreativita({ creativita: [], objective: "ECOMMERCE" })
+    .length === 0,
+  "ECOMMERCE senza asset: nessuna guidance missing (solo LEADS)",
+);
+
+console.log("\n=== LANDSCAPE ===");
+mark(
+  "LANDSCAPE",
+  haFormatoOrizzontale([LANDSCAPE]),
+  "CASE 5: diagnosi tecnica landscape resta vera",
+);
 const gLandscape = generaGuidanceCreativita({
   creativita: [LANDSCAPE],
   objective: "LEADS",
 });
-const idsLandscape = gLandscape.map((i) => i.id);
 mark(
-  "LANDSCAPE GUIDANCE",
-  idsLandscape.includes(ID_CREATIVE_LANDSCAPE) &&
-    gLandscape.find((i) => i.id === ID_CREATIVE_LANDSCAPE)?.title ===
-      "Il formato è molto orizzontale." &&
-    !idsLandscape.includes(ID_CREATIVE_RATIO_NON_IDEALE),
-  "TEST 4: landscape → suggestion orizzontale, senza duplicare ratio",
+  "LANDSCAPE",
+  gLandscape.length === 1 &&
+    gLandscape[0]?.id === ID_CREATIVE_MANCA_9_16 &&
+    !idsDi(gLandscape).includes(ID_CREATIVE_LANDSCAPE) &&
+    !idsDi(gLandscape).includes(ID_CREATIVE_RATIO_NON_IDEALE),
+  "CASE 5: landscape → solo manca 9:16, niente duplicato orizzontale/ratio",
 );
-mark(
-  "LANDSCAPE GUIDANCE",
-  idsLandscape.includes(ID_CREATIVE_MANCA_9_16),
-  "Aurora C: landscape include anche manca 9:16",
-);
-const visLandscape = selezionaGuidanceDaMostrare(
-  gLandscape as Parameters<typeof selezionaGuidanceDaMostrare>[0],
-);
-mark(
-  "LANDSCAPE GUIDANCE",
-  visLandscape.principale?.id === ID_CREATIVE_LANDSCAPE &&
-    visLandscape.secondari.length <= 2,
-  "landscape è principale; max 2 secondari",
-);
-
-console.log("\n=== RATIO GUIDANCE ===");
-const gRatio = generaGuidanceCreativita({
-  creativita: [RATIO_STRANO],
+const gLandscapeCon916 = generaGuidanceCreativita({
+  creativita: [LANDSCAPE, STORIES],
   objective: "LEADS",
 });
 mark(
-  "RATIO GUIDANCE",
-  gRatio.some(
-    (i) =>
-      i.id === ID_CREATIVE_RATIO_NON_IDEALE &&
-      i.title === "Il formato può essere adattato meglio.",
-  ) && !gRatio.some((i) => i.id === ID_CREATIVE_LANDSCAPE),
-  "TEST 5: ratio non Meta (non landscape) → adattamento",
+  "LANDSCAPE",
+  gLandscapeCon916.length === 0,
+  "landscape + 9:16: checker copre l'orizzontale, Affianco tace",
 );
 
-console.log("\n=== NO PERFORMANCE CLAIMS ===");
+console.log("\n=== REGRESSIONS ===");
 const tuttiTesti = testiGuidance([
   ...gVuoto,
   ...gSolo11,
@@ -191,53 +199,41 @@ const tuttiTesti = testiGuidance([
   ...gRatio,
 ]);
 mark(
-  "NO PERFORMANCE CLAIMS",
+  "REGRESSIONS",
   LINGUAGGIO_PERFORMANCE.every((p) => !tuttiTesti.includes(p)),
-  "TEST 6: nessun claim CTR/CPL/longevità/performance nei messaggi",
+  "nessun claim CTR/CPL/longevità/performance nei messaggi",
 );
-const helperSrc = src("src/lib/qualita-creativita.ts");
-mark(
-  "NO PERFORMANCE CLAIMS",
-  !helperSrc.includes('level: "BLOCKER"') &&
-    !helperSrc.includes('level: "WARNING"'),
-  "helper P1A: solo SUGGESTION/INFO, nessun BLOCKER",
-);
-
-console.log("\n=== UI CARD ===");
-const studio = src("src/components/nuova-contatti/StudioCreativo.tsx");
-mark(
-  "UI CARD",
-  studio.includes("AffiancoSuggerisce") &&
-    studio.includes("generaGuidanceCreativita") &&
-    studio.includes("dropzoneConGuidance"),
-  "card Affianco nello Step 4, vicino all'upload",
-);
-mark(
-  "UI CARD",
-  (studio.match(/<AffiancoSuggerisce/g) ?? []).length === 1 &&
-    studio.includes("dropzoneConGuidance"),
-  "una sola card guidance, non un box per asset",
-);
-
-console.log("\n=== REGRESSIONS ===");
 const helper = src("src/lib/qualita-creativita.ts");
+const checker = src(
+  "src/components/nuova-contatti/ControlloFormatoCreativita.tsx",
+);
+const dropzone = src("src/components/nuova-contatti/DropzoneCreativita.tsx");
+mark(
+  "REGRESSIONS",
+  checker.includes("Un asset da ottimizzare") &&
+    dropzone.includes("Formato da ottimizzare"),
+  "checker tecnico invariato",
+);
+mark(
+  "REGRESSIONS",
+  !helper.includes('level: "BLOCKER"') &&
+    gVuoto.every((i) => i.level === "SUGGESTION"),
+  "nessun BLOCKER nuovo",
+);
 mark(
   "REGRESSIONS",
   helper.includes('from "@/lib/creativita"') &&
-    helper.includes("aspectRatioMetaOk") &&
-    helper.includes("aspectRatioStoriesOk") &&
-    helper.includes("aspectRatioOrizzontale") &&
     !helper.includes("pre-lancio-check") &&
     !helper.includes("creativita-storage") &&
     !helper.includes("rischio-copy") &&
     !helper.includes("raccomanda-copy"),
-  "riusa soglie creativita.ts; non tocca storage/pre-lancio/copy risk",
+  "non tocca storage/pre-lancio/copy risk",
 );
+const studio = src("src/components/nuova-contatti/StudioCreativo.tsx");
 mark(
   "REGRESSIONS",
-  gVuoto.every((i) => i.level !== "WARNING") &&
-    !gVuoto.some((i) => (i as { level: string }).level === "BLOCKER"),
-  "TEST 7: missing asset non blocca upload/export",
+  (studio.match(/<AffiancoSuggerisce/g) ?? []).length === 1,
+  "una sola card Affianco",
 );
 const videoComeStories = generaGuidanceCreativita({
   creativita: [asset(1080, 1080, { isVideo: true })],
@@ -247,6 +243,15 @@ mark(
   "REGRESSIONS",
   videoComeStories.length === 0,
   "video conta come copertura 9:16 (allineato al pre-lancio)",
+);
+const visRatio = selezionaGuidanceDaMostrare(
+  gRatio as Parameters<typeof selezionaGuidanceDaMostrare>[0],
+);
+mark(
+  "REGRESSIONS",
+  visRatio.principale?.id === ID_CREATIVE_MANCA_9_16 &&
+    visRatio.secondari.length === 0,
+  "card: 1 principale, nessun secondario duplicato",
 );
 
 console.log("\n=== ESITO ===");

@@ -79,8 +79,8 @@ export function haFormatoOrizzontale(
 }
 
 /**
- * Ratio fuori da 1:1 / 4:5 / 9:16, e non già coperto da landscape
- * (il landscape ha guidance dedicata).
+ * Ratio fuori da 1:1 / 4:5 / 9:16, escluso il landscape
+ * (diagnosi già coperta dal checker/dropzone).
  */
 export function haRatioNonIdeale(
   creativita: CreativeFormatSnapshot[],
@@ -92,6 +92,10 @@ export function haRatioNonIdeale(
   });
 }
 
+/**
+ * Ratio e landscape restano diagnosi del checker/dropzone (Step 4).
+ * Affianco mostra solo la prossima azione, senza ripetere lo stesso warning.
+ */
 export function generaGuidanceCreativita(
   input: QualitaCreativitaInput,
 ): CreativeGuidanceItem[] {
@@ -105,30 +109,6 @@ export function generaGuidanceCreativita(
       title: "Aggiungi una creatività.",
       description:
         "Puoi continuare, ma una creatività pronta rende la campagna più completa prima dell'esportazione.",
-      field: "creativita",
-      step: 4,
-    });
-  }
-
-  if (haRatioNonIdeale(assets)) {
-    items.push({
-      id: ID_CREATIVE_RATIO_NON_IDEALE,
-      level: "SUGGESTION",
-      title: "Il formato può essere adattato meglio.",
-      description:
-        "Prepara una versione 1:1, 4:5 o 9:16 per ridurre i ritagli nei principali posizionamenti.",
-      field: "creativita",
-      step: 4,
-    });
-  }
-
-  if (haFormatoOrizzontale(assets)) {
-    items.push({
-      id: ID_CREATIVE_LANDSCAPE,
-      level: "SUGGESTION",
-      title: "Il formato è molto orizzontale.",
-      description:
-        "Verifica di avere anche una versione adatta ai posizionamenti verticali e feed mobile.",
       field: "creativita",
       step: 4,
     });
