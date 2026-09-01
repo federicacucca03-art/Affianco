@@ -15,11 +15,11 @@ type Tab = "login" | "signup";
 const PASSWORD_MIN = 6;
 
 function destinazioneSicura(raw: string | null): string {
-  if (!raw) return "/campagne";
-  if (!raw.startsWith("/")) return "/campagne";
-  if (raw.startsWith("//")) return "/campagne";
-  if (raw.startsWith("/login")) return "/campagne";
-  if (raw.startsWith("/approvazione")) return "/campagne";
+  if (!raw) return "/home";
+  if (!raw.startsWith("/")) return "/home";
+  if (raw.startsWith("//")) return "/home";
+  if (raw.startsWith("/login")) return "/home";
+  if (raw.startsWith("/approvazione")) return "/home";
   return raw;
 }
 

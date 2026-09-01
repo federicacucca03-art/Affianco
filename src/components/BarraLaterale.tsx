@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Briefcase,
+  House,
   LayoutGrid,
   LogOut,
   Settings,
@@ -25,6 +26,7 @@ type VoceNav = {
 };
 
 const voci: VoceNav[] = [
+  { etichetta: "Home", href: "/home", icona: House },
   { etichetta: "Campagne", href: "/campagne", icona: LayoutGrid },
   { etichetta: "Clienti", href: "/clienti", icona: Briefcase },
   { etichetta: "Risultati", href: "/risultati", icona: TrendingUp },
@@ -75,7 +77,7 @@ export function BarraLaterale({ aperta, onChiudi }: Props) {
       >
         <div className="flex flex-col items-center px-2">
           <Link
-            href="/campagne"
+            href="/home"
             onClick={onChiudi}
             className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-sm font-medium text-[var(--primary)] shadow-[var(--shadow-card)]"
             aria-label="Affianco"
@@ -97,8 +99,11 @@ export function BarraLaterale({ aperta, onChiudi }: Props) {
           {voci.map((voce) => {
             const Icona = voce.icona;
             const attiva =
-              voce.href !== null &&
-              (pathname === voce.href || pathname.startsWith(`${voce.href}/`));
+              voce.href === "/home"
+                ? pathname === "/home"
+                : voce.href !== null &&
+                  (pathname === voce.href ||
+                    pathname.startsWith(`${voce.href}/`));
 
             const classi = `flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
               attiva

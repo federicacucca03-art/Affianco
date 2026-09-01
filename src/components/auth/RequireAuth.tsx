@@ -18,7 +18,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return;
     if (user) return;
-    const next = pathname && pathname !== "/login" ? pathname : "/campagne";
+    const next = pathname && pathname !== "/login" ? pathname : "/home";
     const q = new URLSearchParams({ next });
     window.location.replace(`/login?${q.toString()}`);
   }, [loading, user, pathname]);

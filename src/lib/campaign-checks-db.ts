@@ -216,6 +216,24 @@ export async function leggiUltimiChecksUtente(): Promise<
   return mappa;
 }
 
+/** Check dell'utente da `isoFrom` in poi (una query, nessun N+1). */
+export async function leggiChecksUtenteDal(
+  isoFrom: string,
+): Promise<CampaignCheck[]> {
+  const uid = await requireAuthUserId();
+  const { data, error } = await supabase
+    .from("campaign_checks")
+    .select("*")
+    .eq("user_id", uid)
+    .gte("created_at", isoFrom)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as CampaignCheckRow[])
+    .map(mappaDaRow)
+    .filter((c): c is CampaignCheck => Boolean(c));
+}
+
 export async function inserisciCampaignCheck(
   input: NuovoCampaignCheck,
 ): Promise<CampaignCheck> {
