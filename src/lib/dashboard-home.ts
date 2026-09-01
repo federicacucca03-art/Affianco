@@ -26,11 +26,21 @@ export type AttentionItem = {
   href: string;
 };
 
+export type GiornoAttivita = {
+  chiave: string;
+  data: Date;
+  count: number;
+  isToday: boolean;
+  lettera: string;
+};
+
 export type AttivitaSettimana = {
   campagneControllate: number;
   totaleCheck: number;
-  perGiorno: number[];
+  giorni: GiornoAttivita[];
 };
+
+const LETTERE_GIORNO_IT = ["D", "L", "M", "M", "G", "V", "S"] as const;
 
 const PRIORITA: Record<AttentionCategory, number> = {
   RED: 1,
@@ -164,33 +174,73 @@ export function isoInizioFinestraGiorni(
   return d.toISOString();
 }
 
+export function chiaveGiornoLocale(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export function etichettaAriaBarraAttivita(data: Date, count: number): string {
+  const quando = new Intl.DateTimeFormat("it-IT", {
+    day: "numeric",
+    month: "long",
+  }).format(data);
+  const cosa =
+    count === 1 ? "1 campagna controllata" : `${count} campagne controllate`;
+  return `${quando}: ${cosa}`;
+}
+
+/** Quota altezza barra (0 se count=0). max giornaliero = 1. */
+export function quotaAltezzaBarraAttivita(count: number, max: number): number {
+  if (count <= 0 || max <= 0) return 0;
+  return count / max;
+}
+
 export function aggregaAttivitaSettimana(
   checks: CampaignCheck[],
   now: Date = new Date(),
 ): AttivitaSettimana {
   const n = 7;
-  const perGiorno = Array.from({ length: n }, () => 0);
+  const oggi = new Date(now);
+  oggi.setHours(0, 0, 0, 0);
+
+  const giorni: GiornoAttivita[] = [];
+  const indice = new Map<string, number>();
+
+  for (let i = n - 1; i >= 0; i -= 1) {
+    const data = new Date(oggi);
+    data.setDate(oggi.getDate() - i);
+    data.setHours(0, 0, 0, 0);
+    const chiave = chiaveGiornoLocale(data);
+    indice.set(chiave, giorni.length);
+    giorni.push({
+      chiave,
+      data,
+      count: 0,
+      isToday: i === 0,
+      lettera: LETTERE_GIORNO_IT[data.getDay()],
+    });
+  }
+
+  const idsPerGiorno = giorni.map(() => new Set<string>());
   const campagne = new Set<string>();
-  const inizioOggi = new Date(now);
-  inizioOggi.setHours(0, 0, 0, 0);
+  let totaleCheck = 0;
 
   for (const check of checks) {
     const t = new Date(check.createdAt);
     if (Number.isNaN(t.getTime())) continue;
-    const inizioCheck = new Date(t);
-    inizioCheck.setHours(0, 0, 0, 0);
-    const diffGiorni = Math.round(
-      (inizioOggi.getTime() - inizioCheck.getTime()) / 86_400_000,
-    );
-    if (diffGiorni < 0 || diffGiorni >= n) continue;
-    perGiorno[n - 1 - diffGiorni] += 1;
+    const idx = indice.get(chiaveGiornoLocale(t));
+    if (idx === undefined) continue;
+    totaleCheck += 1;
+    idsPerGiorno[idx].add(check.campaignId);
     campagne.add(check.campaignId);
   }
 
   return {
     campagneControllate: campagne.size,
-    totaleCheck: perGiorno.reduce((a, b) => a + b, 0),
-    perGiorno,
+    totaleCheck,
+    giorni: giorni.map((g, i) => ({ ...g, count: idsPerGiorno[i].size })),
   };
 }
 

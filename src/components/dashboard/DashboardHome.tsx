@@ -16,9 +16,12 @@ import {
   aggregaAttivitaSettimana,
   campagneInRevisione,
   derivaAttenzione,
+  etichettaAriaBarraAttivita,
   isoInizioFinestraGiorni,
   pillGestione,
+  quotaAltezzaBarraAttivita,
   type AttentionItem,
+  type GiornoAttivita,
 } from "@/lib/dashboard-home";
 import { nomeCampagnaCard } from "@/components/risultati/ControlRoomOverview";
 import { StatoChip, type StatoChipKind } from "@/components/nuova-contatti/StatoChip";
@@ -51,17 +54,57 @@ function chipAttenzione(item: AttentionItem): {
   }
 }
 
-function MiniBars({ valori }: { valori: number[] }) {
-  const max = Math.max(1, ...valori);
+const ALTEZZA_CHART_PX = 72;
+const ALTEZZA_BARRA_VUOTA_PX = 5;
+
+function classeBarraAttivita(giorno: GiornoAttivita): string {
+  if (giorno.isToday) return "bg-[var(--primary)]";
+  if (giorno.count > 0) return "bg-[var(--accent-muted)]";
+  return "bg-[var(--primary-soft)]";
+}
+
+function MiniChartAttivita({ giorni }: { giorni: GiornoAttivita[] }) {
+  const max = Math.max(0, ...giorni.map((g) => g.count));
   return (
-    <div className="mt-auto flex h-10 items-end gap-1" aria-hidden>
-      {valori.map((v, i) => (
-        <span
-          key={i}
-          className="flex-1 rounded-t-sm bg-[var(--primary-soft)]"
-          style={{ height: `${v === 0 ? 18 : Math.max(22, (v / max) * 100)}%` }}
-        />
-      ))}
+    <div className="mt-auto w-full min-w-0 pt-5">
+      <div
+        className="flex items-end gap-1 sm:gap-1.5"
+        style={{ height: ALTEZZA_CHART_PX }}
+      >
+        {giorni.map((giorno) => {
+          const label = etichettaAriaBarraAttivita(giorno.data, giorno.count);
+          const quota = quotaAltezzaBarraAttivita(giorno.count, max);
+          const altezzaPx =
+            giorno.count === 0
+              ? ALTEZZA_BARRA_VUOTA_PX
+              : Math.round(quota * ALTEZZA_CHART_PX);
+          return (
+            <div
+              key={giorno.chiave}
+              className="flex h-full min-w-0 flex-1 flex-col items-center justify-end"
+            >
+              <span
+                role="img"
+                title={label}
+                aria-label={label}
+                className={`w-[9px] max-w-full rounded-full sm:w-[11px] ${classeBarraAttivita(giorno)}`}
+                style={{ height: altezzaPx }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex gap-1 sm:gap-1.5">
+        {giorni.map((giorno) => (
+          <span
+            key={`${giorno.chiave}-label`}
+            className="min-w-0 flex-1 text-center text-[10px] font-medium leading-none text-[var(--ink-muted)]"
+            aria-hidden
+          >
+            {giorno.lettera}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -163,14 +206,20 @@ export function DashboardHome() {
       ) : (
         <>
           <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 xl:items-stretch">
-            <section className="aff-panel-white flex min-h-[15.5rem] flex-col p-4 sm:p-5">
+            <section className="aff-panel-white flex min-h-[15.5rem] min-w-0 flex-col p-4 sm:p-5">
               <p className="text-[13px] font-medium text-[var(--primary)]">
                 Attività
               </p>
-              {attivita.campagneControllate === 0 ? (
-                <p className="mt-4 text-sm leading-relaxed text-[var(--ink-muted)]">
-                  Ancora nessun controllo questa settimana.
-                </p>
+              {attivita.totaleCheck === 0 ? (
+                <div className="mt-4 space-y-1.5">
+                  <p className="text-sm leading-relaxed text-[var(--ink)]">
+                    Ancora nessun controllo questa settimana.
+                  </p>
+                  <p className="text-[13px] leading-relaxed text-[var(--ink-muted)]">
+                    I controlli compariranno qui man mano che aggiorni le
+                    campagne.
+                  </p>
+                </div>
               ) : (
                 <>
                   <p className="mt-3 text-[26px] font-medium tabular-nums tracking-tight text-[var(--ink)]">
@@ -181,15 +230,18 @@ export function DashboardHome() {
                       ? "campagna controllata"
                       : "campagne controllate"}
                   </p>
-                  {attivita.totaleCheck > 0 ? (
+                  <p className="mt-0.5 text-xs text-[var(--ink-muted)]">
+                    negli ultimi 7 giorni
+                  </p>
+                  {attivita.totaleCheck !== attivita.campagneControllate ? (
                     <p className="mt-1 text-xs text-[var(--ink-muted)]">
                       {attivita.totaleCheck}{" "}
                       {attivita.totaleCheck === 1
-                        ? "controllo negli ultimi 7 giorni"
-                        : "controlli negli ultimi 7 giorni"}
+                        ? "controllo"
+                        : "controlli"}
                     </p>
                   ) : null}
-                  <MiniBars valori={attivita.perGiorno} />
+                  <MiniChartAttivita giorni={attivita.giorni} />
                 </>
               )}
             </section>
@@ -243,7 +295,7 @@ export function DashboardHome() {
               </ul>
             </section>
 
-            <section className="aff-panel-white flex min-h-[15.5rem] flex-col p-4 sm:p-5">
+            <section className="aff-panel-white flex min-h-[15.5rem] flex-col p-3.5 sm:p-4">
               <p className="text-[13px] font-medium text-[var(--primary)]">
                 Revisioni cliente
               </p>
@@ -266,7 +318,7 @@ export function DashboardHome() {
                       <li key={campagna.id}>
                         <Link
                           href={`/campagne/${campagna.id}`}
-                          className="flex items-start justify-between gap-2 rounded-[14px] bg-[var(--lavender-muted)]/70 px-2.5 py-2 hover:opacity-90"
+                          className="flex items-start justify-between gap-2 rounded-[14px] bg-[var(--lavender-muted)]/70 px-2 py-1.5 hover:opacity-90"
                         >
                           <div className="min-w-0">
                             <p className="text-sm font-medium leading-snug text-[var(--ink)]">
