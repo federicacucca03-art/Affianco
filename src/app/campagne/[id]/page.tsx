@@ -20,11 +20,8 @@ import { hrefModificaConfigurazione } from "@/data/percorsi-nuova-campagna";
 import { PannelloAssetStrategia } from "@/components/campagne/PannelloAssetStrategia";
 import { PannelloDiagnosiPerformance } from "@/components/campagne/PannelloDiagnosiPerformance";
 import { DiarioBordo } from "@/components/campagne/DiarioBordo";
-import {
-  emojiHealth,
-  etichettaHealth,
-  healthBadgeClasses,
-} from "@/lib/control-room";
+import { etichettaHealth } from "@/lib/control-room";
+import { StatoChip, chipDaHealth } from "@/components/nuova-contatti/StatoChip";
 import {
   leggiUltimoCheckCampagna,
   type CampaignCheck,
@@ -40,19 +37,13 @@ type TabDettaglio = "asset" | "diagnosi";
 
 function BadgeHealth({ check }: { check: CampaignCheck | null }) {
   if (!check) {
-    return (
-      <span className="inline-flex items-center gap-2 rounded-full bg-[#EEF0F3] px-4 py-2 text-base font-medium text-[#5A6578]">
-        Mai controllata
-      </span>
-    );
+    return <StatoChip kind="pending" label="Mai controllata" />;
   }
   return (
-    <span
-      className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-base font-medium ${healthBadgeClasses(check.healthStatus)}`}
-    >
-      <span aria-hidden>{emojiHealth(check.healthStatus)}</span>
-      {etichettaHealth(check.healthStatus)}
-    </span>
+    <StatoChip
+      kind={chipDaHealth(check.healthStatus)}
+      label={etichettaHealth(check.healthStatus)}
+    />
   );
 }
 
@@ -275,7 +266,7 @@ export default function DettaglioCampagnaPage() {
         {(campagna.status ?? "").toUpperCase() === "APPROVED" ? (
           <div className="mb-4 rounded-xl border border-[#E8D48A] bg-[#FFF8E7] px-4 py-3">
             <p className="text-sm font-medium text-[#9A7B0A]">
-              ✅ Approvata dal cliente
+              Approvata dal cliente
               {campagna.approvedAt
                 ? ` il ${formatDataApprovazione(campagna.approvedAt)}`
                 : ""}
@@ -286,7 +277,7 @@ export default function DettaglioCampagnaPage() {
         {(campagna.status ?? "").toUpperCase() === "REVISION_REQUESTED" ? (
           <div className="mb-4 rounded-xl border border-[#f5c9b8] bg-[#fff4f0] p-4 sm:p-5">
             <p className="text-sm font-bold text-[#C45C5C]">
-              ⚠️ Il cliente ha richiesto una modifica
+              Il cliente ha richiesto una modifica
             </p>
             {campagna.revisionNotes?.trim() ? (
               <div className="mt-3 rounded-xl border border-[var(--border)] bg-white px-4 py-3">

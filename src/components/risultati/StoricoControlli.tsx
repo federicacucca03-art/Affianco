@@ -6,22 +6,9 @@ import {
   formatDataCheck,
   formatEuro,
   trendVsPrecedente,
-  type HealthStatus,
 } from "@/lib/control-room";
 import type { CampaignCheck } from "@/lib/campaign-checks-db";
-
-function badgeClass(status: HealthStatus): string {
-  switch (status) {
-    case "GREEN":
-      return "bg-[#E8F5EE] text-[#2D6A4A]";
-    case "YELLOW":
-      return "bg-[#FFF6E5] text-[#9A6700]";
-    case "RED":
-      return "bg-[#FDEDED] text-[#B42318]";
-    default:
-      return "bg-[#EEF0F3] text-[#5A6578]";
-  }
-}
+import { StatoChip, chipDaHealth } from "@/components/nuova-contatti/StatoChip";
 
 export function StoricoControlli({
   checks,
@@ -69,11 +56,10 @@ export function StoricoControlli({
                   {formatDataCheck(check.createdAt)}
                 </td>
                 <td className="px-3 py-2.5">
-                  <span
-                    className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${badgeClass(check.healthStatus)}`}
-                  >
-                    {etichettaHealth(check.healthStatus)}
-                  </span>
+                  <StatoChip
+                    kind={chipDaHealth(check.healthStatus)}
+                    label={etichettaHealth(check.healthStatus)}
+                  />
                 </td>
                 <td className="px-3 py-2.5 font-medium text-[var(--ink)]">
                   {formatEuro(check.primaryCost)}

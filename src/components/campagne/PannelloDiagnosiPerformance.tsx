@@ -4,15 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Campagna } from "@/types/campagne";
 import {
-  emojiHealth,
   etichettaHealth,
   etichettaMetricaPrimaria,
   etichettaTrend,
   formatDataCheck,
   formatEuro,
-  healthBadgeClasses,
   trendVsPrecedente,
 } from "@/lib/control-room";
+import { StatoChip, chipDaHealth } from "@/components/nuova-contatti/StatoChip";
 import { normalizzaObjective } from "@/types/campagne";
 import {
   leggiChecksCampagna,
@@ -106,18 +105,18 @@ export function PannelloDiagnosiPerformance({
           </div>
         ) : (
           <>
-            <div
-              className={`mt-5 rounded-xl border px-4 py-4 ${healthBadgeClasses(ultimo.healthStatus)}`}
-            >
-              <p className="text-xs font-medium uppercase tracking-wide opacity-80">
-                Ultimo controllo · {formatDataCheck(ultimo.createdAt)}
-              </p>
-              <p className="mt-1 text-lg font-medium">
-                {emojiHealth(ultimo.healthStatus)}{" "}
-                {etichettaHealth(ultimo.healthStatus)}
-              </p>
+            <div className="mt-5 rounded-xl bg-white px-4 py-4 shadow-[var(--shadow-card)]">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatoChip
+                  kind={chipDaHealth(ultimo.healthStatus)}
+                  label={etichettaHealth(ultimo.healthStatus)}
+                />
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+                  Ultimo controllo · {formatDataCheck(ultimo.createdAt)}
+                </p>
+              </div>
               {trend ? (
-                <p className="mt-1 text-xs opacity-90">
+                <p className="mt-2 text-xs text-[var(--ink-muted)]">
                   vs check precedente: {etichettaTrend(trend)}
                 </p>
               ) : null}

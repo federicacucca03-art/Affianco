@@ -1,4 +1,7 @@
+"use client";
+
 import { MockBrowser } from "@/components/landing/mock/MockBrowser";
+import { StatoChip } from "@/components/nuova-contatti/StatoChip";
 
 type RigaCliente = {
   iniziali: string;
@@ -36,17 +39,6 @@ const CLIENTI: RigaCliente[] = [
   },
 ];
 
-function StatoDot({ stato }: { stato: RigaCliente["stato"] }) {
-  const color =
-    stato === "ok" ? "bg-[#3D8B57]" : "bg-[#C45C5C]";
-  return (
-    <span
-      className={`inline-block h-2 w-2 shrink-0 rounded-full ${color}`}
-      aria-hidden
-    />
-  );
-}
-
 export function MockDashboardHero() {
   return (
     <MockBrowser titolo="affianco.app/campagne">
@@ -59,15 +51,9 @@ export function MockDashboardHero() {
             I tuoi clienti attivi
           </p>
         </div>
-        <div className="flex shrink-0 gap-2 text-[10px] text-[var(--ink-muted)]">
-          <span className="inline-flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#3D8B57]" />
-            6 ok
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#C45C5C]" />
-            1 att.
-          </span>
+        <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+          <StatoChip kind="ok" label="6 ok" />
+          <StatoChip kind="critico" label="1 att." />
         </div>
       </div>
 
@@ -89,16 +75,10 @@ export function MockDashboardHero() {
                 {cliente.cplTarget}
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <StatoDot stato={cliente.stato} />
-              <span
-                className={`hidden text-[10px] font-medium sm:inline ${
-                  cliente.stato === "ok" ? "text-[#3D8B57]" : "text-[#C45C5C]"
-                }`}
-              >
-                {cliente.statoLabel}
-              </span>
-            </div>
+            <StatoChip
+              kind={cliente.stato === "ok" ? "ok" : "critico"}
+              label={cliente.statoLabel}
+            />
           </li>
         ))}
       </ul>

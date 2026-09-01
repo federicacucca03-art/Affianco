@@ -20,7 +20,6 @@ import {
   diagnosticaDeterministica,
   etichettaTrend,
   formatEuro,
-  healthBadgeClasses,
   normalizzaCtrDaApi,
   parseCtrInput,
   parseNum,
@@ -31,6 +30,7 @@ import {
   trendVsPrecedente,
   type ControlRoomKpis,
 } from "@/lib/control-room";
+import { StatoChip, chipDaHealth } from "@/components/nuova-contatti/StatoChip";
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
   leggiCampagnaDaSupabase,
@@ -951,35 +951,36 @@ function RisultatiPage() {
 
       {/* Stato economico — dopo selezione */}
       {haSelezione ? (
-        <section
-          className={`mt-6 rounded-[var(--radius)] border px-5 py-5 shadow-[var(--shadow-soft)] ${healthBadgeClasses(health.status)}`}
-        >
+        <section className="aff-panel-white mt-6 px-5 py-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide opacity-80">
+              <StatoChip
+                kind={chipDaHealth(health.status)}
+                label={health.label}
+              />
+              <p className="mt-3 text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
                 {health.mode === "efficiency"
                   ? "Controllo di efficienza"
                   : "Stato campagna"}
               </p>
-              <p className="mt-1 text-xl font-medium">{health.label}</p>
-              <p className="mt-2 max-w-xl text-sm leading-relaxed">
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-[var(--ink)]">
                 {health.explanation}
               </p>
               {health.efficiencyNote ? (
-                <p className="mt-2 max-w-xl text-xs leading-relaxed opacity-90">
+                <p className="mt-2 max-w-xl text-xs leading-relaxed text-[var(--ink-muted)]">
                   {health.efficiencyNote}
                 </p>
               ) : null}
             </div>
             {health.deltaLabel ? (
-              <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-medium">
+              <span className="rounded-full bg-[var(--lavender-muted)] px-3 py-1 text-xs font-medium text-[var(--ink)]">
                 {health.deltaLabel}
               </span>
             ) : null}
           </div>
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-xl bg-white/70 px-4 py-3">
+            <div className="rounded-xl bg-white px-4 py-3 shadow-[var(--shadow-card)]">
               <p className="text-xs text-[var(--ink-muted)]">
                 {health.mode === "efficiency"
                   ? "CPM attuale"
@@ -989,7 +990,7 @@ function RisultatiPage() {
                 {formatEuro(economic.actual)}
               </p>
             </div>
-            <div className="rounded-xl bg-white/70 px-4 py-3">
+            <div className="rounded-xl bg-white px-4 py-3 shadow-[var(--shadow-card)]">
               <p className="text-xs text-[var(--ink-muted)]">
                 {health.mode === "efficiency"
                   ? "CPM di riferimento (piano)"
@@ -1004,7 +1005,7 @@ function RisultatiPage() {
           {economic.objective === "ECOMMERCE" &&
           economic.roasAttuale != null &&
           economic.roasBreakEvenHint != null ? (
-            <div className="mt-4 rounded-xl bg-white/70 px-4 py-3 text-sm">
+            <div className="mt-4 rounded-xl bg-white px-4 py-3 text-sm shadow-[var(--shadow-card)]">
               <p className="text-xs text-[var(--ink-muted)]">
                 ROAS attuale vs break-even (da campagna)
               </p>

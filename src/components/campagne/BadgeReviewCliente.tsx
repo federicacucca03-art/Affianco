@@ -17,7 +17,6 @@ export function BadgeReviewClienteLabel({ badge }: Props) {
     <span
       className={`inline-flex shrink-0 items-center rounded-full px-3 py-1 text-xs font-medium ${stili[badge]}`}
     >
-      {badge === "Approvata" ? "✅ " : badge === "Revisione Richiesta" ? "⚠️ " : ""}
       {badge}
     </span>
   );

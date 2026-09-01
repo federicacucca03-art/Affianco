@@ -1,5 +1,7 @@
 "use client";
 
+import { StatoChip } from "@/components/nuova-contatti/StatoChip";
+
 type Props = {
   breakEvenRoas: number;
   targetRoas: number;
@@ -64,19 +66,19 @@ export function BarraRoasEcommerce({
           />
         ) : null}
       </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-[var(--ink)]">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#C45C4A]" />
-          Rosso · ROAS &lt; {breakEvenRoas}x (perdita)
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#E6A817]" />
-          Arancione · fino a {targetRoas}x (pareggio)
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#3D8B57]" />
-          Verde · ≥ {targetRoas}x (utile target)
-        </span>
+      <div className="flex flex-wrap gap-2 text-xs text-[var(--ink)]">
+        <StatoChip
+          kind="critico"
+          label={`ROAS < ${breakEvenRoas}x (perdita)`}
+        />
+        <StatoChip
+          kind="watch"
+          label={`Fino a ${targetRoas}x (pareggio)`}
+        />
+        <StatoChip
+          kind="ok"
+          label={`≥ ${targetRoas}x (utile target)`}
+        />
       </div>
     </div>
   );

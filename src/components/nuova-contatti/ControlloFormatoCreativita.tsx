@@ -4,6 +4,7 @@ import type { CreativitaAsset } from "@/lib/creativita";
 import { aspectRatioMetaOk } from "@/lib/creativita";
 import {
   chipDaEmoji,
+  chipLabelFormato,
   RigaDiagnostica,
 } from "@/components/nuova-contatti/StatoChip";
 
@@ -121,14 +122,18 @@ export function ControlloFormatoCreativita({
         Verifica aspect ratio e compatibilità feed — nessun blocco automatico.
       </p>
       <ul className="mt-4 overflow-hidden rounded-[16px] bg-white px-4">
-        {voci.map((voce) => (
-          <RigaDiagnostica
-            key={voce.label}
-            voce={voce.label}
-            kind={chipDaEmoji(voce.emoji)}
-            spiegazione={voce.messaggio}
-          />
-        ))}
+        {voci.map((voce) => {
+          const kind = chipDaEmoji(voce.emoji);
+          return (
+            <RigaDiagnostica
+              key={voce.label}
+              voce={voce.label}
+              kind={kind}
+              chipLabel={chipLabelFormato(kind)}
+              spiegazione={voce.messaggio}
+            />
+          );
+        })}
       </ul>
     </div>
   );

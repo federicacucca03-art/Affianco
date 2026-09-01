@@ -5,14 +5,13 @@ import Link from "next/link";
 import type { Campagna, CampagnaObjective } from "@/types/campagne";
 import { etichettaObiettivo } from "@/lib/pre-lancio-check";
 import {
-  emojiHealth,
   etichettaMetricaPrimaria,
   formatDataCheck,
   formatEuro,
-  healthBadgeClasses,
   type ActionPriority,
   type HealthStatus,
 } from "@/lib/control-room";
+import { StatoChip, chipDaHealth } from "@/components/nuova-contatti/StatoChip";
 import { normalizzaObjective } from "@/types/campagne";
 import type { CampaignCheck } from "@/lib/campaign-checks-db";
 
@@ -185,18 +184,10 @@ function BadgeStato({
     Boolean(ultimo),
   );
   if (!ultimo) {
-    return (
-      <span className="inline-flex rounded-full bg-[#EEF0F3] px-3 py-1 text-xs font-medium text-[#5A6578]">
-        {label}
-      </span>
-    );
+    return <StatoChip kind="pending" label={label} />;
   }
   return (
-    <span
-      className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${healthBadgeClasses(ultimo.healthStatus)}`}
-    >
-      {emojiHealth(ultimo.healthStatus)} {label}
-    </span>
+    <StatoChip kind={chipDaHealth(ultimo.healthStatus)} label={label} />
   );
 }
 

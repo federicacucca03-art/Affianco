@@ -1,10 +1,13 @@
+"use client";
+
 import { ArrowRight } from "lucide-react";
 import { MockBrowser } from "@/components/landing/mock/MockBrowser";
+import { StatoChip } from "@/components/nuova-contatti/StatoChip";
 
 const RIEPILOGO = [
-  { emoji: "🟢", label: "6 clienti nella norma" },
-  { emoji: "🟡", label: "2 da monitorare" },
-  { emoji: "🔴", label: "1 richiede attenzione" },
+  { kind: "ok" as const, label: "6 clienti nella norma" },
+  { kind: "watch" as const, label: "2 da monitorare" },
+  { kind: "critico" as const, label: "1 richiede attenzione" },
 ];
 
 export function MockControlRoom() {
@@ -12,12 +15,7 @@ export function MockControlRoom() {
     <MockBrowser titolo="affianco.app/risultati">
       <div className="flex flex-wrap gap-2">
         {RIEPILOGO.map((item) => (
-          <span
-            key={item.label}
-            className="rounded-full border border-[var(--border)] bg-[var(--surface-hover)] px-3 py-1 text-[11px] text-[var(--ink)]"
-          >
-            {item.emoji} {item.label}
-          </span>
+          <StatoChip key={item.label} kind={item.kind} label={item.label} />
         ))}
       </div>
 

@@ -17,6 +17,7 @@ import {
   prossimoRuolo,
   RUOLI_IN_ORDINE,
 } from "@/lib/creativita";
+import { StatoChip } from "@/components/nuova-contatti/StatoChip";
 
 type Props = {
   creativita: CreativitaAsset[];
@@ -622,12 +623,15 @@ export function DropzoneCreativita({
       )}
 
       {caroselloIncompleto ? (
-        <div className="mt-4 rounded-xl border border-[#f5c9b8] bg-[#fff4f0] px-4 py-3 text-sm leading-relaxed text-[var(--ink)]">
-          ⚠️ Carosello incompleto: carica almeno {minAsset}{" "}
+        <div className="mt-4 flex flex-wrap items-start gap-2 rounded-[16px] bg-white px-4 py-3 shadow-[var(--shadow-card)]">
+          <StatoChip kind="watch" label="Da verificare" />
+          <p className="min-w-0 flex-1 text-sm leading-relaxed text-[var(--ink)]">
+          Carosello incompleto: carica almeno {minAsset}{" "}
           {isInStore || isRetargeting || isAwareness
             ? "contenuti"
             : "schede prodotto"}{" "}
           (ora ne hai {creativita.length}). Massimo {maxAsset}.
+          </p>
         </div>
       ) : null}
 
@@ -686,17 +690,23 @@ export function DropzoneCreativita({
       ) : null}
 
       {mostraAvvisoOrizzontale ? (
-        <div className="mt-4 rounded-xl border border-[#f5c9b8] bg-[#fff4f0] px-4 py-3 text-sm leading-relaxed text-[var(--ink)]">
-          ⚠️ Formato orizzontale rilevato: Sui telefoni occupa meno spazio nel
+        <div className="mt-4 flex flex-wrap items-start gap-2 rounded-[16px] bg-white px-4 py-3 shadow-[var(--shadow-card)]">
+          <StatoChip kind="watch" label="Da ottimizzare" />
+          <p className="min-w-0 flex-1 text-sm leading-relaxed text-[var(--ink)]">
+          Formato orizzontale rilevato: Sui telefoni occupa meno spazio nel
           feed. Consigliamo di usare ritagli verticali (4:5 o 1:1).
+          </p>
         </div>
       ) : null}
 
       {mostraAvvisoFormato ? (
-        <div className="mt-4 rounded-xl border border-[#f5c9b8] bg-[#fff4f0] px-4 py-3 text-sm leading-relaxed text-[var(--ink)]">
-          ⚠️ Formato non ottimizzato: L&apos;immagine caricata rischia di essere
+        <div className="mt-4 flex flex-wrap items-start gap-2 rounded-[16px] bg-white px-4 py-3 shadow-[var(--shadow-card)]">
+          <StatoChip kind="watch" label="Da ottimizzare" />
+          <p className="min-w-0 flex-1 text-sm leading-relaxed text-[var(--ink)]">
+          Formato non ottimizzato: L&apos;immagine caricata rischia di essere
           ritagliata male su mobile. Ti consigliamo immagini in formato 4:5 o
           1:1 (1080×1080 px).
+          </p>
         </div>
       ) : null}
 

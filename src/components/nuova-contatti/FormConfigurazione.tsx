@@ -61,6 +61,7 @@ import { StudioCreativo } from "@/components/nuova-contatti/StudioCreativo";
 import { BarraBreakEven } from "@/components/nuova-contatti/BarraBreakEven";
 import { BarraRoasEcommerce } from "@/components/nuova-contatti/BarraRoasEcommerce";
 import { alertFattibilitaNicchia } from "@/lib/fattibilita-nicchia";
+import { StatoChip } from "@/components/nuova-contatti/StatoChip";
 import {
   etichettaObiettivo,
   type WizardStep,
@@ -3087,13 +3088,13 @@ export function FormConfigurazione({
                   : "CPL target di riferimento"}
               </p>
               {conversionRateSource === "ESTIMATED" && !ltvEconomics ? (
-                <p className="mt-2 inline-flex rounded-full bg-[var(--yellow-soft)] px-2.5 py-0.5 text-xs font-medium text-[#6b5420]">
-                  Calcolo basato su una stima
+                <p className="mt-2">
+                  <StatoChip kind="watch" label="Calcolo basato su una stima" />
                 </p>
               ) : null}
               {conversionRateSource === "REAL" && !ltvEconomics ? (
-                <p className="mt-2 inline-flex rounded-full bg-[var(--green-soft)] px-2.5 py-0.5 text-xs font-medium text-[#2d6a4a]">
-                  Dato reale
+                <p className="mt-2">
+                  <StatoChip kind="ok" label="Dato reale" />
                 </p>
               ) : null}
               {!ltvEconomics ? (
@@ -3601,41 +3602,47 @@ export function FormConfigurazione({
             !isPercorsoRetargeting &&
             !isPercorsoAwareness &&
             !hookOk ? (
-            <div className="mt-3 rounded-xl border border-[#f5c9b8] bg-[#fff4f0] px-3.5 py-3 text-sm leading-relaxed text-[var(--ink)]">
+            <div className="mt-3 flex flex-wrap items-start gap-2 rounded-[16px] bg-white px-3.5 py-3 shadow-[var(--shadow-card)]">
+              <StatoChip kind="watch" label="Da rivedere" />
+              <p className="min-w-0 flex-1 text-sm leading-relaxed text-[var(--ink)]">
               {isEcommerce ? (
                 <>
-                  ⚠️ Gancio incompleto su Mobile: assicurati che il Prodotto
+                  Gancio incompleto su Mobile: assicurati che il Prodotto
                   Hero e/o l&apos;Offerta Promo compaiano nelle prime ~120
                   battute (prime due righe), prima del tasto &apos;Mostra
                   altro&apos;.
                 </>
               ) : isRetargeting ? (
                 <>
-                  ⚠️ Gancio incompleto su Mobile: assicurati che l&apos;invito
+                  Gancio incompleto su Mobile: assicurati che l&apos;invito
                   a completare l&apos;ordine o la promo di recupero compaiano
                   nelle prime ~120 battute (prime due righe).
                 </>
               ) : (
                 <>
-                  ⚠️ Gancio incompleto visibile su Mobile: Assicurati che la
+                  Gancio incompleto visibile su Mobile: Assicurati che la
                   città ({cittaHook}) e l&apos;offerta siano scritte nelle
                   prime due righe per catturare l&apos;attenzione prima del
                   tasto &apos;Mostra altro&apos;.
                 </>
               )}
+              </p>
             </div>
           ) : !isPercorsoEcommerce &&
             !isPercorsoBookings &&
             !isPercorsoInstore &&
             !isPercorsoRetargeting &&
             hookOk ? (
-            <p className="mt-2 text-xs text-[#2d6a4a]">
+            <div className="mt-2 flex flex-wrap items-start gap-2">
+              <StatoChip kind="ok" />
+              <p className="min-w-0 flex-1 text-xs leading-relaxed text-[var(--ink-muted)]">
               {isEcommerce
-                ? "✅ Hook mobile ok: Prodotto e Offerta visibili prima del 'Altro'."
+                ? "Hook mobile ok: Prodotto e Offerta visibili prima del 'Altro'."
                 : isRetargeting
-                  ? "✅ Hook mobile ok: Urgenza e incentivo di recupero ben visibili."
-                  : "✅ Hook mobile ok: città e offerta nelle prime ~120 battute."}
-            </p>
+                  ? "Hook mobile ok: Urgenza e incentivo di recupero ben visibili."
+                  : "Hook mobile ok: città e offerta nelle prime ~120 battute."}
+              </p>
+            </div>
           ) : null}
         </div>
 

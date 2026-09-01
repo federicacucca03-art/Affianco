@@ -1,7 +1,11 @@
 "use client";
 
 import type { ControlloMessaggioRisultato } from "@/lib/controllo-messaggio";
-import { chipDaEmoji, RigaDiagnostica } from "@/components/nuova-contatti/StatoChip";
+import {
+  chipDaEmoji,
+  chipLabelMessaggio,
+  RigaDiagnostica,
+} from "@/components/nuova-contatti/StatoChip";
 
 type Props = {
   risultato: ControlloMessaggioRisultato;
@@ -43,14 +47,18 @@ export function ControlloMessaggio({ risultato, variant = "leads" }: Props) {
         {sottotitolo}
       </p>
       <ul className="mt-4 overflow-hidden rounded-[16px] bg-white px-4">
-        {risultato.voci.map((voce) => (
-          <RigaDiagnostica
-            key={voce.id}
-            voce={voce.label}
-            kind={chipDaEmoji(voce.emoji)}
-            spiegazione={voce.messaggio}
-          />
-        ))}
+        {risultato.voci.map((voce) => {
+          const kind = chipDaEmoji(voce.emoji);
+          return (
+            <RigaDiagnostica
+              key={voce.id}
+              voce={voce.label}
+              kind={kind}
+              chipLabel={chipLabelMessaggio(kind)}
+              spiegazione={voce.messaggio}
+            />
+          );
+        })}
       </ul>
       {risultato.notaLunghezza ? (
         <p className="mt-3 text-[13px] leading-relaxed text-[var(--ink-muted)]">

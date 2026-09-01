@@ -7,7 +7,7 @@ import {
   PESI_STRATEGIC_SCORE,
 } from "@/lib/strategic-score";
 import { etichettaConversionRateSource } from "@/lib/conversion-rate";
-import { RigaDiagnostica, StatoChip } from "@/components/nuova-contatti/StatoChip";
+import { RigaDiagnostica, StatoChip, testoSenzaIndicatoreStato } from "@/components/nuova-contatti/StatoChip";
 
 type Props = {
   result: StrategicScoreResult;
@@ -144,7 +144,7 @@ export function StrategicScoreCard({ result }: Props) {
                 key={suggerimento}
                 className="text-[13px] leading-relaxed text-[var(--ink-muted)]"
               >
-                {suggerimento}
+                {testoSenzaIndicatoreStato(suggerimento)}
               </li>
             ))}
         </ul>

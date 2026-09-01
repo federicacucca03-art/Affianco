@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import {
   etichettaEvento,
-  emojiEvento,
   formatDataOraLog,
   generaTestoStoricoAttivita,
   leggiLogCampagna,
@@ -166,11 +165,9 @@ export function DiarioBordo({
           {logs.map((log) => (
             <li key={log.id} className="relative pb-6 last:pb-0">
               <span
-                className="absolute top-1.5 -left-[1.4rem] flex h-5 w-5 items-center justify-center rounded-full bg-white text-xs shadow-sm ring-2 ring-[var(--border)]"
+                className="absolute top-1.5 -left-[1.35rem] h-3 w-3 rounded-full border-2 border-[var(--border)] bg-white"
                 aria-hidden
-              >
-                {emojiEvento(log.eventType)}
-              </span>
+              />
               <div className="flex flex-wrap items-center gap-2">
                 <span
                   className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-medium ${stileBadgeEvento(log.eventType)}`}

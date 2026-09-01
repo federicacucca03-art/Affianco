@@ -2,6 +2,7 @@
 
 import type { ConfigurazioneContatti, CampagnaObjective } from "@/types/campagne";
 import { stimaBenchmark } from "@/data/benchmarks";
+import { testoSenzaIndicatoreStato } from "@/components/nuova-contatti/StatoChip";
 import {
   calculateBreakEvenPerBooking,
   calculateBreakEvenPerLead,
@@ -564,15 +565,17 @@ export function PannelloPerche({
                 : `Con ${budgetGiornaliero}€ al giorno (${budgetMensile}€ al mese) il riferimento per ${benchmark.etichettaCategoria} è questo intervallo (tipicamente intorno a ${benchmark.budgetRiferimento}€/mese). Non è una promessa: è un ordine di grandezza da tenere a mente.`}
           </p>
           <p className="mt-3 border-t border-[var(--border)] pt-3 text-xs leading-relaxed text-[var(--ink-muted)]">
-            {isPercorsoAwareness
-              ? "ℹ️ Reach vs Link Clicks: con destinazione → click verso il link; senza destinazione → copertura. Non misura visite fisiche."
-              : isAwareness
-              ? "ℹ️ Stima basata su un CPM medio di 7€ per campagne di Notorietà / Lancio Locale in Italia."
-              : isRetargeting
-                ? "ℹ️ Stima basata su benchmark per campagne di Retargeting / Recupero Carrelli su Meta Italia."
-                : isInStore
-                  ? "ℹ️ Stima indicativa basata su budget e benchmark interni (non dato Meta)."
-                  : `ℹ️ Stima basata su benchmark di settore per campagne Lead Form Meta in Italia, adattata al raggio di ${cittaNota}.`}
+            {testoSenzaIndicatoreStato(
+              isPercorsoAwareness
+                ? "ℹ️ Reach vs Link Clicks: con destinazione → click verso il link; senza destinazione → copertura. Non misura visite fisiche."
+                : isAwareness
+                  ? "ℹ️ Stima basata su un CPM medio di 7€ per campagne di Notorietà / Lancio Locale in Italia."
+                  : isRetargeting
+                    ? "ℹ️ Stima basata su benchmark per campagne di Retargeting / Recupero Carrelli su Meta Italia."
+                    : isInStore
+                      ? "ℹ️ Stima indicativa basata su budget e benchmark interni (non dato Meta)."
+                      : `ℹ️ Stima basata su benchmark di settore per campagne Lead Form Meta in Italia, adattata al raggio di ${cittaNota}.`,
+            )}
           </p>
         </section>
       )}

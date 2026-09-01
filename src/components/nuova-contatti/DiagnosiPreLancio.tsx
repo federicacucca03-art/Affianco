@@ -6,7 +6,11 @@ import type {
   PreLancioDiagnosi,
   PreLancioSeverita,
 } from "@/lib/pre-lancio-check";
-import { StatoChip, type StatoChipKind } from "@/components/nuova-contatti/StatoChip";
+import {
+  StatoChip,
+  testoSenzaIndicatoreStato,
+  type StatoChipKind,
+} from "@/components/nuova-contatti/StatoChip";
 
 type Props = {
   diagnosi: PreLancioDiagnosi;
@@ -78,14 +82,16 @@ function CardControlloOperativo({
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start sm:gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium text-[var(--ink)]">{titolo}</p>
+            <p className="text-sm font-medium text-[var(--ink)]">
+              {testoSenzaIndicatoreStato(titolo)}
+            </p>
             <StatoChip
               kind={chipDaSeverita(severita)}
               label={etichettaSeverita(severita)}
             />
           </div>
           <p className="mt-1.5 text-sm leading-relaxed text-[var(--ink)]">
-            {motivazione}
+            {testoSenzaIndicatoreStato(motivazione)}
           </p>
           {severita !== "info" ? (
             <p className="mt-1 text-xs text-[var(--ink-muted)]">
@@ -139,7 +145,7 @@ function LayoutLegacy({
             Stima Appuntamenti Settimanali
           </p>
           <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]">
-            📅 Stima indicativa: ~
+            Stima indicativa: ~
             <span className="font-medium">
               {diagnosi.stimaAppuntamenti.appuntamenti}
             </span>{" "}
@@ -154,7 +160,7 @@ function LayoutLegacy({
             Stima Conversioni &amp; Ordini
           </p>
           <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]">
-            📦 Stima indicativa: ~
+            Stima indicativa: ~
             <span className="font-medium">
               {diagnosi.stimaOrdini.ordiniMensili}
             </span>{" "}
@@ -165,10 +171,13 @@ function LayoutLegacy({
 
       {diagnosi.stimaCoperturaRetargeting ? (
         <div className="aff-panel-white mt-4 px-4 py-4">
-          <p className="text-sm leading-relaxed text-[var(--ink-muted)]">
-            ℹ️ Copertura retargeting: configurazione a pubblico caldo — verifica
-            pixel e audience in Meta prima del lancio.
-          </p>
+          <div className="flex flex-wrap items-start gap-2">
+            <StatoChip kind="info" />
+            <p className="min-w-0 flex-1 text-sm leading-relaxed text-[var(--ink-muted)]">
+              Copertura retargeting: configurazione a pubblico caldo — verifica
+              pixel e audience in Meta prima del lancio.
+            </p>
+          </div>
         </div>
       ) : null}
 
@@ -188,7 +197,7 @@ function LayoutLegacy({
                     }
                   />
                   <p className="min-w-0 flex-1 text-sm leading-relaxed text-[var(--ink)]">
-                    {check.messaggio}
+                    {testoSenzaIndicatoreStato(check.messaggio)}
                   </p>
                 </div>
                 {check.azione && onAzioneRapida ? (
@@ -219,7 +228,9 @@ function LayoutLegacy({
                 className="flex flex-wrap items-start gap-2 text-[13px] leading-relaxed text-[var(--ink-muted)]"
               >
                 <StatoChip kind="ok" />
-                <span className="min-w-0 flex-1">{check.messaggio}</span>
+                <span className="min-w-0 flex-1">
+                  {testoSenzaIndicatoreStato(check.messaggio)}
+                </span>
               </li>
             ))}
           </ul>
@@ -406,7 +417,11 @@ export function DiagnosiPreLancio({ diagnosi, onAzioneRapida }: Props) {
                     className="flex flex-wrap items-center gap-2 text-[13px] text-[var(--ink-muted)]"
                   >
                     <StatoChip kind="ok" />
-                    <span>{check.titolo ?? check.messaggio}</span>
+                    <span>
+                      {testoSenzaIndicatoreStato(
+                        check.titolo ?? check.messaggio,
+                      )}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -421,10 +436,14 @@ export function DiagnosiPreLancio({ diagnosi, onAzioneRapida }: Props) {
                   className="aff-panel-white px-4 py-3 text-sm leading-relaxed text-[var(--ink-muted)]"
                 >
                   <StatoChip kind="info" />
-                  <span className="ml-2">{check.titolo ?? check.messaggio}</span>
+                  <span className="ml-2">
+                    {testoSenzaIndicatoreStato(
+                      check.titolo ?? check.messaggio,
+                    )}
+                  </span>
                   {check.motivazione ? (
                     <span className="mt-1 block text-[var(--ink)]">
-                      {check.motivazione}
+                      {testoSenzaIndicatoreStato(check.motivazione)}
                     </span>
                   ) : null}
                 </li>

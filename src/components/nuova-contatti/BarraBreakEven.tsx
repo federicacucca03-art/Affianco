@@ -1,6 +1,10 @@
 "use client";
 
 import type { AlertFattibilita } from "@/lib/fattibilita-nicchia";
+import {
+  StatoChip,
+  testoSenzaIndicatoreStato,
+} from "@/components/nuova-contatti/StatoChip";
 
 type Props = {
   /** CPL/CPA a break-even (guadagno zero). */
@@ -86,14 +90,14 @@ export function BarraBreakEven({
       </div>
 
       {alert ? (
-        <div
-          className={`rounded-xl border px-3.5 py-3 text-sm leading-relaxed ${
-            alert.tone === "warning"
-              ? "border-0 bg-[var(--yellow-soft)]/80 text-[var(--ink)]"
-              : "border-0 bg-[var(--lavender-muted)] text-[var(--ink)]"
-          }`}
-        >
-          {alert.messaggio}
+        <div className="flex flex-wrap items-start gap-2 rounded-[16px] bg-white px-3.5 py-3 shadow-[var(--shadow-card)]">
+          <StatoChip
+            kind={alert.tone === "warning" ? "watch" : "ok"}
+            label={alert.tone === "warning" ? "Da monitorare" : "In salute"}
+          />
+          <p className="min-w-0 flex-1 text-sm leading-relaxed text-[var(--ink)]">
+            {testoSenzaIndicatoreStato(alert.messaggio)}
+          </p>
         </div>
       ) : null}
     </div>
