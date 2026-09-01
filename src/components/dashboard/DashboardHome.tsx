@@ -56,8 +56,32 @@ function chipAttenzione(item: AttentionItem): {
   }
 }
 
-const ALTEZZA_CHART_PX = 72;
+const ALTEZZA_CHART_PX = 56;
 const ALTEZZA_BARRA_VUOTA_PX = 5;
+
+const STILE_BADGE: Record<StatoChipKind, string> = {
+  ok: "bg-[var(--green-soft)] text-[#2d6a4a]",
+  watch: "bg-[var(--yellow-soft)] text-[#6b5420]",
+  critico: "bg-[#f8d5e2] text-[#7a3d58]",
+  pending: "bg-[var(--lavender-muted)] text-[#5b4fa8]",
+  info: "bg-[var(--primary-soft)] text-[var(--primary)]",
+};
+
+function BadgeDashboard({
+  kind,
+  label,
+}: {
+  kind: StatoChipKind;
+  label: string;
+}) {
+  return (
+    <span
+      className={`inline-flex h-5 max-w-full shrink-0 items-center rounded-full px-2 text-[10px] font-medium leading-none ${STILE_BADGE[kind]}`}
+    >
+      {label}
+    </span>
+  );
+}
 
 function classeBarraAttivita(giorno: GiornoAttivita): string {
   if (giorno.isToday) return "bg-[var(--primary)]";
@@ -76,10 +100,11 @@ function MiniChartAttivita({ giorni }: { giorni: GiornoAttivita[] }) {
         {giorni.map((giorno) => {
           const label = etichettaAriaBarraAttivita(giorno.data, giorno.count);
           const quota = quotaAltezzaBarraAttivita(giorno.count, max);
+          const scala = max <= 1 ? 0.62 : 1;
           const altezzaPx =
             giorno.count === 0
               ? ALTEZZA_BARRA_VUOTA_PX
-              : Math.round(quota * ALTEZZA_CHART_PX);
+              : Math.round(quota * ALTEZZA_CHART_PX * scala);
           return (
             <div
               key={giorno.chiave}
@@ -100,7 +125,7 @@ function MiniChartAttivita({ giorni }: { giorni: GiornoAttivita[] }) {
         {giorni.map((giorno) => (
           <span
             key={`${giorno.chiave}-label`}
-            className="min-w-0 flex-1 text-center text-[10px] font-medium leading-none text-[var(--ink-muted)]"
+            className="min-w-0 flex-1 text-center text-[10px] font-medium leading-none text-[#6e6a7c]"
             aria-hidden
           >
             {giorno.lettera}
@@ -114,7 +139,7 @@ function MiniChartAttivita({ giorni }: { giorni: GiornoAttivita[] }) {
 function AvatarIniziali({ iniziali }: { iniziali: string }) {
   return (
     <span
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-medium text-[var(--primary)] shadow-[var(--shadow-card)]"
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--primary-soft)] text-[11px] font-medium text-[var(--primary)]"
       aria-hidden
     >
       {iniziali}
@@ -178,7 +203,7 @@ export function DashboardHome() {
   );
 
   return (
-    <main className="mx-auto w-full max-w-[1400px] pb-8">
+    <main className="mx-auto w-full max-w-[1400px] pb-6">
       <header>
         <h1 className="text-[26px] font-medium tracking-tight text-[var(--ink)] sm:text-[30px]">
           Buongiorno
@@ -211,7 +236,7 @@ export function DashboardHome() {
         </section>
       ) : (
         <>
-          <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 xl:items-stretch">
+          <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 xl:items-stretch">
             <section className="aff-panel-white flex min-h-[15.5rem] min-w-0 flex-col p-4 sm:p-5">
               <p className="text-[13px] font-medium text-[var(--primary)]">
                 Attività
@@ -252,7 +277,7 @@ export function DashboardHome() {
               )}
             </section>
 
-            <section className="flex min-h-[15.5rem] flex-col rounded-[var(--radius)] bg-[var(--lavender-muted)] p-4 shadow-[var(--shadow-soft)] sm:p-5 md:col-span-2">
+            <section className="flex min-h-[15.5rem] min-w-0 flex-col rounded-[22px] bg-[var(--lavender-muted)] p-4 sm:p-5 md:col-span-2">
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-[13px] font-medium text-[var(--primary)]">
                   Campagne in gestione
@@ -301,7 +326,7 @@ export function DashboardHome() {
               </ul>
             </section>
 
-            <section className="aff-panel-white flex min-h-[15.5rem] flex-col p-3.5 sm:p-4">
+            <section className="aff-panel-white flex min-h-[15.5rem] min-w-0 flex-col p-4 sm:p-5">
               <p className="text-[13px] font-medium text-[var(--primary)]">
                 Revisioni cliente
               </p>
@@ -324,9 +349,9 @@ export function DashboardHome() {
                       <li key={campagna.id}>
                         <Link
                           href={`/campagne/${campagna.id}`}
-                          className="flex items-start justify-between gap-2 rounded-[14px] bg-[var(--lavender-muted)]/70 px-2 py-1.5 hover:opacity-90"
+                          className="flex items-start justify-between gap-2.5 rounded-[14px] bg-[var(--lavender-muted)]/70 px-2.5 py-2 hover:opacity-90"
                         >
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium leading-snug text-[var(--ink)]">
                               {campagna.nomeCliente}
                             </p>
@@ -334,7 +359,10 @@ export function DashboardHome() {
                               {nomeCampagnaCard(campagna)}
                             </p>
                           </div>
-                          <StatoChip kind="critico" label="Revisione richiesta" />
+                          <BadgeDashboard
+                            kind="critico"
+                            label="Revisione richiesta"
+                          />
                         </Link>
                       </li>
                     ))}
@@ -344,7 +372,7 @@ export function DashboardHome() {
             </section>
           </div>
 
-          <section className="aff-panel-white mt-3 p-4 sm:p-5">
+          <section className="aff-panel-white mt-3 min-w-0 p-4 sm:p-5">
             <div className="flex items-baseline justify-between gap-2">
               <p className="text-[13px] font-medium text-[var(--primary)]">
                 Cosa richiede attenzione
@@ -368,7 +396,7 @@ export function DashboardHome() {
                 </p>
               </div>
             ) : (
-              <ul className="mt-2">
+              <ul className="mt-1">
                 {attenzioneVisibili.map((item) => {
                   const chip = chipAttenzione(item);
                   const metaCheck = item.lastCheckAt
@@ -377,10 +405,10 @@ export function DashboardHome() {
                   return (
                     <li
                       key={item.campaignId}
-                      className="grid grid-cols-1 gap-2 border-b border-[var(--border)] py-2.5 last:border-0 sm:grid-cols-[7.5rem_minmax(0,1.2fr)_minmax(0,1fr)_6.5rem_auto] sm:items-center sm:gap-3 sm:py-2"
+                      className="flex flex-col gap-2 border-b border-[rgba(80,70,130,0.06)] py-3 last:border-0 sm:flex-row sm:items-start sm:gap-5"
                     >
-                      <StatoChip kind={chip.kind} label={chip.label} />
-                      <div className="min-w-0">
+                      <BadgeDashboard kind={chip.kind} label={chip.label} />
+                      <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium leading-snug text-[var(--ink)]">
                           {item.clientName}
                         </p>
@@ -389,18 +417,18 @@ export function DashboardHome() {
                           {" · "}
                           {etichettaObiettivo(item.objective)}
                         </p>
+                        <p className="mt-1 text-[13px] leading-snug text-[var(--ink-muted)]">
+                          {item.nextAction}
+                        </p>
                       </div>
-                      <p className="text-[13px] leading-snug text-[var(--ink)]">
-                        {item.nextAction}
-                      </p>
-                      <p className="text-xs leading-snug text-[var(--ink-muted)]">
+                      <p className="text-[12px] leading-snug text-[var(--ink-muted)] sm:w-[8rem] sm:pt-0.5">
                         {metaCheck ? `Ultimo check ${metaCheck}` : ""}
                       </p>
                       <Link
                         href={item.href}
-                        className="inline-flex w-fit shrink-0 items-center justify-center rounded-full bg-white px-3 py-1.5 text-xs font-medium text-[var(--ink)] shadow-[var(--shadow-card)] hover:opacity-90"
+                        className="inline-flex min-h-8 w-fit shrink-0 items-center text-[13px] font-medium text-[var(--primary)] hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                       >
-                        Apri
+                        Apri →
                       </Link>
                     </li>
                   );

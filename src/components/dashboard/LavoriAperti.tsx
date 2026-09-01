@@ -107,14 +107,14 @@ export function LavoriAperti({
   colonne: Record<LavoroColonnaId, LavoroAperto[]>;
 }) {
   return (
-    <section className="aff-panel-white mt-3 min-w-0 px-5 py-5 sm:px-6 sm:py-6">
+    <section className="aff-panel-white mt-3 h-auto min-w-0 px-5 py-4 sm:px-5 sm:py-5">
       <p className="text-[13px] font-medium text-[var(--primary)]">
         Lavori aperti
       </p>
       <p className="mt-0.5 text-[12px] leading-relaxed text-[var(--ink-muted)]">
         Su cosa stai lavorando e in quale situazione si trova.
       </p>
-      <div className="mt-5 grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid grid-cols-1 items-start gap-3 md:grid-cols-2 xl:grid-cols-4">
         {COLONNE.map((meta) => {
           const items = colonne[meta.id];
           const extra = Math.max(0, items.length - MAX_LAVORI_COLONNA);
