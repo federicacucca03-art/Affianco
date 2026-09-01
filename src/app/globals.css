@@ -41,7 +41,10 @@ body {
 }
 
 .aff-app-shell {
-  min-height: 100dvh;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   background: #f8f8fb;
 }
 

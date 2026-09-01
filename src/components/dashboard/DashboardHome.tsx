@@ -178,7 +178,7 @@ export function DashboardHome() {
   );
 
   return (
-    <main className="mx-auto w-full max-w-[1400px]">
+    <main className="mx-auto w-full max-w-[1400px] pb-8">
       <header>
         <h1 className="text-[26px] font-medium tracking-tight text-[var(--ink)] sm:text-[30px]">
           Buongiorno
