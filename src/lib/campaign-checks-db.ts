@@ -25,6 +25,8 @@ export type CampaignCheck = {
   cpc: number | null;
   frequency: number | null;
   roas: number | null;
+  clicks: number | null;
+  impressions: number | null;
   healthStatus: HealthStatus;
   signal: string | null;
   actions: RecommendedAction[];
@@ -46,6 +48,9 @@ export type NuovoCampaignCheck = {
   cpc: number | null;
   frequency: number | null;
   roas: number | null;
+  /** Assente o null → persistito come NULL. 0 è zero reale. */
+  clicks?: number | null;
+  impressions?: number | null;
   healthStatus: HealthStatus;
   signal: string | null;
   actions: RecommendedAction[];
@@ -56,7 +61,7 @@ export type NuovoCampaignCheck = {
   source: CampaignCheckSource;
 };
 
-type CampaignCheckRow = {
+export type CampaignCheckRow = {
   id: string;
   campaign_id: string;
   user_id: string;
@@ -70,6 +75,8 @@ type CampaignCheckRow = {
   cpc: number | string | null;
   frequency: number | string | null;
   roas: number | string | null;
+  clicks?: number | string | null;
+  impressions?: number | string | null;
   health_status: string;
   signal: string | null;
   actions: unknown;
@@ -116,7 +123,9 @@ function mappaAzioni(raw: unknown): RecommendedAction[] {
   return out;
 }
 
-function mappaDaRow(row: CampaignCheckRow): CampaignCheck | null {
+export function mappaCampaignCheckDaRow(
+  row: CampaignCheckRow,
+): CampaignCheck | null {
   if (!isHealth(row.health_status) || !isSource(row.source)) return null;
   const mode = row.threshold_mode;
   return {
@@ -133,6 +142,8 @@ function mappaDaRow(row: CampaignCheckRow): CampaignCheck | null {
     cpc: num(row.cpc),
     frequency: num(row.frequency),
     roas: num(row.roas),
+    clicks: num(row.clicks),
+    impressions: num(row.impressions),
     healthStatus: row.health_status,
     signal: row.signal,
     actions: mappaAzioni(row.actions),
@@ -142,6 +153,39 @@ function mappaDaRow(row: CampaignCheckRow): CampaignCheck | null {
     thresholdMode:
       mode && isThresholdMode(mode) ? mode : null,
     source: row.source,
+  };
+}
+
+function mappaDaRow(row: CampaignCheckRow): CampaignCheck | null {
+  return mappaCampaignCheckDaRow(row);
+}
+
+export function payloadNuovoCampaignCheck(
+  input: NuovoCampaignCheck,
+  userId: string,
+) {
+  return {
+    campaign_id: input.campaignId,
+    user_id: userId,
+    days_active: input.daysActive,
+    spend: input.spend,
+    results_count: input.resultsCount,
+    primary_cost: input.primaryCost,
+    ctr: input.ctr,
+    cpm: input.cpm,
+    cpc: input.cpc,
+    frequency: input.frequency,
+    roas: input.roas,
+    clicks: input.clicks ?? null,
+    impressions: input.impressions ?? null,
+    health_status: input.healthStatus,
+    signal: input.signal,
+    actions: input.actions,
+    note: input.note?.trim() || null,
+    objective: input.objective,
+    threshold: input.threshold,
+    threshold_mode: input.thresholdMode,
+    source: input.source,
   };
 }
 
@@ -259,27 +303,7 @@ export async function inserisciCampaignCheck(
     );
   }
 
-  const payload = {
-    campaign_id: input.campaignId,
-    user_id: uid,
-    days_active: input.daysActive,
-    spend: input.spend,
-    results_count: input.resultsCount,
-    primary_cost: input.primaryCost,
-    ctr: input.ctr,
-    cpm: input.cpm,
-    cpc: input.cpc,
-    frequency: input.frequency,
-    roas: input.roas,
-    health_status: input.healthStatus,
-    signal: input.signal,
-    actions: input.actions,
-    note: input.note?.trim() || null,
-    objective: input.objective,
-    threshold: input.threshold,
-    threshold_mode: input.thresholdMode,
-    source: input.source,
-  };
+  const payload = payloadNuovoCampaignCheck(input, uid);
 
   const { data, error } = await supabase
     .from("campaign_checks")

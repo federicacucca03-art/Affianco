@@ -53,7 +53,11 @@ function sezione(nome: string, ok: boolean) {
 }
 
 async function main() {
-  const { stessaGiornataLocale } = await import("@/lib/campaign-checks-db");
+  const {
+    stessaGiornataLocale,
+    mappaCampaignCheckDaRow,
+    payloadNuovoCampaignCheck,
+  } = await import("@/lib/campaign-checks-db");
 
   const THRESHOLD = 113;
 
@@ -489,6 +493,179 @@ async function main() {
     assert(!/from\("campaign_checks"\)[\s\S]*\.update\(/.test(checksDb), "nessun update dell'ultimo check") &&
     assert(checksDb.includes("stessaGiornataLocale"), "protezione stesso giorno");
 
+  const migrationP0 = legge(
+    "supabase/migrations/20260901_campaign_checks_clicks_impressions.sql",
+  );
+  const migrationP0Ok =
+    assert(
+      migrationP0.includes("add column if not exists clicks integer"),
+      "migration clicks integer",
+    ) &&
+    assert(
+      migrationP0.includes("add column if not exists impressions integer"),
+      "migration impressions integer",
+    ) &&
+    assert(!/clicks integer not null/i.test(migrationP0), "clicks nullable") &&
+    assert(
+      !/impressions integer not null/i.test(migrationP0),
+      "impressions nullable",
+    ) &&
+    assert(
+      !/add column if not exists clicks integer\s+default/i.test(migrationP0),
+      "clicks senza default SQL",
+    ) &&
+    assert(
+      !/add column if not exists impressions integer\s+default/i.test(
+        migrationP0,
+      ),
+      "impressions senza default SQL",
+    ) &&
+    assert(!/check \(clicks/i.test(migrationP0), "nessun CHECK clicks") &&
+    assert(
+      !legge("supabase/migrations/20260831_campaign_checks.sql").includes("clicks"),
+      "migration 20260831 invariata (no clicks)",
+    );
+
+  function rowCheck(
+    extra: Record<string, unknown> = {},
+  ): Parameters<typeof mappaCampaignCheckDaRow>[0] {
+    return {
+      id: "id-1",
+      campaign_id: "c1",
+      user_id: "u1",
+      created_at: "2026-09-01T10:00:00.000Z",
+      days_active: 7,
+      spend: 200,
+      results_count: 2,
+      primary_cost: 100,
+      ctr: 1.2,
+      cpm: 10,
+      cpc: 1,
+      frequency: 1.5,
+      roas: null,
+      health_status: "GREEN",
+      signal: "sotto_soglia",
+      actions: [],
+      note: null,
+      objective: "LEADS",
+      threshold: 80,
+      threshold_mode: "BREAK_EVEN",
+      source: "MANUAL",
+      ...extra,
+    };
+  }
+
+  const mappedLegacy = mappaCampaignCheckDaRow(rowCheck());
+  const mappedCounts = mappaCampaignCheckDaRow(
+    rowCheck({ clicks: 100, impressions: 10_000 }),
+  );
+  const mappedZero = mappaCampaignCheckDaRow(
+    rowCheck({ clicks: 0, impressions: 1000 }),
+  );
+  const mappedLarge = mappaCampaignCheckDaRow(
+    rowCheck({ clicks: 250_000, impressions: 8_000_000 }),
+  );
+
+  const payloadZero = payloadNuovoCampaignCheck(
+    {
+      campaignId: "c1",
+      daysActive: 7,
+      spend: 200,
+      resultsCount: 2,
+      primaryCost: 100,
+      ctr: null,
+      cpm: null,
+      cpc: null,
+      frequency: null,
+      roas: null,
+      clicks: 0,
+      impressions: 1000,
+      healthStatus: "GREEN",
+      signal: null,
+      actions: [],
+      note: null,
+      objective: "LEADS",
+      threshold: 80,
+      thresholdMode: "BREAK_EVEN",
+      source: "MANUAL",
+    },
+    "u1",
+  );
+  const payloadOmitted = payloadNuovoCampaignCheck(
+    {
+      campaignId: "c1",
+      daysActive: 7,
+      spend: 200,
+      resultsCount: 2,
+      primaryCost: 100,
+      ctr: null,
+      cpm: null,
+      cpc: null,
+      frequency: null,
+      roas: null,
+      healthStatus: "GREEN",
+      signal: null,
+      actions: [],
+      note: null,
+      objective: "LEADS",
+      threshold: 80,
+      thresholdMode: "BREAK_EVEN",
+      source: "MANUAL",
+    },
+    "u1",
+  );
+
+  const caseA03 =
+    assert(mappedLegacy != null, "CASE A map legacy") &&
+    assert(mappedLegacy?.clicks === null, "CASE A clicks null") &&
+    assert(mappedLegacy?.impressions === null, "CASE A impressions null");
+  const caseB03 =
+    assert(mappedCounts?.clicks === 100, "CASE B clicks 100") &&
+    assert(mappedCounts?.impressions === 10_000, "CASE B impressions 10000");
+  const caseC03 =
+    assert(payloadZero.clicks === 0, "CASE C insert clicks 0 preserved") &&
+    assert(payloadZero.impressions === 1000, "CASE C insert impressions 1000") &&
+    assert(mappedZero?.clicks === 0, "CASE C map clicks 0 not null");
+  const caseD03 =
+    assert(payloadOmitted.clicks === null, "CASE D omitted clicks → null") &&
+    assert(
+      payloadOmitted.impressions === null,
+      "CASE D omitted impressions → null",
+    );
+  const caseE03 =
+    assert(mappedLarge?.clicks === 250_000, "CASE E clicks integer") &&
+    assert(
+      mappedLarge?.impressions === 8_000_000,
+      "CASE E impressions integer no string",
+    ) &&
+    assert(typeof mappedLarge?.clicks === "number", "CASE E clicks is number") &&
+    assert(
+      typeof mappedLarge?.impressions === "number",
+      "CASE E impressions is number",
+    );
+
+  const m03aOk =
+    migrationP0Ok &&
+    caseA03 &&
+    caseB03 &&
+    caseC03 &&
+    caseD03 &&
+    caseE03 &&
+    assert(checksDb.includes("clicks: input.clicks ?? null"), "insert persiste clicks") &&
+    assert(
+      checksDb.includes("impressions: input.impressions ?? null"),
+      "insert persiste impressions",
+    ) &&
+    assert(checksDb.includes('.select("*")'), "select * include nuove colonne") &&
+    assert(
+      !legge("src/app/risultati/page.tsx").includes('["clicks"'),
+      "M0.3A nessuna UI clicks nel form",
+    ) &&
+    assert(
+      !legge("src/lib/control-room.ts").includes("clicks:"),
+      "M0.3A nessun cambio engine ControlRoomKpis",
+    );
+
   const risultati = legge("src/app/risultati/page.tsx");
   const campagnaPage = legge("src/app/campagne/[id]/page.tsx");
   const pannello = legge("src/components/campagne/PannelloDiagnosiPerformance.tsx");
@@ -679,6 +856,12 @@ async function main() {
   sezione("M0.2 METRIC SEMANTICS", m02Ok);
   sezione("M0.2.1 UI SEMANTICS", m021Ok);
   sezione("M0.2.2 APPROVAL SEMANTICS", m022Ok);
+  sezione("M0.3A CLICKS IMPRESSIONS SCHEMA", m03aOk);
+  console.log(`M0.3A CASE A: ${caseA03 ? "PASS" : "FAIL"}`);
+  console.log(`M0.3A CASE B: ${caseB03 ? "PASS" : "FAIL"}`);
+  console.log(`M0.3A CASE C: ${caseC03 ? "PASS" : "FAIL"}`);
+  console.log(`M0.3A CASE D: ${caseD03 ? "PASS" : "FAIL"}`);
+  console.log(`M0.3A CASE E: ${caseE03 ? "PASS" : "FAIL"}`);
   console.log(`CASE A: ${caseAOk ? "PASS" : "FAIL"}`);
   console.log(`CASE B: ${caseBOk ? "PASS" : "FAIL"}`);
   console.log(`CASE C: ${caseCOk ? "PASS" : "FAIL"}`);

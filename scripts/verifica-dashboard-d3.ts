@@ -57,6 +57,8 @@ function check(campaignId: string, createdAt: string): CampaignCheck {
     cpc: null,
     frequency: null,
     roas: null,
+    clicks: null,
+    impressions: null,
     healthStatus: "GREEN",
     signal: null,
     actions: [],
