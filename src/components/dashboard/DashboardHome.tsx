@@ -20,10 +20,7 @@ import {
   pillGestione,
   type AttentionItem,
 } from "@/lib/dashboard-home";
-import {
-  etichettaStatoOperativo,
-  nomeCampagnaCard,
-} from "@/components/risultati/ControlRoomOverview";
+import { nomeCampagnaCard } from "@/components/risultati/ControlRoomOverview";
 import { StatoChip, type StatoChipKind } from "@/components/nuova-contatti/StatoChip";
 import { useOnboardingCampagna } from "@/components/OnboardingCampagnaContext";
 import {
@@ -32,8 +29,9 @@ import {
 } from "@/lib/supabase-errori";
 import { normalizzaObjective } from "@/types/campagne";
 
-const MAX_GESTIONE = 8;
-const MAX_REVISIONI = 3;
+const MAX_GESTIONE = 5;
+const MAX_REVISIONI = 2;
+const MAX_ATTENZIONE = 4;
 
 function chipAttenzione(item: AttentionItem): {
   kind: StatoChipKind;
@@ -56,18 +54,26 @@ function chipAttenzione(item: AttentionItem): {
 function MiniBars({ valori }: { valori: number[] }) {
   const max = Math.max(1, ...valori);
   return (
-    <div
-      className="mt-5 flex h-14 items-end gap-1.5"
-      aria-hidden
-    >
+    <div className="mt-auto flex h-10 items-end gap-1" aria-hidden>
       {valori.map((v, i) => (
         <span
           key={i}
-          className="flex-1 rounded-t-md bg-[var(--primary-soft)]"
-          style={{ height: `${Math.max(12, (v / max) * 100)}%` }}
+          className="flex-1 rounded-t-sm bg-[var(--primary-soft)]"
+          style={{ height: `${v === 0 ? 18 : Math.max(22, (v / max) * 100)}%` }}
         />
       ))}
     </div>
+  );
+}
+
+function AvatarIniziali({ iniziali }: { iniziali: string }) {
+  return (
+    <span
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-medium text-[var(--primary)] shadow-[var(--shadow-card)]"
+      aria-hidden
+    >
+      {iniziali}
+    </span>
   );
 }
 
@@ -111,6 +117,7 @@ export function DashboardHome() {
     () => derivaAttenzione(campagne, ultimi),
     [campagne, ultimi],
   );
+  const attenzioneVisibili = attenzione.slice(0, MAX_ATTENZIONE);
   const revisioni = useMemo(
     () => campagneInRevisione(campagne),
     [campagne],
@@ -123,41 +130,31 @@ export function DashboardHome() {
 
   return (
     <main className="mx-auto w-full max-w-[1400px]">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-[28px] font-medium tracking-tight text-[var(--ink)] sm:text-[32px]">
-            Buongiorno
-          </h1>
-          <p className="mt-1 max-w-xl text-[15px] leading-relaxed text-[var(--ink-muted)]">
-            Questa è la situazione delle campagne che stai gestendo.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={apriModaleCampagna}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90"
-        >
-          <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
-          Nuova campagna
-        </button>
+      <header>
+        <h1 className="text-[26px] font-medium tracking-tight text-[var(--ink)] sm:text-[30px]">
+          Buongiorno
+        </h1>
+        <p className="mt-1 max-w-xl text-sm leading-relaxed text-[var(--ink-muted)] sm:text-[15px]">
+          Questa è la situazione delle campagne che stai gestendo.
+        </p>
       </header>
 
       {caricamento ? (
-        <p className="mt-10 text-sm text-[var(--ink-muted)]">Caricamento…</p>
+        <p className="mt-8 text-sm text-[var(--ink-muted)]">Caricamento…</p>
       ) : errore ? (
-        <p className="mt-10 text-sm text-[#7a3d58]">{errore}</p>
+        <p className="mt-8 text-sm text-[#7a3d58]">{errore}</p>
       ) : campagne.length === 0 ? (
-        <section className="aff-panel-white mt-8 px-6 py-10">
+        <section className="aff-panel-white mt-6 px-5 py-8">
           <p className="text-base font-medium text-[var(--ink)]">
             Non hai ancora campagne in gestione.
           </p>
-          <p className="mt-2 max-w-md text-sm leading-relaxed text-[var(--ink-muted)]">
+          <p className="mt-1.5 max-w-md text-sm leading-relaxed text-[var(--ink-muted)]">
             Crea la prima campagna per vedere qui cosa richiede attenzione.
           </p>
           <button
             type="button"
             onClick={apriModaleCampagna}
-            className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90"
+            className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90"
           >
             <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
             Crea la prima campagna
@@ -165,38 +162,39 @@ export function DashboardHome() {
         </section>
       ) : (
         <>
-          <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <section className="aff-panel-white flex flex-col p-5 md:min-h-[16rem]">
+          <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 xl:items-stretch">
+            <section className="aff-panel-white flex min-h-[15.5rem] flex-col p-4 sm:p-5">
               <p className="text-[13px] font-medium text-[var(--primary)]">
                 Attività
               </p>
               {attivita.campagneControllate === 0 ? (
-                <p className="mt-6 text-sm leading-relaxed text-[var(--ink-muted)]">
+                <p className="mt-4 text-sm leading-relaxed text-[var(--ink-muted)]">
                   Ancora nessun controllo questa settimana.
                 </p>
               ) : (
                 <>
-                  <p className="mt-4 text-[28px] font-medium tabular-nums tracking-tight text-[var(--ink)]">
+                  <p className="mt-3 text-[26px] font-medium tabular-nums tracking-tight text-[var(--ink)]">
                     {attivita.campagneControllate}
                   </p>
-                  <p className="mt-1 text-sm text-[var(--ink-muted)]">
+                  <p className="mt-0.5 text-[13px] leading-snug text-[var(--ink-muted)]">
                     {attivita.campagneControllate === 1
                       ? "campagna controllata"
                       : "campagne controllate"}
-                    {attivita.totaleCheck > 0
-                      ? ` · ${attivita.totaleCheck} ${
-                          attivita.totaleCheck === 1
-                            ? "controllo"
-                            : "controlli"
-                        }`
-                      : ""}
                   </p>
+                  {attivita.totaleCheck > 0 ? (
+                    <p className="mt-1 text-xs text-[var(--ink-muted)]">
+                      {attivita.totaleCheck}{" "}
+                      {attivita.totaleCheck === 1
+                        ? "controllo negli ultimi 7 giorni"
+                        : "controlli negli ultimi 7 giorni"}
+                    </p>
+                  ) : null}
                   <MiniBars valori={attivita.perGiorno} />
                 </>
               )}
             </section>
 
-            <section className="flex flex-col rounded-[var(--radius)] bg-[var(--lavender-muted)] p-5 shadow-[var(--shadow-soft)] md:col-span-2 md:min-h-[16rem]">
+            <section className="flex min-h-[15.5rem] flex-col rounded-[var(--radius)] bg-[var(--lavender-muted)] p-4 shadow-[var(--shadow-soft)] sm:p-5 md:col-span-2">
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-[13px] font-medium text-[var(--primary)]">
                   Campagne in gestione
@@ -208,7 +206,7 @@ export function DashboardHome() {
                   Vedi tutte
                 </Link>
               </div>
-              <ul className="mt-4 space-y-2">
+              <ul className="mt-3 space-y-1.5">
                 {gestione.map((campagna) => {
                   const check = ultimi.get(campagna.id) ?? null;
                   const pill = pillGestione(campagna, check);
@@ -216,21 +214,25 @@ export function DashboardHome() {
                     <li key={campagna.id}>
                       <Link
                         href={`/campagne/${campagna.id}`}
-                        className="flex items-start gap-3 rounded-[16px] bg-white/90 px-3.5 py-3 transition-opacity hover:opacity-90"
+                        className="flex items-center gap-2.5 rounded-[14px] bg-white/90 px-2.5 py-2 transition-opacity hover:opacity-90"
                       >
+                        <AvatarIniziali iniziali={campagna.iniziali} />
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-[var(--ink)]">
+                          <p className="text-sm font-medium leading-snug text-[var(--ink)]">
                             {campagna.nomeCliente}
                           </p>
-                          <p className="mt-0.5 text-[13px] text-[var(--ink-muted)]">
+                          <p className="mt-0.5 text-[12px] leading-snug text-[var(--ink-muted)]">
                             {nomeCampagnaCard(campagna)}
                             {" · "}
                             {etichettaObiettivo(
                               normalizzaObjective(campagna.objective),
                             )}
-                            {check
-                              ? ` · ${formatDataCheck(check.createdAt)}`
-                              : ""}
+                            {check ? (
+                              <span className="text-[var(--ink-muted)]/80">
+                                {" · "}
+                                {formatDataCheck(check.createdAt)}
+                              </span>
+                            ) : null}
                           </p>
                         </div>
                         <StatoChip kind={pill.kind} label={pill.label} />
@@ -241,32 +243,40 @@ export function DashboardHome() {
               </ul>
             </section>
 
-            <section className="aff-panel-white flex flex-col p-5 md:min-h-[16rem]">
+            <section className="aff-panel-white flex min-h-[15.5rem] flex-col p-4 sm:p-5">
               <p className="text-[13px] font-medium text-[var(--primary)]">
                 Revisioni cliente
               </p>
               {revisioni.length === 0 ? (
-                <p className="mt-6 text-sm leading-relaxed text-[var(--ink-muted)]">
+                <p className="mt-4 text-sm leading-relaxed text-[var(--ink-muted)]">
                   Nessuna revisione cliente.
                 </p>
               ) : (
                 <>
-                  <p className="mt-3 text-[28px] font-medium tabular-nums tracking-tight text-[var(--ink)]">
+                  <p className="mt-3 text-[26px] font-medium tabular-nums tracking-tight text-[var(--ink)]">
                     {revisioni.length}
                   </p>
-                  <ul className="mt-4 space-y-3">
+                  <p className="mt-0.5 text-[13px] text-[var(--ink-muted)]">
+                    {revisioni.length === 1
+                      ? "revisione da gestire"
+                      : "revisioni da gestire"}
+                  </p>
+                  <ul className="mt-3 space-y-1.5">
                     {revisioni.slice(0, MAX_REVISIONI).map((campagna) => (
                       <li key={campagna.id}>
                         <Link
                           href={`/campagne/${campagna.id}`}
-                          className="block rounded-[14px] bg-[var(--lavender-muted)]/60 px-3 py-2.5 hover:opacity-90"
+                          className="flex items-start justify-between gap-2 rounded-[14px] bg-[var(--lavender-muted)]/70 px-2.5 py-2 hover:opacity-90"
                         >
-                          <p className="text-sm font-medium text-[var(--ink)]">
-                            {campagna.nomeCliente}
-                          </p>
-                          <p className="mt-0.5 text-[13px] text-[var(--ink-muted)]">
-                            {nomeCampagnaCard(campagna)}
-                          </p>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium leading-snug text-[var(--ink)]">
+                              {campagna.nomeCliente}
+                            </p>
+                            <p className="mt-0.5 text-[12px] leading-snug text-[var(--ink-muted)]">
+                              {nomeCampagnaCard(campagna)}
+                            </p>
+                          </div>
+                          <StatoChip kind="critico" label="Revisione richiesta" />
                         </Link>
                       </li>
                     ))}
@@ -276,52 +286,61 @@ export function DashboardHome() {
             </section>
           </div>
 
-          <section className="aff-panel-white mt-4 p-5 sm:p-6">
-            <p className="text-[13px] font-medium text-[var(--primary)]">
-              Cosa richiede attenzione
-            </p>
+          <section className="aff-panel-white mt-3 p-4 sm:p-5">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-[13px] font-medium text-[var(--primary)]">
+                Cosa richiede attenzione
+              </p>
+              {attenzione.length > MAX_ATTENZIONE ? (
+                <Link
+                  href="/risultati"
+                  className="text-xs font-medium text-[var(--primary)] hover:opacity-80"
+                >
+                  Vedi tutte ({attenzione.length})
+                </Link>
+              ) : null}
+            </div>
             {attenzione.length === 0 ? (
-              <div className="mt-5">
-                <p className="text-base font-medium text-[var(--ink)]">
+              <div className="mt-3">
+                <p className="text-sm font-medium text-[var(--ink)]">
                   Nessuna urgenza oggi.
                 </p>
-                <p className="mt-1 text-sm leading-relaxed text-[var(--ink-muted)]">
+                <p className="mt-0.5 text-[13px] leading-relaxed text-[var(--ink-muted)]">
                   Le campagne monitorate non richiedono interventi immediati.
                 </p>
               </div>
             ) : (
-              <ul className="mt-4 divide-y divide-[var(--border)]">
-                {attenzione.map((item) => {
+              <ul className="mt-2">
+                {attenzioneVisibili.map((item) => {
                   const chip = chipAttenzione(item);
+                  const metaCheck = item.lastCheckAt
+                    ? formatDataCheck(item.lastCheckAt)
+                    : null;
                   return (
                     <li
                       key={item.campaignId}
-                      className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:gap-4"
+                      className="grid grid-cols-1 gap-2 border-b border-[var(--border)] py-2.5 last:border-0 sm:grid-cols-[7.5rem_minmax(0,1.2fr)_minmax(0,1fr)_6.5rem_auto] sm:items-center sm:gap-3 sm:py-2"
                     >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <StatoChip kind={chip.kind} label={chip.label} />
-                          <span className="text-sm font-medium text-[var(--ink)]">
-                            {item.clientName}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-[13px] text-[var(--ink-muted)]">
+                      <StatoChip kind={chip.kind} label={chip.label} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium leading-snug text-[var(--ink)]">
+                          {item.clientName}
+                        </p>
+                        <p className="mt-0.5 text-[12px] leading-snug text-[var(--ink-muted)]">
                           {item.campaignName}
                           {" · "}
                           {etichettaObiettivo(item.objective)}
                         </p>
-                        <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]">
-                          {item.nextAction}
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--ink-muted)]">
-                          {item.lastCheckAt
-                            ? `Ultimo controllo ${formatDataCheck(item.lastCheckAt)}`
-                            : etichettaStatoOperativo(null, false)}
-                        </p>
                       </div>
+                      <p className="text-[13px] leading-snug text-[var(--ink)]">
+                        {item.nextAction}
+                      </p>
+                      <p className="text-xs leading-snug text-[var(--ink-muted)]">
+                        {metaCheck ? `Ultimo check ${metaCheck}` : ""}
+                      </p>
                       <Link
                         href={item.href}
-                        className="inline-flex shrink-0 items-center justify-center rounded-full bg-white px-4 py-2 text-sm font-medium text-[var(--ink)] shadow-[var(--shadow-card)] hover:opacity-90"
+                        className="inline-flex w-fit shrink-0 items-center justify-center rounded-full bg-white px-3 py-1.5 text-xs font-medium text-[var(--ink)] shadow-[var(--shadow-card)] hover:opacity-90"
                       >
                         Apri
                       </Link>
