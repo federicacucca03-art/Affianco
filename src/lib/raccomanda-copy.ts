@@ -1,12 +1,17 @@
 /**
  * Raccomandazione copy A/B/C (LEADS).
- * Riusa il checker esistente. Nessuno score visibile, nessuna AI, niente performance.
+ * Riusa il checker esistente + rischio copy. Nessuno score visibile, nessuna AI.
  *
- * Limite V1: le promesse di risultato non coperte dal checker
- * (es. "torna a sorridere subito") non influenzano il ranking.
+ * Limite: il tono non entra nel ranking.
+ * Le promesse di risultato non coperte dai pattern di rischio
+ * non influenzano il ranking.
  */
 
 import { analizzaControlloMessaggioLeads } from "@/lib/controllo-messaggio";
+import {
+  analizzaRischioCopy,
+  livelloRischioCopy,
+} from "@/lib/rischio-copy";
 import type { CampagnaObjective } from "@/types/campagne";
 
 export type CopyVariantId = "A" | "B" | "C";
@@ -24,6 +29,7 @@ export type CopyVariantProfile = {
   cta: CopySignalLevel;
   hook: CopySignalLevel;
   length: CopySignalLevel;
+  riskWarning: boolean;
   reasons: string[];
 };
 
@@ -63,18 +69,23 @@ function punti(livello: CopySignalLevel): number {
   return 0;
 }
 
+function puntiRischio(warning: boolean): number {
+  return warning ? 0 : 1;
+}
+
 function confrontaRanking(
   a: CopyVariantProfile,
   b: CopyVariantProfile,
 ): number {
-  const coppie: [CopySignalLevel, CopySignalLevel][] = [
-    [a.coherence, b.coherence],
-    [a.cta, b.cta],
-    [a.hook, b.hook],
-    [a.length, b.length],
+  const coppie: [number, number][] = [
+    [punti(a.coherence), punti(b.coherence)],
+    [punti(a.cta), punti(b.cta)],
+    [puntiRischio(a.riskWarning), puntiRischio(b.riskWarning)],
+    [punti(a.hook), punti(b.hook)],
+    [punti(a.length), punti(b.length)],
   ];
   for (const [sx, dx] of coppie) {
-    const diff = punti(dx) - punti(sx);
+    const diff = dx - sx;
     if (diff !== 0) return diff;
   }
   return 0;
@@ -93,6 +104,11 @@ function motiviConsiglio(profilo: CopyVariantProfile): string[] {
   }
   if (profilo.cta === "green") {
     motivi.push("CTA chiara");
+  }
+  if (profilo.riskWarning) {
+    motivi.push("Claim da verificare");
+  } else {
+    motivi.push("Meno rischiosa");
   }
   if (profilo.coherence !== "yellow") {
     motivi.push("Nessun contenuto incoerente rilevato");
@@ -119,19 +135,30 @@ function profiloDaTesto(
     brief: input.brief ?? "",
     settore: input.settore ?? "",
   });
+  const rischi = analizzaRischioCopy({
+    testo,
+    offerta: input.offerta,
+    brief: input.brief,
+  });
+  const livelloRischio = livelloRischioCopy(rischi);
   const voce = (id: string) => esito.voci.find((v) => v.id === id);
   const coherence = livelloDaEmoji(voce("coerenza")?.emoji);
   const cta = livelloDaEmoji(voce("cta")?.emoji);
   const hook = livelloDaEmoji(voce("hook")?.emoji);
   const length = livelloDaEmoji(voce("lunghezza")?.emoji);
   const vuoto = !testo.trim();
-  const hardFail = vuoto || coherence === "yellow" || cta === "missing";
+  const hardRisk = livelloRischio === "HARD_FAIL";
+  const riskWarning = livelloRischio === "WARNING";
+  const hardFail =
+    vuoto || coherence === "yellow" || cta === "missing" || hardRisk;
 
   const reasons: string[] = [];
   if (vuoto) reasons.push("Testo vuoto");
-  else if (coherence === "yellow") {
+  if (hardRisk) reasons.push("Claim troppo assoluto");
+  if (riskWarning) reasons.push("Claim da verificare");
+  if (!vuoto && !hardRisk && coherence === "yellow") {
     reasons.push(voce("coerenza")?.messaggio ?? "Coerenza da rivedere");
-  } else if (cta === "missing") {
+  } else if (!vuoto && !hardRisk && !riskWarning && cta === "missing") {
     reasons.push("CTA assente");
   }
 
@@ -143,6 +170,7 @@ function profiloDaTesto(
     cta,
     hook,
     length,
+    riskWarning,
     reasons,
   };
 }
@@ -154,6 +182,9 @@ function descrizioneSingola(profilo: CopyVariantProfile): string {
   }
   if (profilo.cta === "green") {
     pezzi.push("usa una CTA più chiara");
+  }
+  if (!profilo.riskWarning && pezzi.length < 2) {
+    pezzi.push("è meno rischiosa");
   }
   if (profilo.hook === "green" && pezzi.length < 2) {
     pezzi.push("ha un'apertura più specifica");
@@ -215,7 +246,11 @@ export function raccomandaCopy(
     if (recommendedIds.includes(p.variant)) {
       return { ...p, status: "RECOMMENDED", reasons: motiviConsiglio(p) };
     }
-    return { ...p, status: "ALTERNATIVE", reasons: [] };
+    return {
+      ...p,
+      status: "ALTERNATIVE",
+      reasons: p.riskWarning ? ["Claim da verificare"] : [],
+    };
   });
 
   if (recommendedIds.length === 1) {

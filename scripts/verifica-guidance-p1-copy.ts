@@ -86,6 +86,7 @@ function testoHaPerformance(t: string): boolean {
 }
 
 const srcHelper = src("src/lib/raccomanda-copy.ts");
+const srcRischio = src("src/lib/rischio-copy.ts");
 const srcCard = src("src/components/nuova-contatti/CopyRecommendationCard.tsx");
 const srcForm = src("src/components/nuova-contatti/FormConfigurazione.tsx");
 const srcChecker = src("src/lib/controllo-messaggio.ts");
@@ -116,8 +117,8 @@ mark(
   "B CONSIGLIATA",
   motiviJoin.includes("coerent") &&
     motiviJoin.includes("cta") &&
-    motiviJoin.includes("incoerent"),
-  `motivi coerente/CTA/incoerente: ${aurora?.reasons.join(" | ")}`,
+    (motiviJoin.includes("incoerent") || motiviJoin.includes("rischios")),
+  `motivi coerente/CTA: ${aurora?.reasons.join(" | ")}`,
 );
 mark(
   "B CONSIGLIATA",
@@ -301,22 +302,25 @@ mark(
 console.log("\n=== NO PERFORMANCE ===");
 mark(
   "NO PERFORMANCE",
-  !testoHaPerformance(srcHelper) && !testoHaPerformance(srcCard),
-  "helper e card senza linguaggio performance",
+  !testoHaPerformance(srcHelper) &&
+    !testoHaPerformance(srcCard) &&
+    !testoHaPerformance(srcRischio),
+  "helper, rischio e card senza linguaggio performance",
 );
 mark(
   "NO PERFORMANCE",
   srcHelper.includes("analizzaControlloMessaggioLeads") &&
+    srcHelper.includes("analizzaRischioCopy") &&
     !srcHelper.includes("TERMINI_RISCHIO_INVENTATI") &&
     !srcHelper.includes("CTA_VERBO"),
   "riusa il checker, non duplica le regole",
 );
 mark(
   "NO PERFORMANCE",
-  srcHelper.includes("promesse di risultato non coperte dal checker") &&
-    !srcHelper.includes("tono") &&
-    !srcHelper.includes("TonoVoce"),
-  "limite promesse documentato; tono assente dal ranking",
+  srcHelper.includes("il tono non entra nel ranking") &&
+    !srcHelper.includes("TonoVoce") &&
+    !srcRischio.includes("TonoVoce"),
+  "tono assente dal ranking e dal rischio",
 );
 
 console.log("\n=== SOLO LEADS ===");
