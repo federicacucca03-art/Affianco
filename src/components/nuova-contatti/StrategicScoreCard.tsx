@@ -103,7 +103,7 @@ export function StrategicScoreCard({ result }: Props) {
         </p>
       ) : null}
 
-      <ul className="mt-4 overflow-hidden rounded-[16px] bg-[var(--lavender-muted)]/45 px-4">
+      <ul className="mt-4 overflow-hidden rounded-[16px] bg-[var(--lavender-muted)] px-4">
         {fattori.map((f) => (
           <RigaDiagnostica
             key={f.label}

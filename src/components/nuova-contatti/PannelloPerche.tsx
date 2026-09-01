@@ -299,7 +299,7 @@ export function PannelloPerche({
           </h2>
 
           {isAwareness ? (
-            <div className="mt-4 aff-panel-lilac p-4">
+            <div className="mt-4 aff-panel-white p-4">
               {isPercorsoAwareness ? (
                 <>
                   <p className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
@@ -381,7 +381,7 @@ export function PannelloPerche({
               </p>
             </div>
           ) : (
-            <div className="mt-4 aff-panel-lilac p-4">
+            <div className="mt-4 aff-panel-white p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
                 {ltvEconomics
                   ? isBookings

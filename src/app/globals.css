@@ -1,30 +1,30 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f6fb;
-  --background-deep: #9e99c4;
-  --app-bg: #b8b4d8;
-  --workspace: #f7f6fb;
+  --background: #f8f8fb;
+  --background-deep: #eeecf7;
+  --app-bg: #f8f8fb;
+  --workspace: #fafafc;
   --ink: #1d1b26;
   --ink-muted: #747080;
-  --border: rgba(80, 70, 130, 0.12);
-  --primary: #7469d8;
+  --border: rgba(80, 70, 130, 0.1);
+  --primary: #7569d8;
   --primary-soft: #ece9fb;
-  --accent: #7469d8;
+  --accent: #7569d8;
   --accent-soft: #ece9fb;
   --accent-muted: #a89ee8;
-  --surface: #faf9fc;
+  --surface: #ffffff;
   --surface-hover: #f3f1f8;
-  --lavender: #8f8ab8;
-  --lavender-muted: #ddd9f4;
+  --lavender: #eeecf7;
+  --lavender-muted: #f0edfa;
   --pink-soft: #f7a6c7;
   --green-soft: #bfe7b7;
   --yellow-soft: #f5e58a;
   --radius: 24px;
   --radius-lg: 32px;
   --radius-sm: 14px;
-  --shadow-soft: 0 28px 70px rgba(70, 55, 130, 0.14);
-  --shadow-card: 0 16px 48px rgba(70, 55, 130, 0.1);
+  --shadow-soft: 0 18px 48px rgba(70, 55, 130, 0.08);
+  --shadow-card: 0 10px 32px rgba(70, 55, 130, 0.07);
 }
 
 @theme inline {
@@ -42,32 +42,13 @@ body {
 
 .aff-app-shell {
   min-height: 100dvh;
-  background-color: #b8b4d8;
-  background-image:
-    radial-gradient(ellipse 85% 55% at 6% -8%, rgba(247, 166, 199, 0.32), transparent 58%),
-    radial-gradient(ellipse 55% 40% at 96% 12%, rgba(191, 231, 183, 0.16), transparent 52%),
-    radial-gradient(ellipse 70% 48% at 78% 108%, rgba(143, 138, 184, 0.5), transparent 58%),
-    linear-gradient(
-      168deg,
-      #d5d0ea 0%,
-      #c5c0e0 28%,
-      #b8b4d8 55%,
-      #aaa6ca 78%,
-      #9e99c4 100%
-    );
+  background: #f8f8fb;
 }
 
 .aff-workspace {
   border-radius: 32px;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.58) 0%,
-    rgba(238, 234, 248, 0.46) 48%,
-    rgba(214, 210, 232, 0.36) 100%
-  );
+  background: #fafafc;
   box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
 }
 
 .aff-panel-white {
@@ -78,14 +59,14 @@ body {
 
 .aff-panel-lilac {
   border-radius: 22px;
-  background: rgba(143, 138, 184, 0.22);
-  box-shadow: 0 10px 32px rgba(70, 55, 130, 0.06);
+  background: #f0edfa;
+  box-shadow: none;
 }
 
 .aff-panel-lilac-deep {
   border-radius: 22px;
-  background: rgba(122, 116, 168, 0.32);
-  box-shadow: 0 10px 32px rgba(70, 55, 130, 0.08);
+  background: #e9e6f4;
+  box-shadow: none;
 }
 
 .aff-input {

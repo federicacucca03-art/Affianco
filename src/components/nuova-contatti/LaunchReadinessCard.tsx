@@ -28,7 +28,7 @@ export function LaunchReadinessCard({ result }: Props) {
       </p>
 
       {mancanti.length > 0 ? (
-        <ul className="mt-4 overflow-hidden rounded-[16px] bg-[var(--lavender-muted)]/45 px-4">
+        <ul className="mt-4 overflow-hidden rounded-[16px] bg-[var(--lavender-muted)] px-4">
           {mancanti.map((item) => (
             <RigaDiagnostica
               key={item.id}
@@ -41,7 +41,7 @@ export function LaunchReadinessCard({ result }: Props) {
       ) : null}
 
       {okItems.length > 0 ? (
-        <details className="mt-3 rounded-[16px] bg-[var(--lavender-muted)]/35 px-4 py-2">
+        <details className="mt-3 rounded-[16px] bg-[var(--lavender-muted)] px-4 py-2">
           <summary className="cursor-pointer text-[13px] font-medium text-[var(--ink)]">
             {okItems.length}{" "}
             {okItems.length === 1 ? "controllo OK" : "controlli OK"}

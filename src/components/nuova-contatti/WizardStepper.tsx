@@ -32,7 +32,7 @@ export function WizardStepper({
                   attivo
                     ? "bg-white shadow-[var(--shadow-card)]"
                     : fatto
-                      ? "bg-white/35 hover:bg-white/55"
+                      ? "bg-white/80 hover:bg-white"
                       : "bg-transparent"
                 } ${cliccabile ? "cursor-pointer" : "cursor-default"}`}
               >
@@ -42,7 +42,7 @@ export function WizardStepper({
                       ? "bg-[var(--primary)] text-white"
                       : fatto
                         ? "bg-[var(--green-soft)] text-[#2d6a4a]"
-                        : "bg-white/50 text-[var(--ink-muted)]"
+                        : "bg-[var(--lavender-muted)] text-[var(--ink-muted)]"
                   }`}
                 >
                   {fatto ? "✓" : s.id}

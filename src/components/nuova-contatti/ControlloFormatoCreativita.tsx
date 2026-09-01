@@ -113,7 +113,7 @@ export function ControlloFormatoCreativita({
   }
 
   return (
-    <div className="aff-panel-lilac p-5">
+    <div className="aff-panel-white p-5">
       <p className="text-[13px] font-medium text-[var(--primary)]">
         Controllo formato
       </p>

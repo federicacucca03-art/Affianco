@@ -26,7 +26,7 @@ export function BarraSuperiore({ onApriMenu }: Props) {
       <button
         type="button"
         aria-label="Apri menu"
-        className="rounded-2xl p-1.5 text-white hover:bg-white/15 md:hidden"
+        className="rounded-2xl p-1.5 text-[var(--ink)] hover:bg-[var(--lavender-muted)] md:hidden"
         onClick={onApriMenu}
       >
         <Menu className="h-5 w-5" strokeWidth={1.75} />
@@ -42,7 +42,7 @@ export function BarraSuperiore({ onApriMenu }: Props) {
         <input
           type="search"
           placeholder="Cerca un cliente o una campagna"
-          className="w-full max-w-xl rounded-full border-0 bg-white/80 py-2.5 pl-11 pr-4 text-sm text-[var(--ink)] shadow-[var(--shadow-card)] outline-none placeholder:text-[var(--ink-muted)] focus:ring-2 focus:ring-[var(--pink-soft)]/50"
+          className="w-full max-w-xl rounded-full border-0 bg-white py-2.5 pl-11 pr-4 text-sm text-[var(--ink)] shadow-[var(--shadow-card)] outline-none placeholder:text-[var(--ink-muted)] focus:ring-2 focus:ring-[var(--primary-soft)]"
         />
       </label>
 
@@ -50,7 +50,7 @@ export function BarraSuperiore({ onApriMenu }: Props) {
         <button
           type="button"
           aria-label="Notifiche"
-          className="relative rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
+          className="relative rounded-full bg-white p-2 text-[var(--ink-muted)] shadow-[var(--shadow-card)] hover:text-[var(--ink)]"
         >
           <Bell className="h-5 w-5" strokeWidth={1.75} />
           <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--pink-soft)]" />
@@ -70,11 +70,11 @@ export function BarraSuperiore({ onApriMenu }: Props) {
           title={email ?? undefined}
           aria-label={email ? `Account ${email}` : "Profilo utente"}
         >
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-medium text-[var(--primary)] shadow-[var(--shadow-card)]">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--primary-soft)] text-xs font-medium text-[var(--primary)] shadow-[var(--shadow-card)]">
             {inizialiDaEmail(email)}
           </span>
           <ChevronDown
-            className="hidden h-4 w-4 text-white/80 sm:block"
+            className="hidden h-4 w-4 text-[var(--ink-muted)] sm:block"
             strokeWidth={1.75}
             aria-hidden
           />

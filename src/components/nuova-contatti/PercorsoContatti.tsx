@@ -2415,8 +2415,8 @@ export function PercorsoContatti({
           ) : null}
         </div>
 
-        <div className="mb-8 aff-panel-lilac p-2 sm:p-3">
-          <div className="rounded-[20px] bg-[rgba(110,104,158,0.28)] p-1.5">
+        <div className="mb-8 aff-panel-white p-2 sm:p-3">
+          <div className="rounded-[20px] bg-[var(--lavender-muted)] p-1.5">
             <WizardStepper
             step={wizardStep}
             titoliOverride={{
@@ -2836,7 +2836,7 @@ export function PercorsoContatti({
               type="button"
               onClick={vaiIndietro}
               disabled={wizardStep === 1}
-              className="rounded-[16px] bg-white/70 px-5 py-2.5 text-sm font-medium text-[var(--ink)] shadow-[var(--shadow-card)] transition-opacity hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-[16px] bg-white px-5 py-2.5 text-sm font-medium text-[var(--ink)] shadow-[var(--shadow-card)] transition-opacity hover:bg-[var(--lavender-muted)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               Indietro
             </button>
@@ -2844,7 +2844,7 @@ export function PercorsoContatti({
               <button
                 type="button"
                 onClick={() => router.push(`/campagne/${campaignIdEdit}`)}
-                className="rounded-[16px] bg-white/70 px-5 py-2.5 text-sm font-medium text-[var(--ink)] shadow-[var(--shadow-card)] transition-opacity hover:bg-white"
+                className="rounded-[16px] bg-white px-5 py-2.5 text-sm font-medium text-[var(--ink)] shadow-[var(--shadow-card)] transition-opacity hover:bg-[var(--lavender-muted)]"
               >
                 Annulla
               </button>

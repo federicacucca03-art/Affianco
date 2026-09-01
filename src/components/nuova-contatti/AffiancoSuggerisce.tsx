@@ -93,7 +93,7 @@ export function AffiancoSuggerisce({
   if (!principale) return null;
 
   return (
-    <section className="aff-panel-lilac-deep p-6">
+    <section className="aff-panel-white p-6">
       <p className="text-[13px] font-medium text-[var(--primary)]">
         Affianco suggerisce
       </p>

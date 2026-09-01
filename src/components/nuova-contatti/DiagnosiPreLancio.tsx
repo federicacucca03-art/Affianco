@@ -134,7 +134,7 @@ function LayoutLegacy({
       </div>
 
       {diagnosi.stimaAppuntamenti ? (
-        <div className="aff-panel-lilac mt-4 px-4 py-4">
+        <div className="aff-panel-white mt-4 px-4 py-4">
           <p className="text-[13px] font-medium text-[var(--primary)]">
             Stima Appuntamenti Settimanali
           </p>
@@ -149,7 +149,7 @@ function LayoutLegacy({
       ) : null}
 
       {diagnosi.stimaOrdini ? (
-        <div className="aff-panel-lilac mt-4 px-4 py-4">
+        <div className="aff-panel-white mt-4 px-4 py-4">
           <p className="text-[13px] font-medium text-[var(--primary)]">
             Stima Conversioni &amp; Ordini
           </p>
@@ -164,7 +164,7 @@ function LayoutLegacy({
       ) : null}
 
       {diagnosi.stimaCoperturaRetargeting ? (
-        <div className="aff-panel-lilac mt-4 px-4 py-4">
+        <div className="aff-panel-white mt-4 px-4 py-4">
           <p className="text-sm leading-relaxed text-[var(--ink-muted)]">
             ℹ️ Copertura retargeting: configurazione a pubblico caldo — verifica
             pixel e audience in Meta prima del lancio.
@@ -207,7 +207,7 @@ function LayoutLegacy({
       ) : null}
 
       {okChecks.length > 0 ? (
-        <details className="aff-panel-lilac mt-4 px-4 py-3">
+        <details className="aff-panel-white mt-4 px-4 py-3">
           <summary className="cursor-pointer text-[13px] font-medium text-[var(--ink)]">
             {okChecks.length}{" "}
             {okChecks.length === 1 ? "controllo OK" : "controlli OK"}
@@ -237,7 +237,7 @@ function BoxStimaSaturazione({ diagnosi }: { diagnosi: PreLancioDiagnosi }) {
   if (!diagnosi.saturazione) return null;
   const isInstore = diagnosi.objective === "IN_STORE";
   return (
-    <div className="aff-panel-lilac mt-5 px-4 py-4">
+    <div className="aff-panel-white mt-5 px-4 py-4">
       <p className="text-[13px] font-medium text-[var(--primary)]">
         {isInstore
           ? "STIMA · Pressione sul pubblico"
@@ -394,7 +394,7 @@ export function DiagnosiPreLancio({ diagnosi, onAzioneRapida }: Props) {
           ) : null}
 
           {okChecks.length > 0 ? (
-            <details className="aff-panel-lilac mt-4 px-4 py-3">
+            <details className="aff-panel-white mt-4 px-4 py-3">
               <summary className="cursor-pointer text-[13px] font-medium text-[var(--ink)]">
                 {okChecks.length}{" "}
                 {okChecks.length === 1 ? "controllo OK" : "controlli OK"}
@@ -418,7 +418,7 @@ export function DiagnosiPreLancio({ diagnosi, onAzioneRapida }: Props) {
               {infoChecks.map((check) => (
                 <li
                   key={check.id}
-                  className="aff-panel-lilac px-4 py-3 text-sm leading-relaxed text-[var(--ink-muted)]"
+                  className="aff-panel-white px-4 py-3 text-sm leading-relaxed text-[var(--ink-muted)]"
                 >
                   <StatoChip kind="info" />
                   <span className="ml-2">{check.titolo ?? check.messaggio}</span>
@@ -438,7 +438,7 @@ export function DiagnosiPreLancio({ diagnosi, onAzioneRapida }: Props) {
 
           {diagnosi.stimaModelloAwareness &&
           diagnosi.stimaModelloAwareness.impressions > 0 ? (
-            <div className="aff-panel-lilac mt-5 px-4 py-4">
+            <div className="aff-panel-white mt-5 px-4 py-4">
               <p className="text-[13px] font-medium text-[var(--primary)]">
                 STIMA DEL MODELLO
               </p>
@@ -475,7 +475,7 @@ export function DiagnosiPreLancio({ diagnosi, onAzioneRapida }: Props) {
           ) : null}
 
           {diagnosi.istruzioniMeta ? (
-            <div className="aff-panel-lilac mt-5 px-4 py-4">
+            <div className="aff-panel-white mt-5 px-4 py-4">
               <p className="text-[13px] font-medium text-[var(--ink-muted)]">
                 {diagnosi.istruzioniMeta.titolo}
               </p>

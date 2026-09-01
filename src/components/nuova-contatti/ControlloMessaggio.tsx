@@ -37,7 +37,7 @@ export function ControlloMessaggio({ risultato, variant = "leads" }: Props) {
         : "Verifiche automatiche su hook, beneficio, CTA e lunghezza — rivedi e correggi prima del lancio.";
 
   return (
-    <div className="aff-panel-lilac mt-4 p-5">
+    <div className="aff-panel-white mt-4 p-5">
       <p className="text-[13px] font-medium text-[var(--primary)]">{titolo}</p>
       <p className="mt-1 text-[13px] leading-relaxed text-[var(--ink-muted)]">
         {sottotitolo}

@@ -69,7 +69,7 @@ export function BarraLaterale({ aperta, onChiudi }: Props) {
       )}
 
       <aside
-        className={`fixed inset-y-3 left-3 z-50 flex w-16 flex-col rounded-[28px] bg-[rgba(110,104,158,0.55)] py-6 shadow-[var(--shadow-soft)] backdrop-blur-xl md:static md:inset-auto md:h-auto md:self-stretch md:translate-x-0 ${
+        className={`fixed inset-y-3 left-3 z-50 flex w-16 flex-col rounded-[28px] bg-[#eeecf7] py-6 shadow-[var(--shadow-soft)] md:static md:inset-auto md:h-auto md:self-stretch md:translate-x-0 ${
           aperta ? "translate-x-0" : "-translate-x-[120%]"
         }`}
       >
@@ -86,7 +86,7 @@ export function BarraLaterale({ aperta, onChiudi }: Props) {
           <button
             type="button"
             aria-label="Chiudi menu"
-            className="mt-3 rounded-xl p-1 text-white/80 hover:bg-white/15 md:hidden"
+            className="mt-3 rounded-xl p-1 text-[var(--ink-muted)] hover:bg-white/80 md:hidden"
             onClick={onChiudi}
           >
             <X className="h-5 w-5" strokeWidth={1.75} />
@@ -102,8 +102,8 @@ export function BarraLaterale({ aperta, onChiudi }: Props) {
 
             const classi = `flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
               attiva
-                ? "bg-white text-[var(--primary)] shadow-[var(--shadow-card)]"
-                : "text-white/90 hover:bg-white/20"
+                ? "bg-[var(--primary-soft)] text-[var(--primary)] shadow-[var(--shadow-card)]"
+                : "text-[var(--ink-muted)] hover:bg-white/80 hover:text-[var(--ink)]"
             }`;
 
             if (voce.href) {
@@ -129,7 +129,7 @@ export function BarraLaterale({ aperta, onChiudi }: Props) {
 
         <div className="mt-auto flex flex-col items-center gap-4 px-2">
           <span
-            className="flex h-12 w-12 cursor-default items-center justify-center rounded-full text-white/50"
+            className="flex h-12 w-12 cursor-default items-center justify-center rounded-full text-[var(--ink-muted)]/50"
             aria-disabled
             title="Impostazioni — presto disponibile"
           >
@@ -142,12 +142,12 @@ export function BarraLaterale({ aperta, onChiudi }: Props) {
             disabled={logoutInCorso}
             title={email ? `Esci (${email})` : "Esci"}
             aria-label={logoutInCorso ? "Uscita…" : "Esci"}
-            className="flex h-12 w-12 items-center justify-center rounded-full text-white/90 transition-colors hover:bg-white/20 disabled:opacity-60"
+            className="flex h-12 w-12 items-center justify-center rounded-full text-[var(--ink-muted)] transition-colors hover:bg-white/80 hover:text-[var(--ink)] disabled:opacity-60"
           >
             <LogOut className="h-[22px] w-[22px]" strokeWidth={1.75} />
           </button>
           {logoutErrore ? (
-            <p className="px-1 text-center text-[10px] leading-tight text-white">
+            <p className="px-1 text-center text-[10px] leading-tight text-[#7a3d58]">
               {logoutErrore}
             </p>
           ) : null}

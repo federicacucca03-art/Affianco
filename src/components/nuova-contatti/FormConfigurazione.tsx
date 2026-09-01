@@ -309,7 +309,7 @@ function Passo1Sezione({
   children: React.ReactNode;
 }) {
   return (
-    <div className="aff-panel-white space-y-[22px] p-5 sm:p-6">
+    <div className="aff-panel-lilac space-y-[22px] p-5 sm:p-6">
       <div>
         <p className="text-[13px] font-medium text-[var(--primary)]">{titolo}</p>
         <div className="mt-3 h-px bg-[rgba(80,70,130,0.1)]" />
@@ -1070,9 +1070,9 @@ export function FormConfigurazione({
                 ? "passo-1-prenotazioni"
                 : "passo-1-default"
         }
-        className="aff-panel-lilac p-5 shadow-[var(--shadow-soft)] sm:p-6"
+        className="aff-panel-white p-5 shadow-[var(--shadow-soft)] sm:p-6"
       >
-        <header className="aff-panel-white p-6 sm:p-7">
+        <header className="px-1 sm:px-2">
           <h2 className="text-[20px] font-medium tracking-tight text-[var(--ink)] sm:text-[22px]">
             {step1.stepTitle}
           </h2>
@@ -1273,7 +1273,7 @@ export function FormConfigurazione({
           isPercorsoInstore ||
           isPercorsoRetargeting ||
           isPercorsoAwareness ? (
-            <div className="rounded-[20px] bg-[var(--lavender-muted)]/55 p-5 sm:p-6">
+            <div className="rounded-[20px] bg-[var(--lavender-muted)] p-5 sm:p-6">
               <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                 <p className="text-sm font-medium text-[var(--ink)]">
                   {step1.briefLabel}
@@ -1928,7 +1928,7 @@ export function FormConfigurazione({
           </Passo1Sezione>
           ) : null}
 
-          <div className="space-y-4 rounded-[20px] bg-[rgba(122,116,168,0.28)] p-5 sm:p-6">
+          <div className="aff-panel-lilac space-y-4 p-5 sm:p-6">
             <Campo etichetta="Nome campagna">
               <input
                 type="text"
@@ -1946,7 +1946,7 @@ export function FormConfigurazione({
             !isPercorsoInstore &&
             !isPercorsoRetargeting &&
             !isPercorsoAwareness ? (
-            <div className="rounded-[20px] bg-[var(--lavender-muted)]/55 p-5 sm:p-6">
+            <div className="rounded-[20px] bg-[var(--lavender-muted)] p-5 sm:p-6">
               <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                 <p className="text-sm font-medium text-[var(--ink)]">
                   {step1.briefLabel}
@@ -2189,7 +2189,7 @@ export function FormConfigurazione({
                     </div>
                   </div>
                 ) : (
-                <div className="aff-panel-lilac p-4">
+                <div className="aff-panel-white p-4">
                   <p className="text-[13px] font-medium text-[var(--primary)]">
                     Copertura e Frequenza Locale
                   </p>
@@ -2322,7 +2322,7 @@ export function FormConfigurazione({
               {valoreVisita > 0 &&
               margineProdotto > 0 &&
               cpaMaxAcquisto > 0 ? (
-                <div className="aff-panel-lilac p-4">
+                <div className="aff-panel-white p-4">
                   <p className="text-[13px] font-medium text-[var(--primary)]">
                     {isPercorsoEcommerce
                       ? "Limiti economici della campagna"
@@ -2906,7 +2906,7 @@ export function FormConfigurazione({
           {isRetargeting &&
           valoreVisita > 0 &&
           cpaRecupero > 0 ? (
-            <div className="aff-panel-lilac p-4">
+            <div className="aff-panel-white p-4">
               <p className="text-[13px] font-medium text-[var(--primary)]">
                 {isPercorsoRetargeting
                   ? "CPA Max sostenibile"
@@ -2949,7 +2949,7 @@ export function FormConfigurazione({
           valoreVisita > 0 &&
           utilePerScontrino > 0 &&
           cpaInStore > 0 ? (
-            <div className="aff-panel-lilac p-4">
+            <div className="aff-panel-white p-4">
               <p className="text-[13px] font-medium text-[var(--primary)]">
                 {isPercorsoInstore
                   ? "CPA Max sostenibile"
@@ -2987,7 +2987,7 @@ export function FormConfigurazione({
             </div>
           ) : null}
           {isBookings && valoreVisita > 0 && cpaSostenibile > 0 ? (
-            <div className="aff-panel-lilac p-4">
+            <div className="aff-panel-white p-4">
               <p className="text-[13px] font-medium text-[var(--primary)]">
                 {ltvEconomics
                   ? "CPA e LTV — Prenotazioni"
@@ -3080,7 +3080,7 @@ export function FormConfigurazione({
           !isAwareness &&
           valoreVisita > 0 &&
           (cplPrimoAcquistoLeads > 0 || ltvEconomics) ? (
-            <div className="aff-panel-lilac p-4 sm:p-5">
+            <div className="aff-panel-white p-4 sm:p-5">
               <p className="text-[13px] font-medium text-[var(--primary)]">
                 {ltvEconomics
                   ? "CPL e LTV — Sostenibilità acquisizione"
