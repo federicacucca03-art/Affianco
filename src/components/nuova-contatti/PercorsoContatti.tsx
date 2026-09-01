@@ -435,6 +435,7 @@ export function PercorsoContatti({
     useState<RetargetingAudienceSource>("CART");
   const [dataEventoApertura, setDataEventoApertura] = useState("");
   const [tonoVoce, setTonoVoce] = useState<TonoVoce>("diretto");
+  const [previewTabReset, setPreviewTabReset] = useState(0);
   const [wizardStep, setWizardStep] = useState<WizardStep>(1);
   const [ltvAttivo, setLtvAttivo] = useState(false);
   const [frequenzaAnnuale, setFrequenzaAnnuale] = useState<number | string>(1);
@@ -2687,6 +2688,9 @@ export function PercorsoContatti({
                 tonoVoce={tonoVoce}
                 onCambiaTonoVoce={cambiaTonoVoce}
                 onRigeneraVarianti={rigeneraVariantiCopy}
+                onDopoSwapVariante={() =>
+                  setPreviewTabReset((n) => n + 1)
+                }
                 copyAiLoading={copyAiLoading}
                 targetMargin={targetMargin}
                 onCambiaTargetMargin={setTargetMargin}
@@ -2801,6 +2805,7 @@ export function PercorsoContatti({
                   formatoEcommerce={formatoEcommerce}
                   indiceCarosello={indiceAnteprimaCreativita}
                   onCambiaIndiceCarosello={setIndiceAnteprimaCreativita}
+                  tabResetKey={previewTabReset}
                 />
               ) : null}
               {wizardStep === 6 &&

@@ -1,13 +1,37 @@
 "use client";
 
-import type { CopyRecommendation } from "@/lib/raccomanda-copy";
+import { useState } from "react";
+import type { CopyRecommendation, CopyVariantId } from "@/lib/raccomanda-copy";
+import { ctaUsaVariantePrimaria } from "@/lib/raccomanda-copy";
 
 export function CopyRecommendationCard({
   recommendation,
+  onUsaVariante,
 }: {
   recommendation: CopyRecommendation | null;
+  onUsaVariante?: (variante: Exclude<CopyVariantId, "A">) => void;
 }) {
+  const [conferma, setConferma] = useState<Exclude<CopyVariantId, "A"> | null>(
+    null,
+  );
+  const [feedback, setFeedback] = useState(false);
+
   if (!recommendation) return null;
+
+  const azioni = onUsaVariante ? ctaUsaVariantePrimaria(recommendation) : [];
+
+  function chiediConferma(variante: Exclude<CopyVariantId, "A">) {
+    setFeedback(false);
+    setConferma(variante);
+  }
+
+  function applica() {
+    if (!conferma || !onUsaVariante) return;
+    const scelta = conferma;
+    onUsaVariante(scelta);
+    setConferma(null);
+    setFeedback(true);
+  }
 
   return (
     <section
@@ -34,6 +58,64 @@ export function CopyRecommendationCard({
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {feedback ? (
+        <p
+          data-affianco-swap-feedback
+          className="mt-2 text-xs leading-relaxed text-[var(--accent)]"
+        >
+          Variante impostata come principale.
+        </p>
+      ) : null}
+
+      {conferma ? (
+        <div
+          data-affianco-swap-confirm={conferma}
+          className="mt-3 rounded-md border border-[var(--accent-muted)] bg-white px-3 py-2.5"
+        >
+          <p className="text-sm leading-relaxed text-[var(--ink)]">
+            Vuoi impostare la Variante {conferma} come testo principale?
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-[var(--ink-muted)]">
+            Il testo attualmente usato per il lancio resterà disponibile come
+            alternativa.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setConferma(null)}
+              className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--ink)]"
+            >
+              Annulla
+            </button>
+            <button
+              type="button"
+              data-affianco-swap-confirm-apply
+              onClick={applica}
+              className="rounded-full bg-[var(--ink)] px-3 py-1.5 text-xs font-medium text-white"
+            >
+              Usa Variante {conferma}
+            </button>
+          </div>
+        </div>
+      ) : azioni.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {azioni.map((variante) => (
+            <button
+              key={variante}
+              type="button"
+              data-affianco-usa-variante={variante}
+              onClick={() => chiediConferma(variante)}
+              className="rounded-full border border-[var(--accent)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--accent)]"
+            >
+              {azioni.length === 1 &&
+              recommendation.recommendedVariants.length === 1
+                ? "Usa questa variante"
+                : `Usa Variante ${variante}`}
+            </button>
+          ))}
+        </div>
       ) : null}
     </section>
   );

@@ -29,7 +29,7 @@ import {
   BadgeCopyVariant,
   CopyRecommendationCard,
 } from "@/components/nuova-contatti/CopyRecommendationCard";
-import { raccomandaCopy, statusCopyVariant } from "@/lib/raccomanda-copy";
+import { raccomandaCopy, scambiaVariantePrimaria, statusCopyVariant } from "@/lib/raccomanda-copy";
 import { ChevronDown } from "lucide-react";
 import { MetaAdsImportCode } from "@/components/nuova-contatti/MetaAdsImportCode";
 import type { StatoApprovazioneLeads } from "@/components/nuova-contatti/StatoApprovazioneLeads";
@@ -153,6 +153,8 @@ type Props = {
   tonoVoce?: TonoVoce;
   onCambiaTonoVoce?: (valore: TonoVoce) => void;
   onRigeneraVarianti?: () => void;
+  /** Dopo swap B/C → A: reset preview tab (solo LEADS). */
+  onDopoSwapVariante?: () => void;
   copyAiLoading?: boolean;
   targetMargin: 30 | 50 | 70;
   onCambiaTargetMargin: (valore: 30 | 50 | 70) => void;
@@ -404,6 +406,7 @@ export function FormConfigurazione({
   tonoVoce = "diretto",
   onCambiaTonoVoce,
   onRigeneraVarianti,
+  onDopoSwapVariante,
   copyAiLoading = false,
   targetMargin,
   onCambiaTargetMargin,
@@ -490,6 +493,24 @@ export function FormConfigurazione({
     valore: ConfigurazioneContatti[K],
   ) {
     onCambia({ ...config, [chiave]: valore });
+  }
+
+  function usaVarianteComePrimaria(scelta: "B" | "C") {
+    const scambiati = scambiaVariantePrimaria(
+      {
+        varianteA: config.varianteA ?? "",
+        varianteB: config.varianteB ?? "",
+        varianteC: config.varianteC ?? "",
+      },
+      scelta,
+    );
+    onCambia({
+      ...config,
+      varianteA: scambiati.varianteA,
+      varianteB: scambiati.varianteB,
+      varianteC: scambiati.varianteC,
+    });
+    onDopoSwapVariante?.();
   }
 
   const pathname = usePathname() ?? "";
@@ -3480,7 +3501,10 @@ export function FormConfigurazione({
 
         {isPercorsoLeads ? (
           <div className="mt-4">
-            <CopyRecommendationCard recommendation={copyRecommendation} />
+            <CopyRecommendationCard
+              recommendation={copyRecommendation}
+              onUsaVariante={usaVarianteComePrimaria}
+            />
           </div>
         ) : null}
 

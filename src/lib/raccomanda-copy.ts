@@ -290,3 +290,45 @@ export function statusCopyVariant(
   if (!rec) return null;
   return rec.profiles.find((p) => p.variant === variant)?.status ?? null;
 }
+
+export type TestiVariantiCopy = {
+  varianteA: string;
+  varianteB: string;
+  varianteC: string;
+};
+
+/**
+ * Imposta B o C come slot A (primaria). Swap reale, nessun testo perso.
+ * Headline e creatività non sono in questo oggetto.
+ */
+export function scambiaVariantePrimaria(
+  testi: TestiVariantiCopy,
+  scelta: Exclude<CopyVariantId, "A">,
+): TestiVariantiCopy {
+  if (scelta === "B") {
+    return {
+      varianteA: testi.varianteB,
+      varianteB: testi.varianteA,
+      varianteC: testi.varianteC,
+    };
+  }
+  return {
+    varianteA: testi.varianteC,
+    varianteB: testi.varianteB,
+    varianteC: testi.varianteA,
+  };
+}
+
+/**
+ * CTA "Usa …" solo per B/C consigliate. Mai A (già primaria).
+ * Tie a tre: nessuna CTA (A è già allineata).
+ */
+export function ctaUsaVariantePrimaria(
+  rec: CopyRecommendation | null,
+): Exclude<CopyVariantId, "A">[] {
+  if (!rec || rec.recommendedVariants.length === 0) return [];
+  if (rec.recommendedVariants.length === 3) return [];
+  return rec.recommendedVariants.filter(
+    (id): id is Exclude<CopyVariantId, "A"> => id === "B" || id === "C",
+  );
+}

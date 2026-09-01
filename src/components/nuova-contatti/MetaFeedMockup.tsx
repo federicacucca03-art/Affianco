@@ -25,6 +25,8 @@ type Props = {
   formatoEcommerce?: EcommerceCreativoFormato;
   indiceCarosello?: number;
   onCambiaIndiceCarosello?: (indice: number) => void;
+  /** Incrementato dopo swap copy: riporta la tab su A. */
+  tabResetKey?: number;
 };
 
 type TabVariante = "A" | "B" | "C";
@@ -40,8 +42,12 @@ export function MetaFeedMockup({
   formatoEcommerce = "SINGLE",
   indiceCarosello = 0,
   onCambiaIndiceCarosello,
+  tabResetKey = 0,
 }: Props) {
   const [tab, setTab] = useState<TabVariante>("A");
+  useEffect(() => {
+    setTab("A");
+  }, [tabResetKey]);
   const isMapsUrl =
     objective === "AWARENESS" && isUrlMapsIndicazioni(destinationUrl);
   const ctaLabel = ctaLabelDaObjective(objective, bookingChannel, {
