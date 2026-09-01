@@ -25,6 +25,11 @@ import {
   tassoConversioneLeadsValido,
 } from "@/lib/conversion-rate";
 import { ControlloMessaggio } from "@/components/nuova-contatti/ControlloMessaggio";
+import {
+  BadgeCopyVariant,
+  CopyRecommendationCard,
+} from "@/components/nuova-contatti/CopyRecommendationCard";
+import { raccomandaCopy, statusCopyVariant } from "@/lib/raccomanda-copy";
 import { ChevronDown } from "lucide-react";
 import { MetaAdsImportCode } from "@/components/nuova-contatti/MetaAdsImportCode";
 import type { StatoApprovazioneLeads } from "@/components/nuova-contatti/StatoApprovazioneLeads";
@@ -858,6 +863,32 @@ export function FormConfigurazione({
       citta,
       frontEndOffer,
       elevatorPitch,
+      settore,
+    ],
+  );
+
+  const copyRecommendation = useMemo(
+    () =>
+      isPercorsoLeads
+        ? raccomandaCopy({
+            varianteA: valoriVarianti[0],
+            varianteB: valoriVarianti[1],
+            varianteC: valoriVarianti[2],
+            titoloAnnuncio: config.titoloAnnuncio,
+            offerta: frontEndOffer,
+            brief: elevatorPitch,
+            citta: citta ?? "",
+            settore: settore ?? "",
+            objective: "LEADS",
+          })
+        : null,
+    [
+      isPercorsoLeads,
+      valoriVarianti,
+      config.titoloAnnuncio,
+      frontEndOffer,
+      elevatorPitch,
+      citta,
       settore,
     ],
   );
@@ -3447,6 +3478,12 @@ export function FormConfigurazione({
           </div>
         ) : null}
 
+        {isPercorsoLeads ? (
+          <div className="mt-4">
+            <CopyRecommendationCard recommendation={copyRecommendation} />
+          </div>
+        ) : null}
+
         <div className="mt-4 rounded-xl border-2 border-[var(--accent)]/30 bg-[var(--surface-hover)] p-4">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-medium text-[var(--ink)]">
@@ -3462,6 +3499,11 @@ export function FormConfigurazione({
                 ? "Usata per il lancio"
                 : "Consigliato da Affianco per il lancio"}
             </span>
+            {isPercorsoLeads ? (
+              <BadgeCopyVariant
+                status={statusCopyVariant(copyRecommendation, "A")}
+              />
+            ) : null}
           </div>
           <textarea
             value={valoriVarianti[0]}
@@ -3565,9 +3607,19 @@ export function FormConfigurazione({
                 key={variante.id}
                 className="rounded-xl border border-[var(--border)] bg-[var(--surface-hover)] p-4"
               >
-                <p className="text-sm font-medium text-[var(--ink)]">
-                  {variante.etichetta}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-medium text-[var(--ink)]">
+                    {variante.etichetta}
+                  </p>
+                  {isPercorsoLeads ? (
+                    <BadgeCopyVariant
+                      status={statusCopyVariant(
+                        copyRecommendation,
+                        indice === 0 ? "B" : "C",
+                      )}
+                    />
+                  ) : null}
+                </div>
                 <textarea
                   value={valoriVarianti[indice + 1]}
                   onChange={(e) =>
