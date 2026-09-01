@@ -2415,42 +2415,26 @@ export function PercorsoContatti({
           ) : null}
         </div>
 
-        <div className="mb-8 aff-panel-white p-2 sm:p-3.5">
-          <div className="rounded-[20px] bg-[var(--lavender-muted)] p-2 sm:p-2.5">
+        <div className="mb-6 aff-panel-white p-1.5 sm:p-2">
+          <div className="rounded-full bg-[var(--lavender-muted)] px-1 py-1 sm:px-1.5">
             <WizardStepper
-            step={wizardStep}
-            titoliOverride={{
-              ...(isPercorsoAwareness
-                ? {
-                    3: "Messaggio di apertura",
-                    4: "Creatività di apertura",
-                    5: "Controllo",
-                  }
-                : isPercorsoRetargeting
-                  ? {
-                      3: "Messaggio di recupero",
-                      4: "Creatività di recupero",
-                      5: "Controllo",
-                    }
-                  : isPercorsoInstore
-                    ? {
-                        3: "Messaggio locale",
-                        4: "Creatività locale",
-                        5: "Controllo",
-                      }
-                    : {}),
-              ...(wizardStep === 6
-                ? { 6: etichettaStepperStep6(raccomandazioneLancio.stato) }
-                : {}),
-            }}
-            onVaiAStep={(s) => {
-              if (s <= wizardStep) setWizardStep(s);
-            }}
-          />
+              step={wizardStep}
+              titoliOverride={
+                wizardStep === 6
+                  ? { 6: etichettaStepperStep6(raccomandazioneLancio.stato) }
+                  : undefined
+              }
+              onVaiAStep={(s) => {
+                if (s <= wizardStep) setWizardStep(s);
+              }}
+            />
           </div>
           {stepAttuale ? (
-            <div className="px-3 pb-2 pt-3 sm:px-4">
-              <p className="text-sm font-medium text-[var(--ink)]">
+            <div className="px-3 pb-2 pt-2.5 sm:px-4">
+              <p className="text-[12px] font-medium text-[var(--primary)]">
+                Passo {wizardStep} di {WIZARD_STEPS.length}
+              </p>
+              <p className="mt-0.5 text-sm font-medium text-[var(--ink)]">
                 {titoloStepWizard}
               </p>
               {sottotitoloStepWizard ? (
