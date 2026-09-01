@@ -2415,8 +2415,8 @@ export function PercorsoContatti({
           ) : null}
         </div>
 
-        <div className="mb-8 aff-panel-white p-2 sm:p-3">
-          <div className="rounded-[20px] bg-[var(--lavender-muted)] p-1.5">
+        <div className="mb-8 aff-panel-white p-2 sm:p-3.5">
+          <div className="rounded-[20px] bg-[var(--lavender-muted)] p-2 sm:p-2.5">
             <WizardStepper
             step={wizardStep}
             titoliOverride={{
