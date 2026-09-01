@@ -26,11 +26,13 @@ import {
   ID_CREATIVE_VISION_RISK_WARNING,
   findingsRischioDaVisibleText,
   generaGuidanceP1bCreativita,
+  pruneStatoVisionPerAsset,
 } from "@/lib/guidance-creativita-vision";
 import {
   ID_CREATIVE_MANCA_9_16,
   generaGuidanceCreativita,
 } from "@/lib/qualita-creativita";
+import { maxCreativitaPerContesto } from "@/lib/creativita";
 import { GET, POST } from "@/app/api/analyze-creative/route";
 
 let falliti = 0;
@@ -49,6 +51,14 @@ const esiti: Record<string, boolean> = {
   "ERROR NON-BLOCKING": true,
   SECURITY: true,
   "NO PERFORMANCE CLAIMS": true,
+  "PER-ASSET STATE": true,
+  "PER-ASSET BUTTON": true,
+  "PARTIAL ANALYSIS": true,
+  "LOW ON SECONDARY": true,
+  "RISK ON SECONDARY": true,
+  "POSITIVE SUMMARY": true,
+  "REMOVE ASSET RESET": true,
+  "COST CONTROL": true,
 };
 
 function mark(sezione: keyof typeof esiti, ok: boolean, msg: string) {
@@ -363,10 +373,13 @@ mark(
 
 console.log("\n=== VIDEO / ERROR / SECURITY / COPY ===");
 const studio = src("src/components/nuova-contatti/StudioCreativo.tsx");
+const dropzoneSrc = src("src/components/nuova-contatti/DropzoneCreativita.tsx");
 mark(
   "VIDEO DEFER",
-  studio.includes("Analisi visual disponibile per immagini in questa versione.") &&
-    studio.includes('if (!assetPrincipale || assetPrincipale.isVideo) return') &&
+  dropzoneSrc.includes(
+    "Analisi visual disponibile per immagini in questa versione.",
+  ) &&
+    studio.includes("if (!asset || asset.isVideo) return") &&
     !studio.includes("extractFrame") &&
     !studio.includes("html5 video currentTime"),
   "video: microcopy, no frame extract, no analyze",
@@ -432,10 +445,13 @@ mark(
 
 mark(
   "NO PERFORMANCE CLAIMS",
-  studio.includes("Analizza creatività") &&
-    studio.includes("Analisi in corso") &&
-    !studio.includes("useEffect(() => {\n    void analizzaCreativitaPrincipale"),
-  "trigger solo click, non auto-run",
+  dropzoneSrc.includes('"Analizza"') &&
+    dropzoneSrc.includes("onAnalizzaCreativita") &&
+    studio.includes("analizzaCreativitaAsset") &&
+    studio.includes("visionById") &&
+    !studio.includes("Analizza tutto") &&
+    !studio.includes("Promise.all"),
+  "trigger per asset, non auto-run, no batch",
 );
 
 const form = src("src/components/nuova-contatti/FormConfigurazione.tsx");
@@ -443,6 +459,129 @@ mark(
   "P1A MERGE",
   /\belevatorPitch=\{elevatorPitch\}/.test(form),
   "brief LEADS passato a StudioCreativo come prop",
+);
+
+console.log("\n=== MULTI-ASSET ===");
+mark(
+  "PER-ASSET STATE",
+  studio.includes("visionById") &&
+    studio.includes("pruneStatoVisionPerAsset") &&
+    !studio.includes("const [visionAnalysis,"),
+  "stato keyed per asset id, non globale",
+);
+mark(
+  "PER-ASSET BUTTON",
+  dropzoneSrc.includes("onAnalizzaCreativita(c.id)") &&
+    dropzoneSrc.includes('{inCorso ? "Analisi…" : "Analizza"}'),
+  "bottone Analizza per ogni card immagine",
+);
+
+const soloUno = generaGuidanceP1bCreativita({
+  analyses: [{ assetId: "a1", indice: 1, analysis: high }],
+  immaginiTotali: 2,
+  offerta: AURORA_OFFERTA,
+  brief: AURORA_BRIEF,
+});
+mark(
+  "PARTIAL ANALYSIS",
+  soloUno.length === 1 &&
+    (soloUno[0]?.title ?? "").includes("Creatività 1 analizzata") &&
+    !(soloUno[0]?.title ?? "").includes("Le creatività analizzate sono coerenti") &&
+    (soloUno[0]?.description ?? "").includes("1 di 2"),
+  "CASE A: un solo asset analizzato, no riepilogo globale",
+);
+
+const lowSecondario = generaGuidanceP1bCreativita({
+  analyses: [
+    { assetId: "a1", indice: 1, analysis: high },
+    { assetId: "a2", indice: 2, analysis: low },
+  ],
+  immaginiTotali: 2,
+  offerta: AURORA_OFFERTA,
+  brief: AURORA_BRIEF,
+});
+mark(
+  "LOW ON SECONDARY",
+  lowSecondario.some(
+    (i) =>
+      i.id.startsWith(ID_CREATIVE_VISION_RELEVANCE_LOW) &&
+      i.title === "Creatività 2: il visual sembra poco coerente con l'offerta.",
+  ) && !lowSecondario.some((i) => i.id === ID_CREATIVE_VISION_RELEVANCE_HIGH),
+  "CASE A2: LOW su creatività 2, niente positivo globale",
+);
+
+const hardSecondario = generaGuidanceP1bCreativita({
+  analyses: [
+    { assetId: "a1", indice: 1, analysis: high },
+    { assetId: "a2", indice: 2, analysis: claimHard },
+  ],
+  immaginiTotali: 2,
+  offerta: AURORA_OFFERTA,
+  brief: AURORA_BRIEF,
+});
+const shownHard2 = selezionaGuidanceDaMostrare([
+  ...hardSecondario,
+  ...generaGuidanceCreativita({
+    creativita: [
+      { width: 1080, height: 1080 },
+      { width: 1080, height: 1080 },
+    ],
+    objective: "LEADS",
+  }),
+]);
+mark(
+  "RISK ON SECONDARY",
+  shownHard2.principale?.title ===
+    "Creatività 2: da rivedere prima del lancio." &&
+    shownHard2.principale!.id.startsWith(ID_CREATIVE_VISION_RISK_HARD) &&
+    1 + shownHard2.secondari.length <= 3,
+  "CASE C: HARD su creatività 2 prioritario, max 3",
+);
+
+const tuttiOk = generaGuidanceP1bCreativita({
+  analyses: [
+    { assetId: "a1", indice: 1, analysis: high },
+    { assetId: "a2", indice: 2, analysis: high },
+  ],
+  immaginiTotali: 2,
+  offerta: AURORA_OFFERTA,
+  brief: AURORA_BRIEF,
+});
+mark(
+  "POSITIVE SUMMARY",
+  tuttiOk.length === 1 &&
+    tuttiOk[0]?.title ===
+      "Le creatività analizzate sono coerenti con l'offerta." &&
+    tuttiOk[0]?.description ===
+      "Non sono emersi elementi critici nei visual analizzati.",
+  "CASE B: tutti analizzati ok → un solo riepilogo",
+);
+
+const dopoRemove = generaGuidanceP1bCreativita({
+  analyses: [{ assetId: "a1", indice: 1, analysis: high }],
+  immaginiTotali: 1,
+  offerta: AURORA_OFFERTA,
+  brief: AURORA_BRIEF,
+});
+const pruned = pruneStatoVisionPerAsset(
+  { a1: high, a2: low },
+  ["a1"],
+);
+mark(
+  "REMOVE ASSET RESET",
+  pruned.a1 === high &&
+    pruned.a2 === undefined &&
+    dopoRemove[0]?.title === "Il visual è coerente con l'offerta." &&
+    !dopoRemove.some((i) => i.title.includes("Creatività 2")),
+  "CASE D: asset rimosso → warning sparisce",
+);
+
+mark(
+  "COST CONTROL",
+  maxCreativitaPerContesto("LEADS") === 3 &&
+    !studio.includes("retry") &&
+    dropzoneSrc.includes("disabled={inCorso}"),
+  "max 3 LEADS, 1 click = 1 chiamata, no retry/batch",
 );
 
 console.log("\n=== ESITI ===");

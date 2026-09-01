@@ -22,6 +22,12 @@ type Props = {
   creativita: CreativitaAsset[];
   indiceAnteprima: number;
   onCambiaCreativita: (lista: CreativitaAsset[]) => void;
+  /** Stato analisi vision per asset.id. Opzionale (P1B). */
+  analisiVision?: Record<
+    string,
+    { status: "IDLE" | "ANALYZING" | "SUCCESS" | "UNKNOWN" | "ERROR"; errore: string | null }
+  >;
+  onAnalizzaCreativita?: (assetId: string) => void;
   onCambiaIndiceAnteprima: (indice: number) => void;
   objective?: CampagnaObjective;
   formatoEcommerce?: EcommerceCreativoFormato;
@@ -139,6 +145,8 @@ export function DropzoneCreativita({
   creativeGuidelines = null,
   titoloSezione,
   embedded = false,
+  analisiVision,
+  onAnalizzaCreativita,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [trascinando, setTrascinando] = useState(false);
@@ -385,37 +393,54 @@ export function DropzoneCreativita({
           <div className="flex flex-wrap gap-2">
             {creativita.map((c, indice) => {
               const selezionata = indice === indiceAnteprima;
+              const statoVision = analisiVision?.[c.id];
+              const inCorso = statoVision?.status === "ANALYZING";
               return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => onCambiaIndiceAnteprima(indice)}
-                  title={etichette[c.ruolo]}
-                  className={`relative overflow-hidden rounded-xl border-2 transition-colors ${
-                    selezionata
-                      ? "border-[var(--accent)]"
-                      : "border-[var(--border)] hover:border-[var(--accent-muted)]"
-                  }`}
-                >
+                <div key={c.id} className="flex w-16 flex-col items-stretch gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onCambiaIndiceAnteprima(indice)}
+                    title={etichette[c.ruolo]}
+                    className={`relative overflow-hidden rounded-xl border-2 transition-colors ${
+                      selezionata
+                        ? "border-[var(--accent)]"
+                        : "border-[var(--border)] hover:border-[var(--accent-muted)]"
+                    }`}
+                  >
+                    {c.isVideo ? (
+                      <video
+                        src={c.url}
+                        className="h-16 w-16 object-cover"
+                        muted
+                        playsInline
+                      />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={c.url}
+                        alt={etichette[c.ruolo]}
+                        className="h-16 w-16 object-cover"
+                      />
+                    )}
+                    <span className="absolute inset-x-0 bottom-0 bg-black/55 px-1 py-0.5 text-center text-[9px] font-medium text-white">
+                      {indice + 1}
+                    </span>
+                  </button>
                   {c.isVideo ? (
-                    <video
-                      src={c.url}
-                      className="h-16 w-16 object-cover"
-                      muted
-                      playsInline
-                    />
-                  ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={c.url}
-                      alt={etichette[c.ruolo]}
-                      className="h-16 w-16 object-cover"
-                    />
-                  )}
-                  <span className="absolute inset-x-0 bottom-0 bg-black/55 px-1 py-0.5 text-center text-[9px] font-medium text-white">
-                    {indice + 1}
-                  </span>
-                </button>
+                    <p className="text-[8px] leading-tight text-[var(--ink-muted)]">
+                      Solo immagini
+                    </p>
+                  ) : onAnalizzaCreativita ? (
+                    <button
+                      type="button"
+                      disabled={inCorso}
+                      onClick={() => onAnalizzaCreativita(c.id)}
+                      className="rounded-md border border-[var(--border)] bg-white px-0.5 py-0.5 text-[9px] font-medium leading-tight text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {inCorso ? "Analisi…" : "Analizza"}
+                    </button>
+                  ) : null}
+                </div>
               );
             })}
             {puoAggiungere ? (
@@ -497,9 +522,14 @@ export function DropzoneCreativita({
                         ).toFixed(2)}`}
                   </p>
                   {attiva.isVideo ? (
-                    <p className="mt-2 text-xs font-medium text-[#3D8B57]">
-                      Mostra il prodotto in azione nei primi 2 secondi.
-                    </p>
+                    <>
+                      <p className="mt-2 text-xs font-medium text-[#3D8B57]">
+                        Mostra il prodotto in azione nei primi 2 secondi.
+                      </p>
+                      <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
+                        Analisi visual disponibile per immagini in questa versione.
+                      </p>
+                    </>
                   ) : attiva.formatoOrizzontale ? (
                     <p className="mt-2 text-xs font-medium text-[#C26A0A]">
                       Formato orizzontale: occupa meno spazio nel feed mobile.
@@ -521,6 +551,13 @@ export function DropzoneCreativita({
                     <X className="h-3 w-3" strokeWidth={2} />
                     Rimuovi
                   </button>
+                  {!attiva.isVideo &&
+                  analisiVision?.[attiva.id]?.status === "ERROR" &&
+                  analisiVision[attiva.id]?.errore ? (
+                    <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
+                      {analisiVision[attiva.id]!.errore}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </div>

@@ -46,7 +46,7 @@ import type { GuidanceItem } from "@/lib/guidance";
 import { generaGuidanceCreativita } from "@/lib/qualita-creativita";
 import type { CreativeVisionAnalysis } from "@/lib/analyze-creative";
 import { dataUrlDaBytesImmagine } from "@/lib/analyze-creative";
-import { generaGuidanceP1bCreativita } from "@/lib/guidance-creativita-vision";
+import { generaGuidanceP1bCreativita, pruneStatoVisionPerAsset } from "@/lib/guidance-creativita-vision";
 import { supabase } from "@/lib/supabase";
 
 const PASSI_SCANSIONE = [
@@ -151,22 +151,43 @@ export function StudioCreativo({
   const [passoScansione, setPassoScansione] = useState(0);
   const [errore, setErrore] = useState<string | null>(null);
   const [mockInfo, setMockInfo] = useState<string | null>(null);
-  const [visionStatus, setVisionStatus] = useState<
-    "IDLE" | "ANALYZING" | "SUCCESS" | "UNKNOWN" | "ERROR"
-  >("IDLE");
-  const [visionErrore, setVisionErrore] = useState<string | null>(null);
-  const [visionAnalysis, setVisionAnalysis] =
-    useState<CreativeVisionAnalysis | null>(null);
+  const [visionById, setVisionById] = useState<
+    Record<
+      string,
+      {
+        status: "IDLE" | "ANALYZING" | "SUCCESS" | "UNKNOWN" | "ERROR";
+        analysis: CreativeVisionAnalysis | null;
+        errore: string | null;
+      }
+    >
+  >({});
 
-  const assetPrincipale =
-    creativita.find((c) => c.ruolo === "principale") ?? creativita[0] ?? null;
-  const assetPrincipaleId = assetPrincipale?.id ?? null;
-
+  const idsCreativita = creativita.map((c) => c.id).join("|");
   useEffect(() => {
-    setVisionStatus("IDLE");
-    setVisionErrore(null);
-    setVisionAnalysis(null);
-  }, [assetPrincipaleId]);
+    const ids = idsCreativita === "" ? [] : idsCreativita.split("|");
+    setVisionById((prev) => pruneStatoVisionPerAsset(prev, ids));
+  }, [idsCreativita]);
+
+  const analysesVision = useMemo(() => {
+    const out: {
+      assetId: string;
+      indice: number;
+      analysis: CreativeVisionAnalysis;
+    }[] = [];
+    creativita.forEach((c, i) => {
+      const slot = visionById[c.id];
+      if (slot?.analysis) {
+        out.push({
+          assetId: c.id,
+          indice: i + 1,
+          analysis: slot.analysis,
+        });
+      }
+    });
+    return out;
+  }, [creativita, visionById]);
+
+  const immaginiTotali = creativita.filter((c) => !c.isVideo).length;
 
   const guidanceP1a = useMemo(
     () => generaGuidanceCreativita({ creativita, objective }),
@@ -175,11 +196,12 @@ export function StudioCreativo({
   const guidanceP1b = useMemo(
     () =>
       generaGuidanceP1bCreativita({
-        analysis: visionAnalysis,
+        analyses: analysesVision,
+        immaginiTotali,
         offerta,
         brief: elevatorPitch,
       }),
-    [visionAnalysis, offerta, elevatorPitch],
+    [analysesVision, immaginiTotali, offerta, elevatorPitch],
   );
   const guidanceCreativita = useMemo(
     () => [...guidanceP1b, ...guidanceP1a],
@@ -205,19 +227,31 @@ export function StudioCreativo({
     return dataUrl;
   }
 
-  async function analizzaCreativitaPrincipale() {
-    if (!assetPrincipale || assetPrincipale.isVideo) return;
-    setVisionStatus("ANALYZING");
-    setVisionErrore(null);
+  async function analizzaCreativitaAsset(assetId: string) {
+    const asset = creativita.find((c) => c.id === assetId);
+    if (!asset || asset.isVideo) return;
+    setVisionById((prev) => ({
+      ...prev,
+      [assetId]: {
+        status: "ANALYZING",
+        analysis: null,
+        errore: null,
+      },
+    }));
     try {
-      const dataUrl = await blobUrlToDataUrl(assetPrincipale.url);
+      const dataUrl = await blobUrlToDataUrl(asset.url);
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (!token) {
-        setVisionStatus("ERROR");
-        setVisionErrore(
-          "Non sono riuscito ad analizzare il visual. Puoi continuare comunque.",
-        );
+        setVisionById((prev) => ({
+          ...prev,
+          [assetId]: {
+            status: "ERROR",
+            analysis: null,
+            errore:
+              "Non sono riuscito ad analizzare il visual. Puoi continuare comunque.",
+          },
+        }));
         return;
       }
       const res = await fetch("/api/analyze-creative", {
@@ -244,14 +278,24 @@ export function StudioCreativo({
         relevanceReason: data.relevanceReason ?? null,
         visibleText: Array.isArray(data.visibleText) ? data.visibleText : [],
       };
-      setVisionAnalysis(analysis);
-      setVisionStatus(analysis.relevance === "UNKNOWN" ? "UNKNOWN" : "SUCCESS");
+      setVisionById((prev) => ({
+        ...prev,
+        [assetId]: {
+          status: analysis.relevance === "UNKNOWN" ? "UNKNOWN" : "SUCCESS",
+          analysis,
+          errore: null,
+        },
+      }));
     } catch {
-      setVisionAnalysis(null);
-      setVisionStatus("ERROR");
-      setVisionErrore(
-        "Non sono riuscito ad analizzare il visual. Puoi continuare comunque.",
-      );
+      setVisionById((prev) => ({
+        ...prev,
+        [assetId]: {
+          status: "ERROR",
+          analysis: null,
+          errore:
+            "Non sono riuscito ad analizzare il visual. Puoi continuare comunque.",
+        },
+      }));
     }
   }
 
@@ -777,35 +821,14 @@ export function StudioCreativo({
         percorsoRetargeting ||
         percorsoAwareness
       }
+      analisiVision={visionById}
+      onAnalizzaCreativita={(id) => void analizzaCreativitaAsset(id)}
     />
   );
 
   const dropzoneConGuidance = (
     <>
       {dropzone}
-      {assetPrincipale?.isVideo ? (
-        <p className="text-xs leading-relaxed text-[var(--ink-muted)]">
-          Analisi visual disponibile per immagini in questa versione.
-        </p>
-      ) : assetPrincipale ? (
-        <div className="flex flex-col gap-2">
-          <button
-            type="button"
-            disabled={visionStatus === "ANALYZING"}
-            onClick={() => void analizzaCreativitaPrincipale()}
-            className="inline-flex w-fit items-center justify-center rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--ink)] transition-colors hover:border-[var(--accent-muted)] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {visionStatus === "ANALYZING"
-              ? "Analisi in corso…"
-              : "Analizza creatività"}
-          </button>
-          {visionStatus === "ERROR" && visionErrore ? (
-            <p className="text-xs leading-relaxed text-[var(--ink-muted)]">
-              {visionErrore}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
       <AffiancoSuggerisce items={guidanceCreativita as GuidanceItem[]} />
     </>
   );
