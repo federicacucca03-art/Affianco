@@ -402,7 +402,7 @@ export function StudioCreativo({
           Format consigliati di settore
         </h3>
         <span className="inline-flex w-fit rounded-full border border-[#2D6A4A]/30 bg-[#E8F5EE] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#2D6A4A]">
-          Validati su Ad Library
+          Format di riferimento
         </span>
       </div>
       <p className="mt-2 text-xs text-[var(--ink-muted)]">
@@ -952,7 +952,7 @@ export function StudioCreativo({
               🎬 Studio Creativo Interattivo
             </h2>
             <p className="mt-1 max-w-2xl text-xs leading-relaxed text-[var(--ink-muted)]">
-              Format validati, spy tool Meta e reverse-engineering AI — poi
+              Format di riferimento, Ad Library e analisi competitor — poi
               carichi gli asset finali per Ads Manager.
             </p>
           </div>
