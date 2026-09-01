@@ -9,8 +9,8 @@ function tipoRisultatoDaObiettivo(obiettivo: string): string {
   const o = normalizzaObjective(obiettivo);
   if (o === "ECOMMERCE") return "Acquisti";
   if (o === "BOOKINGS") return "Prenotazioni";
-  if (o === "IN_STORE") return "Visite in negozio";
-  if (o === "RETARGETING") return "Acquisti recuperati";
+  if (o === "IN_STORE") return "Risultati (proxy)";
+  if (o === "RETARGETING") return "Risultati";
   if (o === "AWARENESS") return "Copertura / Impression";
   return "Lead Instant Form";
 }
@@ -78,7 +78,9 @@ export function mockScreenshotAnalysis(
   const giorni = Math.max(Number(body.giorniAttiva) || 5, 1);
   const obiettivo = body.obiettivo ?? "LEADS";
   const tipoRisultato = tipoRisultatoDaObiettivo(obiettivo);
-  const isEcommerce = normalizzaObjective(obiettivo) === "ECOMMERCE";
+  const obj = normalizzaObjective(obiettivo);
+  const isEcommerce = obj === "ECOMMERCE";
+  const isAwareness = obj === "AWARENESS";
 
   const fattore =
     giorni < 4 ? 1.08 : giorni < 7 ? 0.96 : 0.88;
@@ -127,7 +129,7 @@ export function mockScreenshotAnalysis(
       verdetto,
       costoPerRisultato,
       target,
-      isEcommerce ? "CPA" : "CPL/CPA",
+      isAwareness ? "CPM" : isEcommerce ? "CPA" : "CPL/CPA",
     ),
     azioniConsigliate: azioniMock(verdetto, faseApprendimento),
   };

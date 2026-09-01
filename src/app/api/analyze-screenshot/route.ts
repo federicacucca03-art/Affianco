@@ -15,10 +15,10 @@ import {
 export const runtime = "nodejs";
 
 const SYSTEM_PROMPT = `Sei un Senior Meta Media Buyer. Analizza lo screenshot di Meta Ads Manager / Business Suite.
-Estrai con precisione i dati numerici visibili e confrontali con la soglia CPL/CPA sostenibile fornita nel contesto.
+Estrai SOLO i dati numerici visibili. Non decidere lo stato economico di Affianco: health, diagnosi e azioni finali sono calcolati dal runtime.
 
 Rispondi SOLO con JSON valido, senza markdown, senza testo fuori dal JSON.
-Schema esatto:
+Schema esatto (backward compatible):
 {
   "spesaTotale": number,
   "risultati": number,
@@ -35,14 +35,14 @@ Schema esatto:
   "azioniConsigliate": string[]
 }
 
-Regole verdetto:
-- ottimo: costo per risultato <= 85% della soglia targetCpl
-- in_target: costo per risultato <= targetCpl
-- fuori_target: costo per risultato > targetCpl
-- dati_insufficienti: meno di 3 risultati o spesa < 25€
+verdetto e azioniConsigliate restano nello schema per compatibilità: Affianco li ignora per health e next action.
 
-azioniConsigliate: esattamente 3 azioni pratiche e operative da fare subito su Meta Ads, in italiano.
-cpc: includilo SOLO se il valore è visibile nello screenshot. Se non è visibile, usa null. Non calcolare CPC da altri KPI.`;
+Se obiettivo è AWARENESS:
+- il confronto rilevante è il CPM, non il CPL
+- non interpretare i risultati come lead o acquisti
+- non scrivere "CPL" nella spiegazione
+
+cpc: includilo SOLO se visibile. Se non è visibile, usa null. Non calcolare CPC da altri KPI.`;
 
 function estraiMediaType(base64: string): "image/jpeg" | "image/png" | "image/webp" {
   if (base64.startsWith("/9j/")) return "image/jpeg";
@@ -169,10 +169,15 @@ export async function POST(request: Request) {
   const base64 = pulisciBase64(imageRaw);
   const mediaType = estraiMediaType(base64);
 
+  const sogliaRiga =
+    contesto.obiettivo.toUpperCase() === "AWARENESS"
+      ? `- CPM di riferimento (piano): ${contesto.targetCpl}€`
+      : `- Costo massimo sostenibile (CPL/CPA): ${contesto.targetCpl}€`;
+
   const userText = `Contesto campagna:
 - Obiettivo: ${contesto.obiettivo}
 - Settore: ${contesto.settore || "non specificato"}
-- CPL/CPA massimo sostenibile (soglia Passo 2): ${contesto.targetCpl}€
+${sogliaRiga}
 - Giorni attiva: ${contesto.giorniAttiva}
 - Cliente: ${contesto.nomeCliente || "non specificato"}
 

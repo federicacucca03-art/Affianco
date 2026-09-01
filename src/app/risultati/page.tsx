@@ -18,6 +18,9 @@ import {
   calcolaHealthStatus,
   descrizioneLogControllo,
   diagnosticaDeterministica,
+  etichettaAreaDiagnosi,
+  etichettaCompleteness,
+  etichettaConfidenza,
   etichettaTrend,
   formatEuro,
   normalizzaCtrDaApi,
@@ -687,7 +690,7 @@ function RisultatiPage() {
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-[var(--ink-muted)]">
           {mostraOverview
-            ? "Tutte le campagne con l’ultimo controllo settimanale. Semaforo, KPI principale e next action."
+            ? "Tutte le campagne con l’ultimo controllo. Stato economico, diagnosi e next action."
             : "Confronta i risultati reali con la soglia economica definita prima del lancio e capisci cosa fare dopo."}
         </p>
         {!mostraOverview ? (
@@ -959,9 +962,7 @@ function RisultatiPage() {
                 label={health.label}
               />
               <p className="mt-3 text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-                {health.mode === "efficiency"
-                  ? "Controllo di efficienza"
-                  : "Stato campagna"}
+                Stato
               </p>
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-[var(--ink)]">
                 {health.explanation}
@@ -1219,14 +1220,20 @@ function RisultatiPage() {
             <section className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">
               <h3 className="text-sm font-medium text-[var(--ink)]">Diagnosi</h3>
               <p className="mt-1 text-xs text-[var(--ink-muted)]">
-                Diagnosi indicativa basata sui KPI disponibili. Verifica sempre
-                il contesto della campagna. Segnali indicativi, da interpretare
-                nel contesto della campagna.
+                Ipotesi sui segnali, distinta dallo stato economico. Non è una
+                certezza sulla creatività, sull&apos;audience o sulla landing.
               </p>
 
               {diagnosis.canDiagnose || diagnosis.signal === "dati_insufficienti" ? (
                 <div className="mt-4">
-                  <p className="text-sm font-medium text-[var(--ink)]">
+                  <p className="text-xs font-medium text-[var(--ink-muted)]">
+                    {etichettaAreaDiagnosi(diagnosis.area)}
+                    {" · "}
+                    {etichettaConfidenza(diagnosis.confidence)}
+                    {" · "}
+                    {etichettaCompleteness(diagnosis.completeness)}
+                  </p>
+                  <p className="mt-2 text-sm font-medium text-[var(--ink)]">
                     {diagnosis.title}
                   </p>
                   <p className="mt-2 text-sm leading-relaxed text-[var(--ink-muted)]">
@@ -1237,9 +1244,6 @@ function RisultatiPage() {
                       {diagnosis.hint}
                     </p>
                   ) : null}
-                  <p className="mt-3 text-xs text-[var(--ink-muted)]">
-                    Segnale: {diagnosis.signal.replace(/_/g, " ")}
-                  </p>
                 </div>
               ) : null}
             </section>

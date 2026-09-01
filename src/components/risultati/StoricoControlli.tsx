@@ -2,6 +2,7 @@
 
 import {
   etichettaHealth,
+  etichettaSegnaleDiagnosi,
   etichettaTrend,
   formatDataCheck,
   formatEuro,
@@ -37,7 +38,7 @@ export function StoricoControlli({
             <th className="px-3 py-2 font-medium">{metricLabel}</th>
             <th className="px-3 py-2 font-medium">Soglia</th>
             <th className="px-3 py-2 font-medium">Trend</th>
-            <th className="px-3 py-2 font-medium">Segnale</th>
+            <th className="px-3 py-2 font-medium">Diagnosi</th>
             <th className="px-3 py-2 font-medium">Nota</th>
           </tr>
         </thead>
@@ -71,7 +72,7 @@ export function StoricoControlli({
                   {i === 0 && trend ? etichettaTrend(trend) : trend ? etichettaTrend(trend) : "—"}
                 </td>
                 <td className="max-w-[220px] px-3 py-2.5 text-[var(--ink-muted)]">
-                  {check.signal?.replace(/_/g, " ") ?? "—"}
+                  {etichettaSegnaleDiagnosi(check.signal)}
                 </td>
                 <td className="max-w-[200px] px-3 py-2.5 text-[var(--ink-muted)]">
                   {check.note?.trim() || "—"}

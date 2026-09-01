@@ -6,6 +6,7 @@ import type { Campagna } from "@/types/campagne";
 import {
   etichettaHealth,
   etichettaMetricaPrimaria,
+  etichettaSegnaleDiagnosi,
   etichettaTrend,
   formatDataCheck,
   formatEuro,
@@ -106,7 +107,10 @@ export function PannelloDiagnosiPerformance({
         ) : (
           <>
             <div className="mt-5 rounded-xl bg-white px-4 py-4 shadow-[var(--shadow-card)]">
-              <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+                Stato
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <StatoChip
                   kind={chipDaHealth(ultimo.healthStatus)}
                   label={etichettaHealth(ultimo.healthStatus)}
@@ -115,6 +119,16 @@ export function PannelloDiagnosiPerformance({
                   Ultimo controllo · {formatDataCheck(ultimo.createdAt)}
                 </p>
               </div>
+              {ultimo.signal ? (
+                <div className="mt-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+                    Diagnosi
+                  </p>
+                  <p className="mt-1 text-sm text-[var(--ink)]">
+                    {etichettaSegnaleDiagnosi(ultimo.signal)}
+                  </p>
+                </div>
+              ) : null}
               {trend ? (
                 <p className="mt-2 text-xs text-[var(--ink-muted)]">
                   vs check precedente: {etichettaTrend(trend)}

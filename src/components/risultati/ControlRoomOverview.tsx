@@ -6,7 +6,7 @@ import type { Campagna, CampagnaObjective } from "@/types/campagne";
 import { etichettaObiettivo } from "@/lib/pre-lancio-check";
 import {
   etichettaMetricaPrimaria,
-  formatDataCheck,
+  etichettaSegnaleDiagnosi,
   formatEuro,
   type ActionPriority,
   type HealthStatus,
@@ -64,7 +64,7 @@ export function fallbackNomeCampagna(objective: CampagnaObjective): string {
     case "ECOMMERCE":
       return "Vendite online";
     case "IN_STORE":
-      return "Visite in negozio";
+      return "Negozio";
     case "RETARGETING":
       return "Retargeting";
     case "AWARENESS":
@@ -172,6 +172,11 @@ function deltaPct(check: CampaignCheck): string {
     ) / 10;
   if (pct === 0) return "in linea";
   return pct > 0 ? `+${pct}%` : `${pct}%`;
+}
+
+function copyDiagnosiOverview(signal: string | null | undefined): string {
+  if (!signal?.trim()) return "Diagnosi non ancora definita";
+  return etichettaSegnaleDiagnosi(signal);
 }
 
 function BadgeStato({
@@ -333,12 +338,15 @@ export function ControlRoomOverview({
             const objective = normalizzaObjective(campagna.objective);
             const metricLabel = etichettaMetricaPrimaria(objective);
             const prima = ultimo?.actions[0] ?? null;
+            const diagnosi = ultimo
+              ? copyDiagnosiOverview(ultimo.signal)
+              : "Diagnosi non ancora definita";
             return (
               <li
                 key={campagna.id}
                 className="rounded-[var(--radius)] bg-white p-4 shadow-[var(--shadow-soft)] sm:p-5"
               >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="order-2 min-w-0 sm:order-1">
                     <p className="text-xs text-[var(--ink-muted)]">
                       {campagna.nomeCliente}
@@ -350,70 +358,54 @@ export function ControlRoomOverview({
                       {etichettaObiettivo(objective)}
                     </p>
                   </div>
-                  <div className="order-1 sm:order-2">
+                  <div className="order-1 sm:order-2 sm:text-right">
+                    <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+                      Stato
+                    </p>
                     <BadgeStato ultimo={ultimo} />
                   </div>
                 </div>
 
                 {ultimo ? (
-                  <>
-                    <p className="mt-3 text-sm text-[var(--ink)]">
-                      <span className="text-[var(--ink-muted)]">
-                        {metricLabel}{" "}
-                      </span>
-                      <span className="font-medium">
-                        {formatEuro(ultimo.primaryCost)}
-                      </span>
-                      <span className="text-[var(--ink-muted)]"> · soglia </span>
-                      <span className="font-medium">
-                        {formatEuro(ultimo.threshold)}
-                      </span>
-                    </p>
-                    <dl className="mt-2 hidden gap-3 text-sm sm:grid sm:grid-cols-2">
-                      <div>
-                        <dt className="text-xs text-[var(--ink-muted)]">
-                          Vs soglia
-                        </dt>
-                        <dd className="mt-0.5 font-medium text-[var(--ink)]">
-                          {deltaPct(ultimo)}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs text-[var(--ink-muted)]">
-                          Ultimo check
-                        </dt>
-                        <dd className="mt-0.5 font-medium text-[var(--ink)]">
-                          {formatDataCheck(ultimo.createdAt)}
-                        </dd>
-                      </div>
-                    </dl>
-                    {prima ? (
-                      <div className="mt-3">
-                        <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-                          Prossima azione
-                        </p>
-                        <p className="mt-1 text-sm text-[var(--ink)]">
-                          {prima.text}
-                        </p>
-                        <span
-                          className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                            prima.priority === "alta"
-                              ? "bg-[#FDEDED] text-[#B42318]"
-                              : prima.priority === "media"
-                                ? "bg-[#FFF6E5] text-[#9A6700]"
-                                : "bg-[#EEF0F3] text-[#5A6578]"
-                          }`}
-                        >
-                          {etichettaPrioritaBreve(prima.priority)}
-                        </span>
-                      </div>
-                    ) : null}
-                  </>
+                  <p className="mt-3 text-sm text-[var(--ink)]">
+                    <span className="text-[var(--ink-muted)]">
+                      {metricLabel}{" "}
+                    </span>
+                    <span className="font-medium">
+                      {formatEuro(ultimo.primaryCost)}
+                    </span>
+                    <span className="text-[var(--ink-muted)]"> · soglia </span>
+                    <span className="font-medium">
+                      {formatEuro(ultimo.threshold)}
+                    </span>
+                    <span className="text-[var(--ink-muted)]">
+                      {" "}
+                      · {deltaPct(ultimo)}
+                    </span>
+                  </p>
                 ) : (
                   <p className="mt-3 text-sm text-[var(--ink-muted)]">
                     Non hai ancora salvato un controllo performance.
                   </p>
                 )}
+
+                <div className="mt-3 border-t border-[var(--border)] pt-3">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+                    Diagnosi
+                  </p>
+                  <p className="mt-0.5 text-sm text-[var(--ink)]">{diagnosi}</p>
+                </div>
+
+                {prima ? (
+                  <div className="mt-3">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+                      Prossima azione
+                    </p>
+                    <p className="mt-0.5 text-sm text-[var(--ink)]">
+                      {prima.text}
+                    </p>
+                  </div>
+                ) : null}
 
                 <Link
                   href={`/risultati?campaignId=${encodeURIComponent(campagna.id)}`}

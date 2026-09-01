@@ -25,6 +25,10 @@ import {
   calculateUtilePerScontrino,
 } from "@/lib/benchmarks";
 import { AnteprimaFeedApprovazione } from "@/components/campagne/AnteprimaFeedApprovazione";
+import {
+  etichettaMetricaPrimaria,
+  etichettaSogliaEconomica,
+} from "@/lib/control-room";
 
 export default function ApprovazioneCampagnaPage() {
   const params = useParams<{ token: string }>();
@@ -336,7 +340,7 @@ export default function ApprovazioneCampagnaPage() {
                   : isAwareness
                     ? "Awareness / Apertura e lancio locale"
                     : isRetargeting
-                      ? "Retargeting / Recupero carrelli"
+                      ? "Retargeting"
                       : isInStore
                         ? "Traffico in negozio / Drive-to-store"
                         : isBookings
@@ -390,7 +394,11 @@ export default function ApprovazioneCampagnaPage() {
           ) : isAwareness && economia.impressions > 0 ? (
             <div className="mt-5 rounded-xl border border-[#c6e7c8] bg-[#f0faf1] p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-[#3D8B57]">
-                STIMA · Copertura del modello
+                {etichettaMetricaPrimaria("AWARENESS")}
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]">
+                {etichettaSogliaEconomica("AWARENESS")}:{" "}
+                <span className="font-medium">{economia.cpa}€</span>
               </p>
               <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]">
                 STIMA · Impression: ~
@@ -405,35 +413,35 @@ export default function ApprovazioneCampagnaPage() {
                   : ""}
               </p>
               <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
-                Stima interna basata su budget, CPM e frequenza media di
-                riferimento. Non utilizza dati live Meta.
+                Stima interna basata su budget, CPM di piano e frequenza media
+                di riferimento. Non utilizza dati live Meta.
               </p>
             </div>
           ) : isRetargeting && economia.cpa > 0 ? (
             <div className="mt-5 rounded-xl border border-[#c6e7c8] bg-[#f0faf1] p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-[#3D8B57]">
-                CPA Massima Sostenibile di Recupero
+                {etichettaMetricaPrimaria("RETARGETING")}
               </p>
               <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]">
-                Costo Max Sostenibile per Recupero:{" "}
-                <span className="font-medium">{economia.cpa}€</span> per ogni
-                cliente ripescato.
+                {etichettaSogliaEconomica("RETARGETING")}:{" "}
+                <span className="font-medium">{economia.cpa}€</span>
               </p>
             </div>
           ) : isInStore && economia.cpa > 0 ? (
             <div className="mt-5 rounded-xl border border-[#c6e7c8] bg-[#f0faf1] p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-[#3D8B57]">
-                CPA Max sostenibile
+                {etichettaMetricaPrimaria("IN_STORE")}
               </p>
               <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]">
-                Utile per Scontrino:{" "}
+                Utile per scontrino:{" "}
                 <span className="font-medium">{economia.utile}€</span>
                 {" · "}
-                CPA Max: <span className="font-medium">{economia.cpa}€</span>
+                {etichettaSogliaEconomica("IN_STORE")}:{" "}
+                <span className="font-medium">{economia.cpa}€</span>
               </p>
               <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]">
-                È la soglia economica massima che il business può sostenere per
-                un nuovo cliente in negozio mantenendo il margine desiderato.
+                È la soglia economica di riferimento sul costo per risultato
+                (proxy). Non misura visite reali in negozio.
               </p>
               <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
                 Non è una previsione del costo che Meta genererà.
