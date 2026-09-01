@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ExternalLink,
@@ -40,7 +40,10 @@ import {
 } from "@/lib/adLibraryKeywords";
 import { DropzoneCreativita } from "@/components/nuova-contatti/DropzoneCreativita";
 import { ControlloFormatoCreativita } from "@/components/nuova-contatti/ControlloFormatoCreativita";
+import { AffiancoSuggerisce } from "@/components/nuova-contatti/AffiancoSuggerisce";
 import { BottoneCopia } from "@/components/nuova-contatti/BottoneCopia";
+import type { GuidanceItem } from "@/lib/guidance";
+import { generaGuidanceCreativita } from "@/lib/qualita-creativita";
 
 const PASSI_SCANSIONE = [
   "Lettura hook visivo e angolo psicologico…",
@@ -144,6 +147,11 @@ export function StudioCreativo({
   const [passoScansione, setPassoScansione] = useState(0);
   const [errore, setErrore] = useState<string | null>(null);
   const [mockInfo, setMockInfo] = useState<string | null>(null);
+
+  const guidanceCreativita = useMemo(
+    () => generaGuidanceCreativita({ creativita, objective }),
+    [creativita, objective],
+  );
 
   const nicchia = nicchiaFormatiDaSettore(settore);
   const formati = formatiPerSettore(settore);
@@ -670,6 +678,13 @@ export function StudioCreativo({
     />
   );
 
+  const dropzoneConGuidance = (
+    <>
+      {dropzone}
+      <AffiancoSuggerisce items={guidanceCreativita as GuidanceItem[]} />
+    </>
+  );
+
   if (percorsoAwareness) {
     return (
       <div className="space-y-6">
@@ -695,7 +710,7 @@ export function StudioCreativo({
               haCopy={haCopy}
               indiceAnteprima={indiceAnteprima}
             />
-            {dropzone}
+            {dropzoneConGuidance}
           </div>
         </section>
 
@@ -744,7 +759,7 @@ export function StudioCreativo({
               haCopy={haCopy}
               indiceAnteprima={indiceAnteprima}
             />
-            {dropzone}
+            {dropzoneConGuidance}
           </div>
         </section>
 
@@ -793,7 +808,7 @@ export function StudioCreativo({
               haCopy={haCopy}
               indiceAnteprima={indiceAnteprima}
             />
-            {dropzone}
+            {dropzoneConGuidance}
           </div>
         </section>
 
@@ -842,7 +857,7 @@ export function StudioCreativo({
               haCopy={haCopy}
               indiceAnteprima={indiceAnteprima}
             />
-            {dropzone}
+            {dropzoneConGuidance}
           </div>
         </section>
 
@@ -900,7 +915,7 @@ export function StudioCreativo({
               haCopy={haCopy}
               indiceAnteprima={indiceAnteprima}
             />
-            {dropzone}
+            {dropzoneConGuidance}
           </div>
         </section>
 
@@ -975,7 +990,7 @@ export function StudioCreativo({
 
       {sezioneDeconstruct}
 
-      {dropzone}
+      {dropzoneConGuidance}
     </div>
   );
 }

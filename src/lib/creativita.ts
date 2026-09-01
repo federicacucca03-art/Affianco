@@ -136,6 +136,13 @@ export function minCreativitaPerContesto(
   return 1;
 }
 
+/** true se il rapporto è circa 9:16 (stessa soglia del pre-lancio). */
+export function aspectRatioStoriesOk(width: number, height: number): boolean {
+  if (!width || !height) return false;
+  const ratio = width / height;
+  return Math.abs(ratio - RATIO_STORIES) <= TOLLERANZA_STORIES;
+}
+
 /**
  * true se il formato è accettabile (1:1, 4:5 Feed o 9:16 Stories/Reels).
  */
@@ -143,9 +150,8 @@ export function aspectRatioMetaOk(width: number, height: number): boolean {
   if (!width || !height) return false;
   const ratio = width / height;
   const isQuadrato = Math.abs(ratio - 1) <= TOLLERANZA_QUADRATO;
-  const isStories = Math.abs(ratio - RATIO_STORIES) <= TOLLERANZA_STORIES;
   const is45 = Math.abs(ratio - RATIO_45) <= TOLLERANZA_45;
-  return isQuadrato || isStories || is45;
+  return isQuadrato || aspectRatioStoriesOk(width, height) || is45;
 }
 
 /** true se l'immagine è in formato landscape (es. 16:9). */

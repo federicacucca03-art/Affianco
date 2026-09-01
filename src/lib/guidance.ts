@@ -80,6 +80,10 @@ function pesoItem(item: GuidanceItem): number {
   }
   if (item.id === "step1-brief-corto") return 210;
   if (item.id === "step1-eta-ampia") return 205;
+  if (item.id === "creative-asset-assente") return 198;
+  if (item.id === "creative-ratio-non-ideale") return 197;
+  if (item.id === "creative-landscape") return 196;
+  if (item.id === "creative-manca-9-16") return 195;
   if (item.level === "SUGGESTION") return 200;
   if (item.id === "economia-cr-real") return 50;
   return 100;
