@@ -14,12 +14,20 @@ export const IDS_GUIDANCE_INLINE_OFFERTA = [
 export const ID_GUIDANCE_INLINE_BRIEF = "step1-brief-corto";
 export const ID_GUIDANCE_INLINE_MISMATCH = "step1-mismatch";
 export const ID_GUIDANCE_INLINE_ETA = "step1-eta-ampia";
+export const ID_GUIDANCE_INLINE_CITTA = "step1-citta-assente";
+export const ID_GUIDANCE_INLINE_TARGET_TYPE = "step1-target-type-mismatch";
+export const ID_GUIDANCE_INLINE_RAGGIO = "targeting-raggio-stretto";
+export const ID_GUIDANCE_INLINE_BUDGET_RAGGIO = "targeting-budget-raggio";
 
 const IDS_INLINE_STEP1 = new Set<string>([
   ...IDS_GUIDANCE_INLINE_OFFERTA,
   ID_GUIDANCE_INLINE_BRIEF,
   ID_GUIDANCE_INLINE_MISMATCH,
   ID_GUIDANCE_INLINE_ETA,
+  ID_GUIDANCE_INLINE_CITTA,
+  ID_GUIDANCE_INLINE_TARGET_TYPE,
+  ID_GUIDANCE_INLINE_RAGGIO,
+  ID_GUIDANCE_INLINE_BUDGET_RAGGIO,
 ]);
 
 function primoPerId(
@@ -49,6 +57,30 @@ export function guidanceInlineEta(
   items: GuidanceItem[],
 ): GuidanceItem | undefined {
   return primoPerId(items, [ID_GUIDANCE_INLINE_ETA]);
+}
+
+export function guidanceInlineCitta(
+  items: GuidanceItem[],
+): GuidanceItem | undefined {
+  return primoPerId(items, [ID_GUIDANCE_INLINE_CITTA]);
+}
+
+export function guidanceInlineTargetType(
+  items: GuidanceItem[],
+): GuidanceItem | undefined {
+  return primoPerId(items, [ID_GUIDANCE_INLINE_TARGET_TYPE]);
+}
+
+export function guidanceInlineRaggio(
+  items: GuidanceItem[],
+): GuidanceItem | undefined {
+  return primoPerId(items, [ID_GUIDANCE_INLINE_RAGGIO]);
+}
+
+export function guidanceInlineBudgetRaggio(
+  items: GuidanceItem[],
+): GuidanceItem | undefined {
+  return primoPerId(items, [ID_GUIDANCE_INLINE_BUDGET_RAGGIO]);
 }
 
 export function guidanceStep1NonInline(

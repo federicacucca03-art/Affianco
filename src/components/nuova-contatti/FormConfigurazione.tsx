@@ -69,8 +69,12 @@ import { AffiancoSuggerisce } from "@/components/nuova-contatti/AffiancoSuggeris
 import {
   InlineGuidance,
   guidanceInlineBrief,
+  guidanceInlineBudgetRaggio,
+  guidanceInlineCitta,
   guidanceInlineEta,
   guidanceInlineOfferta,
+  guidanceInlineRaggio,
+  guidanceInlineTargetType,
   guidanceStep1NonInline,
 } from "@/components/nuova-contatti/InlineGuidance";
 import { LegendaCplDidattica } from "@/components/nuova-contatti/LegendaCplDidattica";
@@ -78,6 +82,7 @@ import { SpiegazioneCalcoloCpl } from "@/components/nuova-contatti/SpiegazioneCa
 import {
   generaGuidanceEconomica,
   generaGuidanceStep1,
+  generaGuidanceTargeting,
   type RaccomandazioneLancioStato,
 } from "@/lib/guidance";
 import { consiglioStrategicoNicchia } from "@/lib/consiglio-nicchia";
@@ -742,10 +747,36 @@ export function FormConfigurazione({
       }),
     [frontEndOffer, elevatorPitch, targetAge, config.etaMin, config.etaMax],
   );
+  const guidanceTargeting = useMemo(
+    () =>
+      generaGuidanceTargeting({
+        objective: objectiveEffettivo,
+        citta,
+        raggioKm: config.raggioKm,
+        budgetGiornaliero: config.budgetGiornaliero,
+        targetType,
+        elevatorPitch,
+      }),
+    [
+      objectiveEffettivo,
+      citta,
+      config.raggioKm,
+      config.budgetGiornaliero,
+      targetType,
+      elevatorPitch,
+    ],
+  );
   const guidanceOfferta = guidanceInlineOfferta(guidanceStep1);
   const guidanceBrief = guidanceInlineBrief(guidanceStep1);
   const guidanceEta = guidanceInlineEta(guidanceStep1);
-  const guidanceStep1Residua = guidanceStep1NonInline(guidanceStep1);
+  const guidanceCitta = guidanceInlineCitta(guidanceTargeting);
+  const guidanceTipoCliente = guidanceInlineTargetType(guidanceTargeting);
+  const guidanceRaggio = guidanceInlineRaggio(guidanceTargeting);
+  const guidanceBudgetRaggio = guidanceInlineBudgetRaggio(guidanceTargeting);
+  const guidanceStep1Residua = guidanceStep1NonInline([
+    ...guidanceStep1,
+    ...guidanceTargeting,
+  ]);
 
   const sogliaGuidance =
     targetCplStudio > 0 ? targetCplStudio : null;
@@ -1108,6 +1139,7 @@ export function FormConfigurazione({
                   placeholder={step1.locationPlaceholder}
                   className={inputClass}
                 />
+                <InlineGuidance item={guidanceCitta} />
               </Campo>
             ) : null}
           </div>
@@ -1244,6 +1276,7 @@ export function FormConfigurazione({
                   );
                 })}
               </div>
+              <InlineGuidance item={guidanceTipoCliente} />
               <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
                 {targetType === "B2B"
                   ? "Export Meta: obiettivo Leads, evento Lead, CTA Scopri di più."
@@ -1425,6 +1458,7 @@ export function FormConfigurazione({
                   placeholder={step1.locationPlaceholder}
                   className={inputClass}
                 />
+                <InlineGuidance item={guidanceCitta} />
               </Campo>
               <Campo etichetta="Raggio locale (km)">
                 <div className="flex gap-2">
@@ -1446,6 +1480,7 @@ export function FormConfigurazione({
                     );
                   })}
                 </div>
+                <InlineGuidance item={guidanceRaggio} />
               </Campo>
               <p className="-mt-1.5 text-xs text-[var(--ink-muted)]">
                 {citta?.trim()
@@ -1494,6 +1529,7 @@ export function FormConfigurazione({
                   placeholder={step1.locationPlaceholder}
                   className={inputClass}
                 />
+                <InlineGuidance item={guidanceCitta} />
               </Campo>
               <Campo etichetta="Raggio locale (km)">
                 <input
@@ -1507,6 +1543,7 @@ export function FormConfigurazione({
                   }
                   className={inputClass}
                 />
+                <InlineGuidance item={guidanceRaggio} />
               </Campo>
               <p className="-mt-1.5 text-xs text-[var(--ink-muted)]">
                 Stesso raggio usato per targeting Meta intorno al punto vendita.
@@ -1767,6 +1804,7 @@ export function FormConfigurazione({
                   );
                 })}
               </div>
+              <InlineGuidance item={guidanceTipoCliente} />
             </div>
             <div>
               {isRetargeting ? (
@@ -3100,6 +3138,7 @@ export function FormConfigurazione({
               }
               className={inputClass}
             />
+            <InlineGuidance item={guidanceBudgetRaggio} />
           </Campo>
           <div className="mt-3">
             <RigaSolaLettura
@@ -3171,6 +3210,7 @@ export function FormConfigurazione({
                     }
                     className={inputClass}
                   />
+                  <InlineGuidance item={guidanceRaggio} />
                 </Campo>
               )}
               <RigaSolaLettura

@@ -6,12 +6,19 @@ import {
   LABEL_STRATEGIA_SOLIDA,
   type StrategicScoreResult,
 } from "@/lib/strategic-score";
-import type { CampagnaObjective, TargetAgeBand } from "@/types/campagne";
+import type { CampagnaObjective, TargetAgeBand, TargetType } from "@/types/campagne";
 import {
   rilevaMismatchOffertaBrief,
   valutaQualitaBrief,
   valutaQualitaOfferta,
 } from "@/lib/qualita-step1";
+import {
+  budgetRaggioDispersivo,
+  cittaLocaleMancante,
+  raggioMoltoStretto,
+  rilevaMismatchTargetType,
+  stepRaggioStretto,
+} from "@/lib/qualita-targeting";
 
 /**
  * Guidance Layer V2 — calcolata al volo, non persistita.
@@ -298,6 +305,96 @@ export function generaGuidanceStep1(
         "Verifica che questa fascia sia davvero coerente con l'offerta.",
       field: "targetAge",
       step: 1,
+    });
+  }
+
+  return items;
+}
+
+export type GuidanceTargetingInput = {
+  objective?: CampagnaObjective | null;
+  citta?: string | null;
+  raggioKm?: number | null;
+  budgetGiornaliero?: number | null;
+  targetType?: TargetType | null;
+  elevatorPitch?: string | null;
+};
+
+/**
+ * Targeting contestuale (città, raggio, budget+raggio, B2C/B2B).
+ * Non tocca economia P0 né qualità offerta/brief.
+ */
+export function generaGuidanceTargeting(
+  input: GuidanceTargetingInput,
+): GuidanceItem[] {
+  const items: GuidanceItem[] = [];
+  const objective = input.objective ?? undefined;
+
+  if (cittaLocaleMancante(objective, input.citta)) {
+    items.push({
+      id: "step1-citta-assente",
+      level: "SUGGESTION",
+      title: "Manca la zona della campagna.",
+      description:
+        "Indica una città per aiutare Affianco a impostare correttamente il pubblico locale.",
+      field: "citta",
+      step: 1,
+    });
+  }
+
+  const mismatchTipo = rilevaMismatchTargetType(
+    input.targetType,
+    input.elevatorPitch,
+  );
+  if (mismatchTipo === "B2B") {
+    items.push({
+      id: "step1-target-type-mismatch",
+      level: "SUGGESTION",
+      title: "Il brief sembra descrivere un pubblico B2B.",
+      description:
+        "Verifica che il tipo cliente selezionato sia coerente con il pubblico descritto.",
+      field: "targetType",
+      step: 1,
+    });
+  } else if (mismatchTipo === "B2C") {
+    items.push({
+      id: "step1-target-type-mismatch",
+      level: "SUGGESTION",
+      title: "Il brief sembra descrivere un pubblico B2C.",
+      description:
+        "Verifica che il tipo cliente selezionato sia coerente con il pubblico descritto.",
+      field: "targetType",
+      step: 1,
+    });
+  }
+
+  if (raggioMoltoStretto(objective, input.raggioKm)) {
+    items.push({
+      id: "targeting-raggio-stretto",
+      level: "SUGGESTION",
+      title: "Il raggio è molto ristretto.",
+      description:
+        "Potrebbe limitare il volume disponibile. Verifica che sia intenzionale.",
+      field: "raggioKm",
+      step: stepRaggioStretto(objective),
+    });
+  }
+
+  if (
+    budgetRaggioDispersivo(
+      objective,
+      input.budgetGiornaliero,
+      input.raggioKm,
+    )
+  ) {
+    items.push({
+      id: "targeting-budget-raggio",
+      level: "SUGGESTION",
+      title: "Il pubblico potrebbe essere dispersivo rispetto al budget.",
+      description:
+        "Con un raggio così ampio e un budget contenuto, potrebbe servire più tempo per raccogliere segnali utili.",
+      field: "budgetGiornaliero",
+      step: 2,
     });
   }
 
