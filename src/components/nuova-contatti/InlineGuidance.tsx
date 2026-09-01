@@ -94,20 +94,20 @@ const STILE_INLINE: Record<
   { wrap: string; label: string }
 > = {
   INFO: {
-    wrap: "border-[var(--border)] bg-[var(--surface-hover)]",
-    label: "text-[var(--accent)]",
+    wrap: "bg-[var(--primary-soft)]",
+    label: "text-[var(--primary)]",
   },
   SUGGESTION: {
-    wrap: "border-[var(--accent-muted)] bg-[var(--accent-soft)]",
-    label: "text-[var(--accent)]",
+    wrap: "bg-[var(--lavender-muted)]",
+    label: "text-[var(--primary)]",
   },
   WARNING: {
-    wrap: "border-[#f5e0a8] bg-[#fff9e8]",
-    label: "text-[#9a6700]",
+    wrap: "bg-[var(--yellow-soft)]/85",
+    label: "text-[#6b5420]",
   },
   BLOCKER: {
-    wrap: "border-[#f5c9b8] bg-[#fff4f0]",
-    label: "text-[#c2410c]",
+    wrap: "bg-[#fde5ee]",
+    label: "text-[#a85a72]",
   },
 };
 
@@ -135,11 +135,11 @@ export function InlineGuidance({
   return (
     <div
       data-affianco-inline-guidance={item?.id ?? livello}
-      className={`mt-2 w-full min-w-0 rounded-lg border px-3 py-2 ${stile.wrap}`}
+      className={`mt-2 w-full min-w-0 rounded-[16px] px-3.5 py-2.5 ${stile.wrap}`}
       role="status"
     >
       <p
-        className={`text-[10px] font-medium uppercase tracking-wide ${stile.label}`}
+        className={`text-[12px] font-medium ${stile.label}`}
       >
         Affianco suggerisce
       </p>

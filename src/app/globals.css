@@ -1,18 +1,30 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f0f1f3;
-  --ink: #1a1a1a;
-  --ink-muted: #6b7280;
-  --border: #e5e7eb;
-  --accent: #2f6fed;
-  --accent-soft: #e8f0fe;
-  --accent-muted: #8aa8f0;
-  --surface: #ffffff;
-  --surface-hover: #f9fafb;
-  --radius: 16px;
-  --radius-lg: 24px;
-  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --background: #f7f6fb;
+  --background-deep: #9e99c4;
+  --app-bg: #b8b4d8;
+  --workspace: #f7f6fb;
+  --ink: #1d1b26;
+  --ink-muted: #747080;
+  --border: rgba(80, 70, 130, 0.12);
+  --primary: #7469d8;
+  --primary-soft: #ece9fb;
+  --accent: #7469d8;
+  --accent-soft: #ece9fb;
+  --accent-muted: #a89ee8;
+  --surface: #faf9fc;
+  --surface-hover: #f3f1f8;
+  --lavender: #8f8ab8;
+  --lavender-muted: #ddd9f4;
+  --pink-soft: #f7a6c7;
+  --green-soft: #bfe7b7;
+  --yellow-soft: #f5e58a;
+  --radius: 24px;
+  --radius-lg: 32px;
+  --radius-sm: 14px;
+  --shadow-soft: 0 28px 70px rgba(70, 55, 130, 0.14);
+  --shadow-card: 0 16px 48px rgba(70, 55, 130, 0.1);
 }
 
 @theme inline {
@@ -26,6 +38,64 @@ body {
   color: var(--ink);
   font-family: var(--font-lexend), sans-serif;
   font-weight: 400;
+}
+
+.aff-app-shell {
+  min-height: 100dvh;
+  background: linear-gradient(145deg, #aaa6ca 0%, #b8b4d8 40%, #c2bedd 100%);
+}
+
+.aff-workspace {
+  border-radius: 32px;
+  background: #faf9fc;
+  box-shadow: var(--shadow-soft);
+}
+
+.aff-input {
+  width: 100%;
+  min-height: 46px;
+  border-radius: 14px;
+  border: 1px solid rgba(80, 70, 130, 0.08);
+  background: #fff;
+  padding: 0.75rem 1rem;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  color: var(--ink);
+  outline: none;
+  box-shadow: 0 1px 8px rgba(70, 55, 130, 0.04);
+}
+.aff-input::placeholder {
+  color: var(--ink-muted);
+}
+.aff-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.aff-input-error {
+  width: 100%;
+  min-height: 46px;
+  border-radius: 14px;
+  border: 1.5px solid #c45c7a;
+  background: #fff8f9;
+  padding: 0.75rem 1rem;
+  font-size: 0.9375rem;
+  color: var(--ink);
+  outline: none;
+}
+
+textarea.aff-input,
+textarea.aff-input-error {
+  min-height: 6.5rem;
+  border-radius: 16px;
+}
+
+.aff-seg-track {
+  display: flex;
+  gap: 0.25rem;
+  border-radius: 999px;
+  background: var(--lavender-muted);
+  padding: 0.3rem;
 }
 
 @keyframes landing-fade-up {
@@ -80,10 +150,10 @@ body {
 @keyframes studio-scan {
   0%,
   100% {
-    box-shadow: inset 0 0 0 0 rgba(47, 111, 237, 0);
+    box-shadow: inset 0 0 0 0 rgba(116, 105, 216, 0);
   }
   50% {
-    box-shadow: inset 0 0 0 2px rgba(47, 111, 237, 0.35);
+    box-shadow: inset 0 0 0 2px rgba(116, 105, 216, 0.35);
   }
 }
 

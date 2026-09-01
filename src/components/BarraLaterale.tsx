@@ -28,7 +28,6 @@ const voci: VoceNav[] = [
   { etichetta: "Campagne", href: "/campagne", icona: LayoutGrid },
   { etichetta: "Clienti", href: "/clienti", icona: Briefcase },
   { etichetta: "Risultati", href: "/risultati", icona: TrendingUp },
-  { etichetta: "Impostazioni", href: null, icona: Settings },
 ];
 
 type Props = {
@@ -70,39 +69,41 @@ export function BarraLaterale({ aperta, onChiudi }: Props) {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-60 flex-col bg-white md:static md:translate-x-0 ${
-          aperta ? "translate-x-0" : "-translate-x-full"
+        className={`fixed inset-y-3 left-3 z-50 flex w-16 flex-col rounded-[28px] bg-[var(--lavender)] py-6 shadow-[var(--shadow-soft)] md:static md:inset-auto md:h-auto md:self-stretch md:translate-x-0 ${
+          aperta ? "translate-x-0" : "-translate-x-[120%]"
         }`}
       >
-        <div className="flex h-16 items-center justify-between px-5">
+        <div className="flex flex-col items-center px-2">
           <Link
             href="/campagne"
-            className="text-lg font-medium tracking-tight text-[var(--ink)]"
             onClick={onChiudi}
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-sm font-medium text-[var(--primary)] shadow-[var(--shadow-card)]"
+            aria-label="Affianco"
+            title="Affianco"
           >
-            Affianco
+            A
           </Link>
           <button
             type="button"
             aria-label="Chiudi menu"
-            className="rounded-xl p-1 text-[var(--ink-muted)] hover:bg-[var(--surface-hover)] md:hidden"
+            className="mt-3 rounded-xl p-1 text-white/80 hover:bg-white/15 md:hidden"
             onClick={onChiudi}
           >
             <X className="h-5 w-5" strokeWidth={1.75} />
           </button>
         </div>
 
-        <nav className="flex flex-col gap-1 px-3 pb-4">
+        <nav className="mt-10 flex flex-1 flex-col items-center gap-4 px-2">
           {voci.map((voce) => {
             const Icona = voce.icona;
             const attiva =
               voce.href !== null &&
               (pathname === voce.href || pathname.startsWith(`${voce.href}/`));
 
-            const classi = `flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-colors ${
+            const classi = `flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
               attiva
-                ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]"
-                : "text-[var(--ink-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--ink)]"
+                ? "bg-white text-[var(--primary)] shadow-[var(--shadow-card)]"
+                : "text-white/90 hover:bg-white/20"
             }`;
 
             if (voce.href) {
@@ -112,52 +113,43 @@ export function BarraLaterale({ aperta, onChiudi }: Props) {
                   href={voce.href}
                   className={classi}
                   onClick={onChiudi}
+                  title={voce.etichetta}
+                  aria-label={voce.etichetta}
+                  aria-current={attiva ? "page" : undefined}
                 >
-                  <Icona className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-                  {voce.etichetta}
+                  <Icona className="h-[22px] w-[22px]" strokeWidth={1.75} />
+                  <span className="sr-only">{voce.etichetta}</span>
                 </Link>
               );
             }
 
-            return (
-              <span
-                key={voce.etichetta}
-                className={`${classi} cursor-default opacity-55`}
-                aria-disabled
-                title="Presto disponibile"
-              >
-                <Icona className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-                <span className="flex min-w-0 flex-col leading-tight">
-                  <span>{voce.etichetta}</span>
-                  <span className="text-[10px] font-normal text-[var(--ink-muted)]">
-                    Presto disponibile
-                  </span>
-                </span>
-              </span>
-            );
+            return null;
           })}
         </nav>
 
-        <div className="mt-auto border-t border-[var(--border)] px-4 py-4">
-          {email ? (
-            <p
-              className="truncate text-xs text-[var(--ink-muted)]"
-              title={email}
-            >
-              {email}
-            </p>
-          ) : null}
+        <div className="mt-auto flex flex-col items-center gap-4 px-2">
+          <span
+            className="flex h-12 w-12 cursor-default items-center justify-center rounded-full text-white/50"
+            aria-disabled
+            title="Impostazioni — presto disponibile"
+          >
+            <Settings className="h-[22px] w-[22px]" strokeWidth={1.75} />
+            <span className="sr-only">Impostazioni, presto disponibile</span>
+          </span>
           <button
             type="button"
             onClick={() => void esci()}
             disabled={logoutInCorso}
-            className="mt-2 flex w-full items-center gap-2 rounded-xl px-2 py-2 text-sm text-[var(--ink-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--ink)] disabled:opacity-60"
+            title={email ? `Esci (${email})` : "Esci"}
+            aria-label={logoutInCorso ? "Uscita…" : "Esci"}
+            className="flex h-12 w-12 items-center justify-center rounded-full text-white/90 transition-colors hover:bg-white/20 disabled:opacity-60"
           >
-            <LogOut className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-            {logoutInCorso ? "Uscita…" : "Esci"}
+            <LogOut className="h-[22px] w-[22px]" strokeWidth={1.75} />
           </button>
           {logoutErrore ? (
-            <p className="mt-1 text-xs text-[#C45C5C]">{logoutErrore}</p>
+            <p className="px-1 text-center text-[10px] leading-tight text-white">
+              {logoutErrore}
+            </p>
           ) : null}
         </div>
       </aside>

@@ -30,7 +30,7 @@ import {
   CopyRecommendationCard,
 } from "@/components/nuova-contatti/CopyRecommendationCard";
 import { raccomandaCopy, scambiaVariantePrimaria, statusCopyVariant } from "@/lib/raccomanda-copy";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, CircleCheck, Info, ShieldAlert } from "lucide-react";
 import { MetaAdsImportCode } from "@/components/nuova-contatti/MetaAdsImportCode";
 import type { StatoApprovazioneLeads } from "@/components/nuova-contatti/StatoApprovazioneLeads";
 import {
@@ -309,11 +309,12 @@ function Passo1Sezione({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-        {titolo}
-      </p>
-      <div className="space-y-3.5">{children}</div>
+    <div className="space-y-[22px]">
+      <div>
+        <p className="text-[13px] font-medium text-[var(--primary)]">{titolo}</p>
+        <div className="mt-3 h-px bg-[rgba(80,70,130,0.1)]" />
+      </div>
+      <div className="space-y-[22px]">{children}</div>
     </div>
   );
 }
@@ -327,7 +328,7 @@ function Campo({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
+      <span className="mb-2 block text-[13px] font-medium text-[var(--ink)]">
         {etichetta}
       </span>
       {children}
@@ -352,11 +353,24 @@ function RigaSolaLettura({
   );
 }
 
-const inputClass =
-  "w-full rounded-xl border border-[var(--border)] bg-white px-3.5 py-2.5 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--ink-muted)] focus:border-[var(--accent)]";
+const inputClass = "aff-input";
 
-const inputErroreClass =
-  "w-full rounded-xl border-2 border-[#C45C5C] bg-[#fff8f8] px-3.5 py-2.5 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--ink-muted)] focus:border-[#C45C5C]";
+const inputErroreClass = "aff-input-error";
+
+function segClass(attivo: boolean, extra = "") {
+  return `rounded-full px-4 py-2.5 text-sm font-medium transition-all ${
+    attivo
+      ? "bg-white text-[var(--primary)] shadow-[var(--shadow-card)] ring-1 ring-[var(--primary)]/25"
+      : "text-[var(--ink-muted)] hover:bg-white/60 hover:text-[var(--ink)]"
+  } ${extra}`;
+}
+
+const GANCI_PILL = [
+  "bg-[var(--lavender-muted)] text-[#5b4fa8]",
+  "bg-[var(--green-soft)] text-[#2d6a4a]",
+  "bg-[var(--yellow-soft)] text-[#6b5420]",
+  "bg-[#fde5ee] text-[#a85a72]",
+];
 
 export function FormConfigurazione({
   config,
@@ -1041,7 +1055,7 @@ export function FormConfigurazione({
     wizardStep == null || passi.includes(wizardStep);
 
   return (
-    <div className="min-w-0 space-y-6">
+    <div className="min-w-0 space-y-8">
       {mostra([1]) ? (
       <>
       <section
@@ -1056,24 +1070,21 @@ export function FormConfigurazione({
                 ? "passo-1-prenotazioni"
                 : "passo-1-default"
         }
-        className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6"
+        className="rounded-[26px] bg-white p-8 shadow-[var(--shadow-soft)] sm:p-9"
       >
         <header>
-          <h2 className="text-base font-medium text-[var(--ink)]">
+          <h2 className="text-[20px] font-medium tracking-tight text-[var(--ink)] sm:text-[22px]">
             {step1.stepTitle}
           </h2>
-          <p className="mt-2 max-w-xl text-sm leading-relaxed text-[var(--ink-muted)]">
+          <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[var(--ink-muted)]">
             {step1.stepSubtitle}
           </p>
-          <p className="mt-3 text-xs text-[var(--ink-muted)]">
-            Obiettivo:{" "}
-            <span className="font-medium text-[var(--ink)]">
-              {etichettaObiettivo(objectiveEffettivo)}
-            </span>
+          <p className="mt-4 inline-flex rounded-full bg-[var(--primary-soft)] px-3 py-1 text-[13px] font-medium text-[var(--primary)]">
+            Obiettivo: {etichettaObiettivo(objectiveEffettivo)}
           </p>
         </header>
 
-        <div className="mt-8 space-y-8">
+        <div className="mt-8 space-y-10">
           {onCaricaClienteEsistente ? (
             <SelettoreClienteEsistente
               onSeleziona={onCaricaClienteEsistente}
@@ -1129,12 +1140,12 @@ export function FormConfigurazione({
               isPercorsoInstore ||
               isPercorsoRetargeting ||
               isPercorsoAwareness
-                ? "grid grid-cols-1 gap-3.5"
-                : "grid grid-cols-1 gap-3.5 sm:grid-cols-2"
+                ? "grid grid-cols-1 gap-5"
+                : "grid grid-cols-1 gap-5 sm:grid-cols-2"
             }
           >
             <div>
-              <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
+              <span className="mb-2 block text-[13px] font-medium text-[var(--ink)]">
                 {step1.nicheLabel}
               </span>
               <SelettoreSettore
@@ -1226,22 +1237,43 @@ export function FormConfigurazione({
             </div>
           ) : null}
           {settore?.trim() ? (
-            <p className="text-sm leading-relaxed text-[var(--ink-muted)]">
-              {consiglioStrategicoNicchia(settore, objectiveEffettivo)}
-            </p>
+            <div className="flex gap-3 rounded-[16px] bg-[var(--primary-soft)] px-4 py-3">
+              <Info
+                className="mt-0.5 h-4 w-4 shrink-0 text-[var(--primary)]"
+                strokeWidth={1.75}
+              />
+              <div>
+                <p className="text-[13px] font-medium text-[var(--primary)]">
+                  Consiglio di nicchia
+                </p>
+                <p className="mt-1 text-[13px] leading-relaxed text-[var(--ink)]">
+                  {consiglioStrategicoNicchia(settore, objectiveEffettivo)}
+                </p>
+              </div>
+            </div>
           ) : null}
           {settoreIntel?.policyAlert ? (
-            <p className="text-xs leading-relaxed text-[#8a6a2b]">
-              <span className="font-medium">Policy Meta:</span>{" "}
-              {settoreIntel.policyAlert}
-            </p>
+            <div className="flex gap-3 rounded-[16px] bg-[var(--yellow-soft)]/80 px-4 py-3">
+              <ShieldAlert
+                className="mt-0.5 h-4 w-4 shrink-0 text-[#6b5420]"
+                strokeWidth={1.75}
+              />
+              <div>
+                <p className="text-[13px] font-medium text-[#6b5420]">
+                  Policy Meta
+                </p>
+                <p className="mt-1 text-[13px] leading-relaxed text-[var(--ink)]">
+                  {settoreIntel.policyAlert}
+                </p>
+              </div>
+            </div>
           ) : null}
 
           {isPercorsoEcommerce ||
           isPercorsoInstore ||
           isPercorsoRetargeting ||
           isPercorsoAwareness ? (
-            <div>
+            <div className="rounded-[20px] bg-[var(--lavender-muted)]/55 p-5 sm:p-6">
               <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                 <p className="text-sm font-medium text-[var(--ink)]">
                   {step1.briefLabel}
@@ -1274,17 +1306,21 @@ export function FormConfigurazione({
                     : "descrivi il prodotto o la collezione principale."}
                 </p>
               ) : elevatorPitch.trim() ? (
-                <p
-                  className={`mt-2 text-xs leading-relaxed ${
-                    validazioneBrief.isValid
-                      ? "text-[#3D8B57]"
-                      : "text-[#C26A0A]"
-                  }`}
-                >
-                  {validazioneBrief.isValid
-                    ? "Brief specifico e utilizzabile."
-                    : validazioneBrief.reason}
-                </p>
+                validazioneBrief.isValid ? (
+                  <div className="mt-2 flex gap-3 rounded-[16px] bg-[var(--green-soft)]/80 px-4 py-3">
+                    <CircleCheck
+                      className="mt-0.5 h-4 w-4 shrink-0 text-[#2d6a4a]"
+                      strokeWidth={1.75}
+                    />
+                    <p className="text-[13px] font-medium text-[#2d6a4a]">
+                      Brief specifico e utilizzabile
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-[13px] leading-relaxed text-[#C26A0A]">
+                    {validazioneBrief.reason}
+                  </p>
+                )
               ) : (
                 <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
                   {step1.briefHint}
@@ -1298,7 +1334,7 @@ export function FormConfigurazione({
               <p className="mb-2 text-xs font-medium text-[var(--ink-muted)]">
                 Tipo Cliente
               </p>
-              <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="aff-seg-track flex-col sm:flex-row">
                 {(
                   [
                     {
@@ -1317,11 +1353,7 @@ export function FormConfigurazione({
                       key={opzione.value}
                       type="button"
                       onClick={() => onCambiaTargetType?.(opzione.value)}
-                      className={`flex-1 rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition-colors ${
-                        attivo
-                          ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                          : "border-[var(--border)] bg-white text-[var(--ink-muted)] hover:border-[var(--accent-muted)]"
-                      }`}
+                      className={segClass(attivo, "flex-1 text-left")}
                     >
                       {opzione.label}
                     </button>
@@ -1378,7 +1410,7 @@ export function FormConfigurazione({
               key={`offerta-${objectiveEffettivo}`}
               value={frontEndOffer}
               onChange={(e) => onCambiaFrontEndOffer?.(e.target.value)}
-              rows={2}
+              rows={4}
               placeholder={
                 isPercorsoAwareness
                   ? step1.offerPlaceholder
@@ -1395,15 +1427,17 @@ export function FormConfigurazione({
                 Ganci consigliati per {settoreIntel.nome}
               </p>
               <div className="flex flex-wrap gap-2">
-                {settoreIntel.ganciConsigliati.slice(0, 3).map((offerta) => (
+                {settoreIntel.ganciConsigliati.slice(0, 3).map((offerta, i) => (
                   <button
                     key={offerta}
                     type="button"
                     onClick={() => onCambiaFrontEndOffer?.(offerta)}
-                    className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                    className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-shadow ${
+                      GANCI_PILL[i % GANCI_PILL.length]
+                    } ${
                       frontEndOffer.trim() === offerta
-                        ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                        : "border-[var(--border)] bg-white text-[var(--ink-muted)] hover:border-[var(--accent-muted)]"
+                        ? "ring-2 ring-[var(--primary)] ring-offset-2"
+                        : "hover:shadow-[var(--shadow-card)]"
                     }`}
                   >
                     {offerta}
@@ -1826,7 +1860,7 @@ export function FormConfigurazione({
               <p className="mb-2 text-xs font-medium text-[var(--ink-muted)]">
                 Tipo Cliente
               </p>
-              <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="aff-seg-track flex-col sm:flex-row">
                 {(
                   [
                     {
@@ -1845,11 +1879,7 @@ export function FormConfigurazione({
                       key={opzione.value}
                       type="button"
                       onClick={() => onCambiaTargetType?.(opzione.value)}
-                      className={`flex-1 rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition-colors ${
-                        attivo
-                          ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                          : "border-[var(--border)] bg-white text-[var(--ink-muted)] hover:border-[var(--accent-muted)]"
-                      }`}
+                      className={segClass(attivo, "flex-1 text-left")}
                     >
                       {opzione.label}
                     </button>
@@ -1866,10 +1896,10 @@ export function FormConfigurazione({
                 </p>
               ) : (
                 <>
-                  <p className="mb-2 text-xs font-medium text-[var(--ink-muted)]">
+                  <p className="mb-2 text-[13px] font-medium text-[var(--ink)]">
                     Fascia d&apos;Età prevalente
                   </p>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="flex flex-wrap gap-1.5 rounded-[22px] bg-[var(--lavender-muted)] p-1.5 sm:flex-nowrap">
                     {(
                       [
                         { value: "18-35" as const, label: "18–35" },
@@ -1884,11 +1914,7 @@ export function FormConfigurazione({
                           key={opzione.value}
                           type="button"
                           onClick={() => onCambiaTargetAge?.(opzione.value)}
-                          className={`rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${
-                            attivo
-                              ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                              : "border-[var(--border)] bg-white text-[var(--ink-muted)] hover:border-[var(--accent-muted)]"
-                          }`}
+                          className={segClass(attivo)}
                         >
                           {opzione.label}
                         </button>
@@ -1902,7 +1928,7 @@ export function FormConfigurazione({
           </Passo1Sezione>
           ) : null}
 
-          <div className="space-y-4 border-t border-[var(--border)] pt-8">
+          <div className="space-y-4 pt-6">
             <Campo etichetta="Nome campagna">
               <input
                 type="text"
@@ -1920,7 +1946,7 @@ export function FormConfigurazione({
             !isPercorsoInstore &&
             !isPercorsoRetargeting &&
             !isPercorsoAwareness ? (
-            <div>
+            <div className="rounded-[20px] bg-[var(--lavender-muted)]/55 p-5 sm:p-6">
               <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                 <p className="text-sm font-medium text-[var(--ink)]">
                   {step1.briefLabel}
@@ -1948,17 +1974,21 @@ export function FormConfigurazione({
                   Campo obbligatorio: compila il brief prodotto / collezione.
                 </p>
               ) : elevatorPitch.trim() ? (
-                <p
-                  className={`mt-2 text-xs leading-relaxed ${
-                    validazioneBrief.isValid
-                      ? "text-[#3D8B57]"
-                      : "text-[#C26A0A]"
-                  }`}
-                >
-                  {validazioneBrief.isValid
-                    ? "Brief specifico e utilizzabile."
-                    : validazioneBrief.reason}
-                </p>
+                validazioneBrief.isValid ? (
+                  <div className="mt-2 flex gap-3 rounded-[16px] bg-[var(--green-soft)]/80 px-4 py-3">
+                    <CircleCheck
+                      className="mt-0.5 h-4 w-4 shrink-0 text-[#2d6a4a]"
+                      strokeWidth={1.75}
+                    />
+                    <p className="text-[13px] font-medium text-[#2d6a4a]">
+                      Brief specifico e utilizzabile
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-[13px] leading-relaxed text-[#C26A0A]">
+                    {validazioneBrief.reason}
+                  </p>
+                )
               ) : (
                 <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
                   {step1.briefHint}

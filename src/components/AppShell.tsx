@@ -14,14 +14,16 @@ export function AppShell({ children }: Props) {
 
   return (
     <OnboardingCampagnaProvider>
-      <div className="flex min-h-full bg-[var(--background)]">
+      <div className="aff-app-shell flex min-h-dvh md:gap-3 md:p-3">
         <BarraLaterale
           aperta={menuAperto}
           onChiudi={() => setMenuAperto(false)}
         />
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <BarraSuperiore onApriMenu={() => setMenuAperto(true)} />
-          <div className="flex-1 overflow-y-auto pb-8">{children}</div>
+          <div className="aff-workspace mx-3 mb-3 min-h-0 flex-1 overflow-y-auto px-5 py-7 sm:px-8 sm:py-8 md:mx-0 md:mb-0 lg:px-10">
+            {children}
+          </div>
         </div>
       </div>
     </OnboardingCampagnaProvider>

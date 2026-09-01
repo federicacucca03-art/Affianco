@@ -15,26 +15,22 @@ type AffiancoSuggerisceProps = {
 
 const STILE_LIVELLO: Record<
   GuidanceLevel,
-  { bordo: string; badge: string; etichetta: string }
+  { badge: string; etichetta: string }
 > = {
   INFO: {
-    bordo: "border-[var(--border)]",
-    badge: "bg-[var(--accent-soft)] text-[var(--accent)]",
+    badge: "bg-[var(--lavender-muted)] text-[#5b4fa8]",
     etichetta: "Info",
   },
   SUGGESTION: {
-    bordo: "border-[var(--accent-muted)]",
-    badge: "bg-[var(--accent-soft)] text-[var(--accent)]",
+    badge: "bg-[var(--primary-soft)] text-[var(--primary)]",
     etichetta: "Suggerimento",
   },
   WARNING: {
-    bordo: "border-[#f5e0a8]",
-    badge: "bg-[#fff9e8] text-[#9a6700]",
+    badge: "bg-[var(--yellow-soft)] text-[#6b5420]",
     etichetta: "Attenzione",
   },
   BLOCKER: {
-    bordo: "border-[#f5c9b8]",
-    badge: "bg-[#fff4f0] text-[#c2410c]",
+    badge: "bg-[#fde5ee] text-[#a85a72]",
     etichetta: "Da sistemare",
   },
 };
@@ -50,10 +46,10 @@ function InsightRiga({
 }) {
   const stile = STILE_LIVELLO[item.level];
   return (
-    <li className={evidenziato ? "" : "border-t border-black/5 pt-3"}>
+    <li className={evidenziato ? "" : "border-t border-[var(--border)] pt-3"}>
       <div className="flex flex-wrap items-center gap-2">
         <span
-          className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${stile.badge}`}
+            className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${stile.badge}`}
         >
           {stile.etichetta}
         </span>
@@ -94,13 +90,12 @@ export function AffiancoSuggerisce({
   if (!haGuidanceDaMostrare(items)) return null;
   const { principale, secondari } = selezionaGuidanceDaMostrare(items);
   if (!principale) return null;
-  const bordo = STILE_LIVELLO[principale.level].bordo;
 
   return (
     <section
-      className={`rounded-[var(--radius)] border bg-white p-5 shadow-[var(--shadow-soft)] ${bordo}`}
+      className="rounded-[22px] bg-[var(--workspace)] p-6 shadow-[var(--shadow-card)]"
     >
-      <p className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
+      <p className="text-[13px] font-medium text-[var(--primary)]">
         Affianco suggerisce
       </p>
       <ul className="mt-3 space-y-3">

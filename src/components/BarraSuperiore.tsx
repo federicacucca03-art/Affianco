@@ -22,11 +22,11 @@ export function BarraSuperiore({ onApriMenu }: Props) {
   const { email } = useAuth();
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-3 bg-[var(--background)] px-4 pt-2 sm:px-6 lg:px-8">
+    <header className="flex h-[4.25rem] shrink-0 items-center gap-3 px-4 sm:px-2 lg:px-3">
       <button
         type="button"
         aria-label="Apri menu"
-        className="rounded-xl p-1.5 text-[var(--ink-muted)] hover:bg-white md:hidden"
+        className="rounded-2xl p-1.5 text-white hover:bg-white/15 md:hidden"
         onClick={onApriMenu}
       >
         <Menu className="h-5 w-5" strokeWidth={1.75} />
@@ -35,14 +35,14 @@ export function BarraSuperiore({ onApriMenu }: Props) {
       <label className="relative min-w-0 flex-1">
         <span className="sr-only">Cerca un cliente o una campagna</span>
         <Search
-          className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ink-muted)]"
+          className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ink-muted)]"
           strokeWidth={1.75}
           aria-hidden
         />
         <input
           type="search"
           placeholder="Cerca un cliente o una campagna"
-          className="w-full max-w-lg rounded-full border border-[var(--border)] bg-white py-2.5 pl-10 pr-4 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--ink-muted)] focus:border-[var(--accent)]"
+          className="w-full max-w-xl rounded-full border-0 bg-[var(--workspace)] py-2.5 pl-11 pr-4 text-sm text-[var(--ink)] shadow-[var(--shadow-card)] outline-none placeholder:text-[var(--ink-muted)] focus:ring-2 focus:ring-white/70"
         />
       </label>
 
@@ -50,10 +50,10 @@ export function BarraSuperiore({ onApriMenu }: Props) {
         <button
           type="button"
           aria-label="Notifiche"
-          className="relative rounded-full p-2 text-[var(--ink-muted)] hover:bg-white"
+          className="relative rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
         >
           <Bell className="h-5 w-5" strokeWidth={1.75} />
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#ef4444]" />
+          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--pink-soft)]" />
         </button>
 
         <button
@@ -70,11 +70,11 @@ export function BarraSuperiore({ onApriMenu }: Props) {
           title={email ?? undefined}
           aria-label={email ? `Account ${email}` : "Profilo utente"}
         >
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-medium text-[var(--accent)]">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-medium text-[var(--primary)] shadow-[var(--shadow-card)]">
             {inizialiDaEmail(email)}
           </span>
           <ChevronDown
-            className="hidden h-4 w-4 text-[var(--ink-muted)] sm:block"
+            className="hidden h-4 w-4 text-white/80 sm:block"
             strokeWidth={1.75}
             aria-hidden
           />

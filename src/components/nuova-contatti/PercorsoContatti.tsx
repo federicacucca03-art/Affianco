@@ -2371,45 +2371,53 @@ export function PercorsoContatti({
     wizardStep === 6;
 
   return (
-    <div className="min-h-screen bg-slate-50/50 py-8">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div className="py-2">
+      <div className={`mx-auto ${wizardStep === 1 ? "max-w-[1120px]" : "max-w-7xl"}`}>
         <Link
           href="/campagne"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent)] transition-opacity hover:opacity-80"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--ink-muted)] transition-colors hover:text-[var(--ink)]"
         >
           <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
           Torna alle campagne
         </Link>
 
-        <div className="mt-4 mb-6">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
-            Assistente guidato · Passo {wizardStep} di 6
-          </p>
-          <h1 className="mt-1 text-2xl font-medium tracking-tight text-[var(--ink)]">
-            {titoloPagina}
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-[var(--ink-muted)]">
-            {sottotitolo}
-          </p>
+        <div className="mt-5 mb-8 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-[13px] font-medium text-[var(--ink-muted)]">
+              Affianco / Campagna
+            </p>
+            {config.nomeCliente?.trim() ? (
+              <p className="mt-1 text-lg font-medium text-[var(--ink)]">
+                {config.nomeCliente.trim()}
+              </p>
+            ) : null}
+            <h1 className="mt-2 text-[28px] font-medium tracking-tight text-[var(--ink)] sm:text-[32px]">
+              {titoloPagina}
+            </h1>
+            <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-[var(--ink-muted)]">
+              {sottotitolo}
+            </p>
+          </div>
           {isEditMode ? (
-            <div className="mt-4 rounded-xl border border-[#f5e0a8] bg-[#fff9e8] px-4 py-3">
-              <p className="text-sm font-medium text-[#9a6700]">
+            <div className="inline-flex max-w-full flex-col rounded-full bg-[var(--yellow-soft)] px-4 py-2 sm:px-5">
+              <p className="text-[13px] font-medium text-[#6b5420]">
                 Stai modificando una campagna esistente
               </p>
               {hydrateEditInCorso ? (
-                <p className="mt-1 text-xs text-[var(--ink-muted)]">
+                <p className="mt-0.5 text-[12px] text-[#6b5420]/80">
                   Caricamento dati dal database…
                 </p>
               ) : null}
               {erroreHydrateEdit ? (
-                <p className="mt-1 text-xs text-[#C45C5C]">{erroreHydrateEdit}</p>
+                <p className="mt-0.5 text-[12px] text-[#a85a72]">{erroreHydrateEdit}</p>
               ) : null}
             </div>
           ) : null}
         </div>
 
-        <div className="mb-8 rounded-[var(--radius)] bg-white p-4 shadow-[var(--shadow-soft)] sm:p-5">
-          <WizardStepper
+        <div className="mb-8 rounded-[24px] bg-white p-2 shadow-[var(--shadow-card)] sm:p-3">
+          <div className="rounded-[20px] bg-[var(--lavender-muted)] p-1.5">
+            <WizardStepper
             step={wizardStep}
             titoliOverride={{
               ...(isPercorsoAwareness
@@ -2439,9 +2447,10 @@ export function PercorsoContatti({
               if (s <= wizardStep) setWizardStep(s);
             }}
           />
+          </div>
           {stepAttuale ? (
-            <>
-              <p className="mt-3 text-sm font-medium text-[var(--ink)]">
+            <div className="px-3 pb-2 pt-3 sm:px-4">
+              <p className="text-sm font-medium text-[var(--ink)]">
                 {titoloStepWizard}
               </p>
               {sottotitoloStepWizard ? (
@@ -2449,7 +2458,7 @@ export function PercorsoContatti({
                   {sottotitoloStepWizard}
                 </p>
               ) : null}
-            </>
+            </div>
           ) : null}
         </div>
 
@@ -2821,13 +2830,13 @@ export function PercorsoContatti({
           ) : null}
         </div>
 
-        <div className="mt-8 flex flex-col gap-3 border-t border-[var(--border)] pt-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-8 flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={vaiIndietro}
               disabled={wizardStep === 1}
-              className="rounded-full border border-[var(--border)] bg-white px-5 py-2.5 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-[16px] bg-white/70 px-5 py-2.5 text-sm font-medium text-[var(--ink)] shadow-[var(--shadow-card)] transition-opacity hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
             >
               Indietro
             </button>
@@ -2835,7 +2844,7 @@ export function PercorsoContatti({
               <button
                 type="button"
                 onClick={() => router.push(`/campagne/${campaignIdEdit}`)}
-                className="rounded-full border border-[var(--border)] bg-white px-5 py-2.5 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--surface-hover)]"
+                className="rounded-[16px] bg-white/70 px-5 py-2.5 text-sm font-medium text-[var(--ink)] shadow-[var(--shadow-card)] transition-opacity hover:bg-white"
               >
                 Annulla
               </button>
@@ -2864,7 +2873,7 @@ export function PercorsoContatti({
                     isPercorsoAwareness) &&
                   Boolean(diagnosi.haErroriBloccanti))
                 }
-                className="rounded-full bg-[var(--ink)] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-[16px] bg-[var(--ink)] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {etichettaPulsanteAvanti}
               </button>
@@ -2893,7 +2902,7 @@ export function PercorsoContatti({
                   hydrateEditInCorso ||
                   Boolean(erroreHydrateEdit)
                 }
-                className="rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-[16px] bg-[var(--ink)] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {salvataggioInCorso ? "Salvataggio in corso…" : "Salva modifiche"}
               </button>

@@ -16,49 +16,49 @@ export function WizardStepper({
 }: Props) {
   return (
     <nav aria-label="Passaggi creazione campagna" className="w-full">
-      <ol className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-1">
+      <ol className="flex gap-1 overflow-x-auto">
         {WIZARD_STEPS.map((s) => {
           const attivo = s.id === step;
           const fatto = s.id < step;
           const cliccabile = Boolean(onVaiAStep) && (fatto || attivo);
           const titoloChip = titoliOverride?.[s.id] ?? s.titolo;
           return (
-            <li key={s.id} className="min-w-0 flex-1">
+            <li key={s.id} className="min-w-[8rem] flex-1">
               <button
                 type="button"
                 disabled={!cliccabile}
                 onClick={() => onVaiAStep?.(s.id)}
-                className={`flex w-full items-start gap-2.5 rounded-xl px-2 py-2 text-left transition-colors ${
+                className={`flex w-full items-center gap-2.5 rounded-full px-3.5 py-2.5 text-left transition-all ${
                   attivo
-                    ? "bg-[var(--accent-soft)]"
+                    ? "bg-white shadow-[var(--shadow-card)]"
                     : fatto
-                      ? "hover:bg-[var(--surface-hover)]"
-                      : "opacity-55"
+                      ? "bg-white/35 hover:bg-white/55"
+                      : "bg-transparent"
                 } ${cliccabile ? "cursor-pointer" : "cursor-default"}`}
               >
                 <span
-                  className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
                     attivo
-                      ? "bg-[var(--accent)] text-white"
+                      ? "bg-[var(--primary)] text-white"
                       : fatto
-                        ? "bg-[#3D8B57] text-white"
-                        : "bg-[#EEF0F3] text-[var(--ink-muted)]"
+                        ? "bg-[var(--green-soft)] text-[#2d6a4a]"
+                        : "bg-white/50 text-[var(--ink-muted)]"
                   }`}
                 >
                   {fatto ? "✓" : s.id}
                 </span>
                 <span className="min-w-0">
                   <span
-                    className={`block text-[11px] font-medium uppercase tracking-wide ${
+                    className={`block text-[11px] font-medium ${
                       attivo
-                        ? "text-[var(--accent)]"
+                        ? "text-[var(--primary)]"
                         : "text-[var(--ink-muted)]"
                     }`}
                   >
                     Passo {s.id}
                   </span>
                   <span
-                    className={`mt-0.5 block truncate text-sm font-medium ${
+                    className={`mt-0.5 block truncate text-[13px] font-medium ${
                       attivo ? "text-[var(--ink)]" : "text-[var(--ink-muted)]"
                     }`}
                   >
@@ -70,12 +70,6 @@ export function WizardStepper({
           );
         })}
       </ol>
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#EEF0F3]">
-        <div
-          className="h-full rounded-full bg-[var(--accent)] transition-all duration-300"
-          style={{ width: `${(step / 6) * 100}%` }}
-        />
-      </div>
     </nav>
   );
 }
