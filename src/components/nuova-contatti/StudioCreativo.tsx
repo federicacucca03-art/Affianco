@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ExternalLink,
@@ -44,6 +44,10 @@ import { AffiancoSuggerisce } from "@/components/nuova-contatti/AffiancoSuggeris
 import { BottoneCopia } from "@/components/nuova-contatti/BottoneCopia";
 import type { GuidanceItem } from "@/lib/guidance";
 import { generaGuidanceCreativita } from "@/lib/qualita-creativita";
+import type { CreativeVisionAnalysis } from "@/lib/analyze-creative";
+import { dataUrlDaBytesImmagine } from "@/lib/analyze-creative";
+import { generaGuidanceP1bCreativita } from "@/lib/guidance-creativita-vision";
+import { supabase } from "@/lib/supabase";
 
 const PASSI_SCANSIONE = [
   "Lettura hook visivo e angolo psicologico…",
@@ -147,11 +151,109 @@ export function StudioCreativo({
   const [passoScansione, setPassoScansione] = useState(0);
   const [errore, setErrore] = useState<string | null>(null);
   const [mockInfo, setMockInfo] = useState<string | null>(null);
+  const [visionStatus, setVisionStatus] = useState<
+    "IDLE" | "ANALYZING" | "SUCCESS" | "UNKNOWN" | "ERROR"
+  >("IDLE");
+  const [visionErrore, setVisionErrore] = useState<string | null>(null);
+  const [visionAnalysis, setVisionAnalysis] =
+    useState<CreativeVisionAnalysis | null>(null);
 
-  const guidanceCreativita = useMemo(
+  const assetPrincipale =
+    creativita.find((c) => c.ruolo === "principale") ?? creativita[0] ?? null;
+  const assetPrincipaleId = assetPrincipale?.id ?? null;
+
+  useEffect(() => {
+    setVisionStatus("IDLE");
+    setVisionErrore(null);
+    setVisionAnalysis(null);
+  }, [assetPrincipaleId]);
+
+  const guidanceP1a = useMemo(
     () => generaGuidanceCreativita({ creativita, objective }),
     [creativita, objective],
   );
+  const guidanceP1b = useMemo(
+    () =>
+      generaGuidanceP1bCreativita({
+        analysis: visionAnalysis,
+        offerta,
+        brief: elevatorPitch,
+      }),
+    [visionAnalysis, offerta, elevatorPitch],
+  );
+  const guidanceCreativita = useMemo(
+    () => [...guidanceP1b, ...guidanceP1a],
+    [guidanceP1b, guidanceP1a],
+  );
+
+  async function blobUrlToDataUrl(url: string): Promise<string> {
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error("Impossibile leggere l'immagine.");
+    }
+    const blob = await res.blob();
+    if (blob.type.startsWith("video/")) {
+      throw new Error(
+        "Analisi visual disponibile per immagini in questa versione.",
+      );
+    }
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const dataUrl = dataUrlDaBytesImmagine(bytes, blob.type);
+    if (!dataUrl) {
+      throw new Error("Formato immagine non supportato.");
+    }
+    return dataUrl;
+  }
+
+  async function analizzaCreativitaPrincipale() {
+    if (!assetPrincipale || assetPrincipale.isVideo) return;
+    setVisionStatus("ANALYZING");
+    setVisionErrore(null);
+    try {
+      const dataUrl = await blobUrlToDataUrl(assetPrincipale.url);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setVisionStatus("ERROR");
+        setVisionErrore(
+          "Non sono riuscito ad analizzare il visual. Puoi continuare comunque.",
+        );
+        return;
+      }
+      const res = await fetch("/api/analyze-creative", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          image: dataUrl,
+          offerta,
+          brief: elevatorPitch,
+          settore,
+        }),
+      });
+      const data = (await res.json()) as CreativeVisionAnalysis & {
+        error?: string;
+      };
+      if (!res.ok) {
+        throw new Error(data.error ?? "analisi fallita");
+      }
+      const analysis: CreativeVisionAnalysis = {
+        relevance: data.relevance ?? "UNKNOWN",
+        relevanceReason: data.relevanceReason ?? null,
+        visibleText: Array.isArray(data.visibleText) ? data.visibleText : [],
+      };
+      setVisionAnalysis(analysis);
+      setVisionStatus(analysis.relevance === "UNKNOWN" ? "UNKNOWN" : "SUCCESS");
+    } catch {
+      setVisionAnalysis(null);
+      setVisionStatus("ERROR");
+      setVisionErrore(
+        "Non sono riuscito ad analizzare il visual. Puoi continuare comunque.",
+      );
+    }
+  }
 
   const nicchia = nicchiaFormatiDaSettore(settore);
   const formati = formatiPerSettore(settore);
@@ -681,6 +783,29 @@ export function StudioCreativo({
   const dropzoneConGuidance = (
     <>
       {dropzone}
+      {assetPrincipale?.isVideo ? (
+        <p className="text-xs leading-relaxed text-[var(--ink-muted)]">
+          Analisi visual disponibile per immagini in questa versione.
+        </p>
+      ) : assetPrincipale ? (
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            disabled={visionStatus === "ANALYZING"}
+            onClick={() => void analizzaCreativitaPrincipale()}
+            className="inline-flex w-fit items-center justify-center rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--ink)] transition-colors hover:border-[var(--accent-muted)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {visionStatus === "ANALYZING"
+              ? "Analisi in corso…"
+              : "Analizza creatività"}
+          </button>
+          {visionStatus === "ERROR" && visionErrore ? (
+            <p className="text-xs leading-relaxed text-[var(--ink-muted)]">
+              {visionErrore}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       <AffiancoSuggerisce items={guidanceCreativita as GuidanceItem[]} />
     </>
   );

@@ -3692,14 +3692,7 @@ export function FormConfigurazione({
         percorsoRetargeting={isPercorsoRetargeting}
         percorsoAwareness={isPercorsoAwareness}
         heroProduct={isPercorsoEcommerce ? heroProduct : undefined}
-        elevatorPitch={
-          isPercorsoEcommerce ||
-          isPercorsoInstore ||
-          isPercorsoRetargeting ||
-          isPercorsoAwareness
-            ? elevatorPitch
-            : undefined
-        }
+        elevatorPitch={elevatorPitch}
         targetType={isPercorsoRetargeting ? targetType : undefined}
         sitoWeb={
           isPercorsoRetargeting || isPercorsoAwareness ? sitoWeb : undefined

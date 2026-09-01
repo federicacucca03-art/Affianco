@@ -69,9 +69,12 @@ function etichettaCosto(objective?: CampagnaObjective): "lead" | "CPA" {
 function pesoItem(item: GuidanceItem): number {
   if (item.level === "BLOCKER") return 500;
   if (item.level === "WARNING") {
+    if (item.id === "creative-vision-risk-hard") return 445;
+    if (item.id === "creative-vision-risk-warning") return 435;
     if (item.id === "step1-mismatch") return 430;
     if (item.id === "economia-cr-unknown") return 420;
     if (item.id === "economia-cr-estimated") return 410;
+    if (item.id === "creative-vision-relevance-low") return 405;
     return 400;
   }
   if (item.id === "economia-soglia") return 300;
