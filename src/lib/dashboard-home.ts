@@ -244,6 +244,89 @@ export function aggregaAttivitaSettimana(
   };
 }
 
+export type LavoroColonnaId =
+  | "preparazione"
+  | "rivedere"
+  | "monitorate"
+  | "controllare";
+
+export type LavoroAperto = {
+  campaignId: string;
+  clientName: string;
+  campaignName: string;
+  initials: string;
+  objective: CampagnaObjective;
+  colonna: LavoroColonnaId;
+  lastCheckAt: string | null;
+  createdAt: string | null;
+};
+
+export const MAX_LAVORI_COLONNA = 3;
+
+export function categoriaLavoroAperto(
+  campagna: Campagna,
+  check: CampaignCheck | null,
+): LavoroColonnaId {
+  const status = statusNorm(campagna);
+  if (status === "REVISION_REQUESTED") return "rivedere";
+  if (status === "DRAFT" || !status) return "preparazione";
+  if (check) return "monitorate";
+  return "controllare";
+}
+
+export function etichettaCountLavori(n: number): string {
+  return n === 1 ? "1 lavoro" : `${n} lavori`;
+}
+
+function confrontaIsoDesc(a: string | null, b: string | null): number {
+  const da = a ?? "";
+  const db = b ?? "";
+  if (da !== db) return db.localeCompare(da);
+  return 0;
+}
+
+export function derivaLavoriAperti(
+  campagne: Campagna[],
+  ultimi: Map<string, CampaignCheck>,
+): Record<LavoroColonnaId, LavoroAperto[]> {
+  const colonne: Record<LavoroColonnaId, LavoroAperto[]> = {
+    preparazione: [],
+    rivedere: [],
+    monitorate: [],
+    controllare: [],
+  };
+
+  for (const campagna of campagne) {
+    if (!campagna.id) continue;
+    const check = ultimi.get(campagna.id) ?? null;
+    const colonna = categoriaLavoroAperto(campagna, check);
+    colonne[colonna].push({
+      campaignId: campagna.id,
+      clientName: campagna.nomeCliente,
+      campaignName: nomeCampagnaCard(campagna),
+      initials: campagna.iniziali,
+      objective: normalizzaObjective(campagna.objective),
+      colonna,
+      lastCheckAt: check?.createdAt ?? null,
+      createdAt: campagna.dataLancio ?? null,
+    });
+  }
+
+  (Object.keys(colonne) as LavoroColonnaId[]).forEach((id) => {
+    colonne[id].sort((a, b) => {
+      if (id === "monitorate") {
+        const perCheck = confrontaIsoDesc(a.lastCheckAt, b.lastCheckAt);
+        if (perCheck !== 0) return perCheck;
+      }
+      const perCreazione = confrontaIsoDesc(a.createdAt, b.createdAt);
+      if (perCreazione !== 0) return perCreazione;
+      return a.clientName.localeCompare(b.clientName, "it");
+    });
+  });
+
+  return colonne;
+}
+
 export function pillGestione(campagna: Campagna, check: CampaignCheck | null): {
   kind: "ok" | "watch" | "critico" | "pending" | "info";
   label: string;

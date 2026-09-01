@@ -16,6 +16,7 @@ import {
   aggregaAttivitaSettimana,
   campagneInRevisione,
   derivaAttenzione,
+  derivaLavoriAperti,
   etichettaAriaBarraAttivita,
   isoInizioFinestraGiorni,
   pillGestione,
@@ -24,6 +25,7 @@ import {
   type GiornoAttivita,
 } from "@/lib/dashboard-home";
 import { nomeCampagnaCard } from "@/components/risultati/ControlRoomOverview";
+import { LavoriAperti } from "@/components/dashboard/LavoriAperti";
 import { StatoChip, type StatoChipKind } from "@/components/nuova-contatti/StatoChip";
 import { useOnboardingCampagna } from "@/components/OnboardingCampagnaContext";
 import {
@@ -170,6 +172,10 @@ export function DashboardHome() {
     [checksSettimana],
   );
   const gestione = campagne.slice(0, MAX_GESTIONE);
+  const lavori = useMemo(
+    () => derivaLavoriAperti(campagne, ultimi),
+    [campagne, ultimi],
+  );
 
   return (
     <main className="mx-auto w-full max-w-[1400px]">
@@ -189,10 +195,10 @@ export function DashboardHome() {
       ) : campagne.length === 0 ? (
         <section className="aff-panel-white mt-6 px-5 py-8">
           <p className="text-base font-medium text-[var(--ink)]">
-            Non hai ancora campagne in gestione.
+            Non hai ancora lavori aperti.
           </p>
           <p className="mt-1.5 max-w-md text-sm leading-relaxed text-[var(--ink-muted)]">
-            Crea la prima campagna per vedere qui cosa richiede attenzione.
+            Crea una campagna per vedere qui su cosa stai lavorando.
           </p>
           <button
             type="button"
@@ -200,7 +206,7 @@ export function DashboardHome() {
             className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90"
           >
             <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
-            Crea la prima campagna
+            Crea una campagna
           </button>
         </section>
       ) : (
@@ -402,6 +408,8 @@ export function DashboardHome() {
               </ul>
             )}
           </section>
+
+          <LavoriAperti colonne={lavori} />
         </>
       )}
     </main>
