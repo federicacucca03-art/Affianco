@@ -42,7 +42,7 @@ export function BarraSuperiore({ onApriMenu }: Props) {
         <input
           type="search"
           placeholder="Cerca un cliente o una campagna"
-          className="w-full max-w-xl rounded-full border-0 bg-[var(--workspace)] py-2.5 pl-11 pr-4 text-sm text-[var(--ink)] shadow-[var(--shadow-card)] outline-none placeholder:text-[var(--ink-muted)] focus:ring-2 focus:ring-white/70"
+          className="w-full max-w-xl rounded-full border-0 bg-white/80 py-2.5 pl-11 pr-4 text-sm text-[var(--ink)] shadow-[var(--shadow-card)] outline-none placeholder:text-[var(--ink-muted)] focus:ring-2 focus:ring-[var(--pink-soft)]/50"
         />
       </label>
 

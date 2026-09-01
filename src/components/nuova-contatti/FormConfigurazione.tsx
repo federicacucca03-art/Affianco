@@ -309,7 +309,7 @@ function Passo1Sezione({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-[22px]">
+    <div className="aff-panel-white space-y-[22px] p-5 sm:p-6">
       <div>
         <p className="text-[13px] font-medium text-[var(--primary)]">{titolo}</p>
         <div className="mt-3 h-px bg-[rgba(80,70,130,0.1)]" />
@@ -366,10 +366,10 @@ function segClass(attivo: boolean, extra = "") {
 }
 
 const GANCI_PILL = [
-  "bg-[var(--lavender-muted)] text-[#5b4fa8]",
+  "bg-[var(--pink-soft)] text-[#7a3d58]",
   "bg-[var(--green-soft)] text-[#2d6a4a]",
   "bg-[var(--yellow-soft)] text-[#6b5420]",
-  "bg-[#fde5ee] text-[#a85a72]",
+  "bg-[var(--lavender-muted)] text-[#5b4fa8]",
 ];
 
 export function FormConfigurazione({
@@ -1070,21 +1070,21 @@ export function FormConfigurazione({
                 ? "passo-1-prenotazioni"
                 : "passo-1-default"
         }
-        className="rounded-[26px] bg-white p-8 shadow-[var(--shadow-soft)] sm:p-9"
+        className="aff-panel-lilac p-5 shadow-[var(--shadow-soft)] sm:p-6"
       >
-        <header>
+        <header className="aff-panel-white p-6 sm:p-7">
           <h2 className="text-[20px] font-medium tracking-tight text-[var(--ink)] sm:text-[22px]">
             {step1.stepTitle}
           </h2>
           <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[var(--ink-muted)]">
             {step1.stepSubtitle}
           </p>
-          <p className="mt-4 inline-flex rounded-full bg-[var(--primary-soft)] px-3 py-1 text-[13px] font-medium text-[var(--primary)]">
+          <p className="mt-4 inline-flex rounded-full bg-[var(--pink-soft)] px-3 py-1 text-[13px] font-medium text-[#7a3d58]">
             Obiettivo: {etichettaObiettivo(objectiveEffettivo)}
           </p>
         </header>
 
-        <div className="mt-8 space-y-10">
+        <div className="mt-5 space-y-5">
           {onCaricaClienteEsistente ? (
             <SelettoreClienteEsistente
               onSeleziona={onCaricaClienteEsistente}
@@ -1928,7 +1928,7 @@ export function FormConfigurazione({
           </Passo1Sezione>
           ) : null}
 
-          <div className="space-y-4 pt-6">
+          <div className="space-y-4 rounded-[20px] bg-[rgba(122,116,168,0.28)] p-5 sm:p-6">
             <Campo etichetta="Nome campagna">
               <input
                 type="text"

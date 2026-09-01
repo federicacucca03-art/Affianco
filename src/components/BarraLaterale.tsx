@@ -69,7 +69,7 @@ export function BarraLaterale({ aperta, onChiudi }: Props) {
       )}
 
       <aside
-        className={`fixed inset-y-3 left-3 z-50 flex w-16 flex-col rounded-[28px] bg-[var(--lavender)] py-6 shadow-[var(--shadow-soft)] md:static md:inset-auto md:h-auto md:self-stretch md:translate-x-0 ${
+        className={`fixed inset-y-3 left-3 z-50 flex w-16 flex-col rounded-[28px] bg-[rgba(110,104,158,0.55)] py-6 shadow-[var(--shadow-soft)] backdrop-blur-xl md:static md:inset-auto md:h-auto md:self-stretch md:translate-x-0 ${
           aperta ? "translate-x-0" : "-translate-x-[120%]"
         }`}
       >

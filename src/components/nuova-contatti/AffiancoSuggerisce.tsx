@@ -22,7 +22,7 @@ const STILE_LIVELLO: Record<
     etichetta: "Info",
   },
   SUGGESTION: {
-    badge: "bg-[var(--primary-soft)] text-[var(--primary)]",
+    badge: "bg-[var(--green-soft)] text-[#2d6a4a]",
     etichetta: "Suggerimento",
   },
   WARNING: {
@@ -30,7 +30,7 @@ const STILE_LIVELLO: Record<
     etichetta: "Attenzione",
   },
   BLOCKER: {
-    badge: "bg-[#fde5ee] text-[#a85a72]",
+    badge: "bg-[var(--pink-soft)] text-[#7a3d58]",
     etichetta: "Da sistemare",
   },
 };
@@ -92,9 +92,7 @@ export function AffiancoSuggerisce({
   if (!principale) return null;
 
   return (
-    <section
-      className="rounded-[22px] bg-[var(--workspace)] p-6 shadow-[var(--shadow-card)]"
-    >
+    <section className="aff-panel-lilac-deep p-6">
       <p className="text-[13px] font-medium text-[var(--primary)]">
         Affianco suggerisce
       </p>

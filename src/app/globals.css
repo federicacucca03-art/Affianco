@@ -42,13 +42,50 @@ body {
 
 .aff-app-shell {
   min-height: 100dvh;
-  background: linear-gradient(145deg, #aaa6ca 0%, #b8b4d8 40%, #c2bedd 100%);
+  background-color: #b8b4d8;
+  background-image:
+    radial-gradient(ellipse 85% 55% at 6% -8%, rgba(247, 166, 199, 0.32), transparent 58%),
+    radial-gradient(ellipse 55% 40% at 96% 12%, rgba(191, 231, 183, 0.16), transparent 52%),
+    radial-gradient(ellipse 70% 48% at 78% 108%, rgba(143, 138, 184, 0.5), transparent 58%),
+    linear-gradient(
+      168deg,
+      #d5d0ea 0%,
+      #c5c0e0 28%,
+      #b8b4d8 55%,
+      #aaa6ca 78%,
+      #9e99c4 100%
+    );
 }
 
 .aff-workspace {
   border-radius: 32px;
-  background: #faf9fc;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.58) 0%,
+    rgba(238, 234, 248, 0.46) 48%,
+    rgba(214, 210, 232, 0.36) 100%
+  );
   box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.aff-panel-white {
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: var(--shadow-card);
+}
+
+.aff-panel-lilac {
+  border-radius: 22px;
+  background: rgba(143, 138, 184, 0.22);
+  box-shadow: 0 10px 32px rgba(70, 55, 130, 0.06);
+}
+
+.aff-panel-lilac-deep {
+  border-radius: 22px;
+  background: rgba(122, 116, 168, 0.32);
+  box-shadow: 0 10px 32px rgba(70, 55, 130, 0.08);
 }
 
 .aff-input {

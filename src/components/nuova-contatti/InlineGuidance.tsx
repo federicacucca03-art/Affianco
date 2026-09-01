@@ -94,20 +94,20 @@ const STILE_INLINE: Record<
   { wrap: string; label: string }
 > = {
   INFO: {
-    wrap: "bg-[var(--primary-soft)]",
-    label: "text-[var(--primary)]",
+    wrap: "bg-[var(--lavender-muted)]",
+    label: "text-[#5b4fa8]",
   },
   SUGGESTION: {
-    wrap: "bg-[var(--lavender-muted)]",
-    label: "text-[var(--primary)]",
+    wrap: "bg-[var(--green-soft)]/75",
+    label: "text-[#2d6a4a]",
   },
   WARNING: {
-    wrap: "bg-[var(--yellow-soft)]/85",
+    wrap: "bg-[var(--yellow-soft)]/90",
     label: "text-[#6b5420]",
   },
   BLOCKER: {
-    wrap: "bg-[#fde5ee]",
-    label: "text-[#a85a72]",
+    wrap: "bg-[var(--pink-soft)]/85",
+    label: "text-[#7a3d58]",
   },
 };
 
