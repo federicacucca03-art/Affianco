@@ -96,10 +96,10 @@ type Props = {
 };
 
 function badgeClass(tag: CuratedFormat["tag"][number]): string {
-  if (tag === "Longevità >60gg") {
+  if (tag === "Formato evergreen") {
     return "bg-[#E8F5EE] text-[#2D6A4A] border-[#B7E4C7]";
   }
-  if (tag === "Alto CTR") {
+  if (tag === "Hook immediato") {
     return "bg-[var(--accent-soft)] text-[var(--accent)] border-[#c6d8f0]";
   }
   return "bg-[#FFF6E5] text-[#9A6700] border-[#F5D78E]";

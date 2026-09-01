@@ -1,9 +1,9 @@
 import { risolviSettoreIntel } from "@/lib/sector-intel";
 
 export type FormatTag =
-  | "Longevità >60gg"
-  | "Alto CTR"
-  | "Conversione Diretta";
+  | "Formato evergreen"
+  | "Hook immediato"
+  | "CTA diretta";
 
 export type CuratedFormat = {
   id: string;
@@ -26,8 +26,8 @@ const SALUTE: CuratedFormat[] = [
     id: "salute-split-prima-dopo",
     titolo: "Split-Screen Prima/Dopo",
     descrizione:
-      "Confronto visivo sobrio (senza claim medici aggressivi). Su Meta resta in libreria oltre 60 giorni quando il before/after è soft e il testo è educativo.",
-    tag: ["Longevità >60gg", "Alto CTR"],
+      "Confronto visivo sobrio (senza claim medici aggressivi). Può essere riutilizzato come contenuto evergreen quando il before/after è soft e il testo è educativo.",
+    tag: ["Formato evergreen", "Hook immediato"],
     istruzioniRegistrazione: [
       "Riprendi 2 clip verticali: situazione iniziale generica + risultato estetico/funzionale (senza sangue o claim garantiti).",
       "Montaggio split 50/50 con titolo in overlay: offerta + città. Max 15 secondi.",
@@ -37,8 +37,8 @@ const SALUTE: CuratedFormat[] = [
     id: "salute-tour-studio",
     titolo: "Tour Studio 15 sec",
     descrizione:
-      "Walkthrough della struttura con tecnologia visibile. Genera fiducia immediata e CTR alto su pubblico locale 25–55 anni.",
-    tag: ["Alto CTR", "Conversione Diretta"],
+      "Walkthrough della struttura con tecnologia visibile. Punta su una comunicazione diretta e rassicurante per un pubblico locale.",
+    tag: ["Hook immediato", "CTA diretta"],
     istruzioniRegistrazione: [
       "Cammina lentamente in reception → sala trattamenti → strumentazione (luce naturale).",
       "Aggiungi voce off del titolare: 1 frase su chi siete + 1 frase sull'offerta.",
@@ -48,11 +48,11 @@ const SALUTE: CuratedFormat[] = [
     id: "salute-dottore-camera",
     titolo: "Dottore/Titolare in Camera",
     descrizione:
-      "Talking head autentico: formato evergreen in odontoiatria ed estetica medica. Conversione diretta su modulo o WhatsApp.",
-    tag: ["Longevità >60gg", "Conversione Diretta"],
+      "Talking head autentico: formato evergreen in odontoiatria ed estetica medica. Orientato all'azione, con invito al modulo o a WhatsApp.",
+    tag: ["Formato evergreen", "CTA diretta"],
     istruzioniRegistrazione: [
       "Ripresa frontale 9:16, petto in su, sfondo studio neutro. Script 3 blocchi: problema → soluzione → CTA.",
-      "Sottotitoli burned-in consigliati: il 70% guarda senza audio.",
+      "Sottotitoli burned-in consigliati: molti guardano senza audio.",
     ],
   },
 ];
@@ -62,19 +62,19 @@ const RISTORAZIONE: CuratedFormat[] = [
     id: "risto-hero-piatto",
     titolo: "Hero Piatto Macro",
     descrizione:
-      "Primo piano del piatto signature con steam/vapore. Standard su ristorazione locale: longevity alta se il piatto non cambia stagionalmente.",
-    tag: ["Longevità >60gg", "Alto CTR"],
+      "Primo piano del piatto signature con steam/vapore. Formato evergreen per ristorazione locale se il piatto non cambia stagionalmente.",
+    tag: ["Formato evergreen", "Hook immediato"],
     istruzioniRegistrazione: [
       "Riprendi il piatto appena servito vicino alla finestra (luce laterale). 3 secondi statici + 2 sec slow push-in.",
-      "Overlay testo: nome piatto + promo (es. -20% pranzo feriale).",
+      "Overlay testo: nome piatto + promo reale (es. pranzo feriale), solo se esiste.",
     ],
   },
   {
     id: "risto-pov-sala",
     titolo: "Video POV Dietro le Quinte",
     descrizione:
-      "POV dalla cucina o dal pass: humanizza il brand e aumenta CTR su Stories/Reels placement.",
-    tag: ["Alto CTR"],
+      "POV dalla cucina o dal pass: humanizza il brand e si adatta a Stories e Reels.",
+    tag: ["Hook immediato"],
     istruzioniRegistrazione: [
       "Clip POV mentre impiatti un ordine reale (15 sec max, audio cucina ok).",
       "Chiudi con piatto finito e CTA prenotazione.",
@@ -84,8 +84,8 @@ const RISTORAZIONE: CuratedFormat[] = [
     id: "risto-evento-data",
     titolo: "Grafica Data Evento",
     descrizione:
-      "Statica o motion leggero con data evento/menu degustazione. Conversione diretta su prenotazioni telefoniche/WhatsApp.",
-    tag: ["Conversione Diretta", "Longevità >60gg"],
+      "Statica o motion leggero con data evento/menu degustazione. Orientato all'azione: invita a prenotare per telefono o WhatsApp.",
+    tag: ["CTA diretta", "Formato evergreen"],
     istruzioniRegistrazione: [
       "Foto sala allestita + grafica con data leggibile anche su mobile.",
       "Evita menu illeggibile: max 8 parole in overlay.",
@@ -98,8 +98,8 @@ const ECOMMERCE: CuratedFormat[] = [
     id: "eco-ugc-unboxing",
     titolo: "UGC Unboxing 9:16",
     descrizione:
-      "Mani reali che aprono pacco e applicano/usano prodotto nei primi 2 secondi. Top performer su skincare e beauty DTC.",
-    tag: ["Alto CTR", "Conversione Diretta"],
+      "Mani reali che aprono pacco e applicano/usano prodotto nei primi 2 secondi. Formato frequente su skincare e beauty DTC.",
+    tag: ["Hook immediato", "CTA diretta"],
     istruzioniRegistrazione: [
       "Registra apertura pacco + texture prodotto sulla pelle (luce naturale, no filtro).",
       "CTA vocale: 'Link in bio' o 'Acquista ora' con badge sconto.",
@@ -109,8 +109,8 @@ const ECOMMERCE: CuratedFormat[] = [
     id: "eco-before-after-soft",
     titolo: "Prima/Dopo Soft (Skincare)",
     descrizione:
-      "Timeline 7/14 giorni senza claim miracolosi. Resta in libreria a lungo se coerente con ASIN/variante prodotto.",
-    tag: ["Longevità >60gg"],
+      "Timeline 7/14 giorni senza claim miracolosi. Può essere riutilizzato come contenuto evergreen se coerente con la variante prodotto.",
+    tag: ["Formato evergreen"],
     istruzioniRegistrazione: [
       "Stessa luce e stesso angolo per entrambe le clip (selfie neutro).",
       "Testo disclaimer piccolo: 'Risultati possono variare'.",
@@ -120,8 +120,8 @@ const ECOMMERCE: CuratedFormat[] = [
     id: "eco-carosello-benefici",
     titolo: "Carosello 3 Benefici",
     descrizione:
-      "Slide 1 problema, 2 ingrediente/USP, 3 promo. Formato carosello con CTR superiore al single image in beauty.",
-    tag: ["Alto CTR", "Conversione Diretta"],
+      "Slide 1 problema, 2 ingrediente/USP, 3 promo. Formato carosello per elencare i benefici in sequenza.",
+    tag: ["Hook immediato", "CTA diretta"],
     istruzioniRegistrazione: [
       "3 foto prodotto su sfondo uniforme + 1 riga testo per slide.",
       "Ultima slide: prezzo barrato + spedizione gratuita se applicabile.",
@@ -134,8 +134,8 @@ const ARTIGIANI: CuratedFormat[] = [
     id: "art-prima-dopo-cantiere",
     titolo: "Prima/Dopo Cantiere",
     descrizione:
-      "Split o swipe del lavoro finito. Forte prova sociale per ristrutturazioni, infissi, idraulici. Longevity >60gg se zona geografica stabile.",
-    tag: ["Longevità >60gg", "Conversione Diretta"],
+      "Split o swipe del lavoro finito. Prova sociale per ristrutturazioni, infissi, idraulici. Formato evergreen se la zona servita è stabile.",
+    tag: ["Formato evergreen", "CTA diretta"],
     istruzioniRegistrazione: [
       "Foto wide stanza prima + stesso angolo dopo (stessa ora del giorno).",
       "Overlay: zona servita + preventivo gratuito.",
@@ -145,8 +145,8 @@ const ARTIGIANI: CuratedFormat[] = [
     id: "art-van-arrivo",
     titolo: "Van + Arrivo sul Posto",
     descrizione:
-      "Furgone brandizzato che arriva al cliente: aumenta fiducia locale e riduce CPL su lead form.",
-    tag: ["Alto CTR"],
+      "Furgone brandizzato che arriva al cliente: comunica presenza locale e rassicurazione.",
+    tag: ["Hook immediato"],
     istruzioniRegistrazione: [
       "Clip 10 sec: van in strada → tecnico che saluta cliente → primo piano strumenti.",
       "Aggiungi nome attività su overlay.",
@@ -156,8 +156,8 @@ const ARTIGIANI: CuratedFormat[] = [
     id: "art-recensione-wa",
     titolo: "Screenshot Recensione WhatsApp",
     descrizione:
-      "Statica con screenshot recensione reale (nome oscurato). Formato direct response molto usato da artigiani italiani.",
-    tag: ["Conversione Diretta", "Longevità >60gg"],
+      "Statica con screenshot recensione reale (nome oscurato). Formato orientato all'azione, usato da artigiani per invitare al modulo.",
+    tag: ["CTA diretta", "Formato evergreen"],
     istruzioniRegistrazione: [
       "Screenshot chat/recensione + cornice telefono minimal.",
       "Headline: 'Perché ci scelgono a [Città]' + CTA modulo.",
@@ -170,8 +170,8 @@ const B2B: CuratedFormat[] = [
     id: "b2b-case-study",
     titolo: "Case Study 1 Slide",
     descrizione:
-      "Numero concreto (+% / -tempo / € risparmiati) + logo cliente oscurato. Sobrio, adatto a consulenza e SaaS B2B.",
-    tag: ["Conversione Diretta", "Longevità >60gg"],
+      "Una metrica reale del caso (solo se documentabile) e logo cliente oscurato. Sobrio, adatto a consulenza e SaaS B2B.",
+    tag: ["CTA diretta", "Formato evergreen"],
     istruzioniRegistrazione: [
       "Grafica 1:1 con 1 metrica grande + 2 bullet di contesto.",
       "CTA: 'Prenota audit gratuito' — tono professionale, no urgenza fake.",
@@ -181,8 +181,8 @@ const B2B: CuratedFormat[] = [
     id: "b2b-talking-head-desk",
     titolo: "Talking Head da Scrivania",
     descrizione:
-      "Founder/consulente spiega problema operativo in 20 sec. CTR alto su LinkedIn/Meta B2B broad.",
-    tag: ["Alto CTR"],
+      "Founder/consulente spiega problema operativo in 20 sec. Apertura diretta, adatta a un pubblico B2B su Meta.",
+    tag: ["Hook immediato"],
     istruzioniRegistrazione: [
       "Webcam o smartphone su treppiede, sfondo ufficio pulito.",
       "Script: dolore → metodo → invito call discovery.",
@@ -192,8 +192,8 @@ const B2B: CuratedFormat[] = [
     id: "b2b-screen-demo",
     titolo: "Screen Demo Prodotto",
     descrizione:
-      "Registrazione schermo con voce over che mostra 1 workflow risolto. Conversione su lead qualificato.",
-    tag: ["Conversione Diretta"],
+      "Registrazione schermo con voce over che mostra 1 workflow risolto. Orientato all'azione, con invito a un contatto qualificato.",
+    tag: ["CTA diretta"],
     istruzioniRegistrazione: [
       "Loom/OBS: 30 sec max, cursore lento, evidenziare 1 risultato.",
       "Chiusura con CTA unica verso landing o form.",
@@ -206,8 +206,8 @@ const FITNESS: CuratedFormat[] = [
     id: "fit-pov-allenamento",
     titolo: "POV Allenamento Reale",
     descrizione:
-      "Allievi veri (non stock) in azione. Formato evergreen per palestre: longevity alta con promo prova gratuita stabile.",
-    tag: ["Longevità >60gg", "Alto CTR"],
+      "Allievi veri (non stock) in azione. Formato evergreen per palestre, utile con una prova gratuita stabile.",
+    tag: ["Formato evergreen", "Hook immediato"],
     istruzioniRegistrazione: [
       "Clip POV 9:16 da sala pesi o corso (movimento dinamico, 12 sec).",
       "Overlay: prova gratuita + quartiere/città.",
@@ -218,7 +218,7 @@ const FITNESS: CuratedFormat[] = [
     titolo: "Trainer Hook 3 Secondi",
     descrizione:
       "Trainer guarda camera e fa domanda provocatoria ('Ancora niente risultati?'). Stop scroll immediato.",
-    tag: ["Alto CTR", "Conversione Diretta"],
+    tag: ["Hook immediato", "CTA diretta"],
     istruzioniRegistrazione: [
       "Ripresa frontale trainer in sala, energia alta primi 3 sec.",
       "Transizione rapida a tour struttura + CTA prova.",
@@ -228,8 +228,8 @@ const FITNESS: CuratedFormat[] = [
     id: "fit-trasformazione-soft",
     titolo: "Trasformazione Soft 30 Giorni",
     descrizione:
-      "Before/after fitness senza fisici irrealistici. Compliance Meta migliore = annunci che durano oltre 60 giorni.",
-    tag: ["Longevità >60gg"],
+      "Before/after fitness senza fisici irrealistici. Formato sobrio, adatto a comunicazioni continuative.",
+    tag: ["Formato evergreen"],
     istruzioniRegistrazione: [
       "Foto progresso allievo consensuato (stesso outfit/angolo).",
       "Didascalia: percorso + offerta prova, no claim medici.",
@@ -378,7 +378,7 @@ const BOOKING_SUGGERIMENTI_BASE: BookingSuggerimentoCreativo[] = [
     id: "reminder",
     nome: "Reminder / promemoria",
     quandoUsarlo:
-      "Idea da testare per ridurre no-show: mostra il valore del promemoria pre-appuntamento.",
+      "Idea da testare per ricordare il valore del promemoria pre-appuntamento.",
     cosaMostrare:
       "Notifica WhatsApp, SMS o email di conferma — tono rassicurante, non allarmistico.",
     hookVisivo:
