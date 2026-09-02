@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { LandingNavbar } from "@/components/landing/LandingNavbar";
 import { LandingHero } from "@/components/landing/sections/LandingHero";
 import { LandingProblema } from "@/components/landing/sections/LandingProblema";
@@ -14,6 +13,7 @@ import { LandingPerChiE } from "@/components/landing/sections/LandingPerChiE";
 import { LandingDifferenziazione } from "@/components/landing/sections/LandingDifferenziazione";
 import { LandingFaq } from "@/components/landing/sections/LandingFaq";
 import { LandingCtaFinale } from "@/components/landing/sections/LandingCtaFinale";
+import { PublicFooter } from "@/components/landing/PublicFooter";
 
 export function LandingPage() {
   const [menuAperto, setMenuAperto] = useState(false);
@@ -40,20 +40,7 @@ export function LandingPage() {
         <LandingCtaFinale />
       </main>
 
-      <footer className="border-t border-[var(--border)] bg-white">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 text-sm text-[var(--ink-muted)] sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p className="text-sm font-medium uppercase tracking-[0.12em] text-[var(--ink)]">
-            Affianco
-          </p>
-          <p>
-            Il posto in cui un professionista gestisce tutto il lavoro dietro le
-            campagne Meta dei propri clienti.
-          </p>
-          <Link href="/login" className="text-[var(--accent)] hover:underline">
-            Accedi →
-          </Link>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }
