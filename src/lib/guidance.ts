@@ -652,12 +652,12 @@ export function etichettaStepperStep6(
   return "Da completare";
 }
 
-export const LABEL_EXPORT_PRONTA = "Esporta Campagna Pronta per Meta";
-export const LABEL_EXPORT_BOZZA = "Esporta bozza per Meta";
+export const LABEL_EXPORT_PRONTA = "Esporta per Meta Ads";
+export const LABEL_EXPORT_BOZZA = "Esporta per Meta Ads";
 export const MICROCOPY_EXPORT_PRONTA =
-  "La configurazione è completa per l'importazione.";
+  "Affianco prepara una bozza strutturata da completare in Ads Manager.";
 export const MICROCOPY_EXPORT_BOZZA =
-  "Puoi preparare il file ora e completare gli elementi mancanti in Ads Manager prima della pubblicazione.";
+  "Affianco prepara una bozza strutturata da completare in Ads Manager.";
 export const MICROCOPY_EXPORT_PAGE_FORM =
   "Page ID e Form ID dovranno essere completati in Meta Ads Manager prima di andare live.";
 export const MICROCOPY_EXPORT_PAGE =
@@ -683,9 +683,9 @@ export type EtichetteExportMetaInput = {
 };
 
 /**
- * Label e microcopy export: lancio ≠ file CSV.
- * Page/Form vuoti non bloccano se il generatore li accetta.
- * Blocco solo se manca il copy necessario a produrre un file valido.
+ * Label CTA export (onesta). Lo stato lancio Step 6 resta distinto:
+ * Page/Form e dettagli Meta vivono in BloccoPreExport / valutaExportMeta.
+ * Blocco etichette solo se manca il copy.
  */
 export function etichetteExportMeta(
   input: EtichetteExportMetaInput,

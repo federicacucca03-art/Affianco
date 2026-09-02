@@ -1383,7 +1383,7 @@ export function FormConfigurazione({
                   Da configurare in Meta
                 </p>
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-[var(--ink)]">
-                  <li>Custom Audience</li>
+                  <li>Audience di retargeting</li>
                   <li>Finestra del pubblico</li>
                   <li>Eventuali esclusioni</li>
                 </ul>
@@ -3224,10 +3224,10 @@ export function FormConfigurazione({
             <InlineGuidance item={guidanceBudgetRaggio} />
           </Campo>
           <div className="mt-3">
-            <RigaSolaLettura
-              etichetta="Budget della campagna (Advantage+ Budget / CBO)"
-              valore={config.cboAttivo ? "Attivo" : "Disattivo"}
-            />
+            <p className="text-xs leading-relaxed text-[var(--ink-muted)]">
+              Budget giornaliero campagna. L&apos;export non supporta ABO: il
+              valore va sulla campagna, non sugli Ad Set.
+            </p>
           </div>
         </dl>
       </section>
@@ -3247,7 +3247,7 @@ export function FormConfigurazione({
                     Da configurare in Meta
                   </p>
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-[var(--ink)]">
-                    <li>Custom Audience</li>
+                    <li>Audience di retargeting</li>
                     <li>Finestra del pubblico</li>
                     <li>Eventuali esclusioni</li>
                   </ul>
@@ -3274,7 +3274,7 @@ export function FormConfigurazione({
               <RigaSolaLettura etichetta="Genere" valore={config.genere} />
               <RigaSolaLettura
                 etichetta="Targeting"
-                valore="Custom Audience (Carrelli 14gg / Visitatori Sito 30gg / Interazioni IG & FB)"
+                valore="Audience da selezionare in Ads Manager"
               />
             </>
             )
@@ -3323,6 +3323,10 @@ export function FormConfigurazione({
                     : "Con interessi"
                 }
               />
+              <p className="mt-1.5 text-xs leading-relaxed text-[var(--ink-muted)]">
+                Le impostazioni avanzate del pubblico vanno verificate in Ads
+                Manager.
+              </p>
             </>
           )}
           <RigaSolaLettura
@@ -3759,15 +3763,8 @@ export function FormConfigurazione({
             : "2. Esporta per Meta Ads Manager"}
         </h2>
         <p className="mt-1 text-xs text-[var(--ink-muted)]">
-          {isPercorsoRetargeting
-            ? "Esporta il file strutturato per importare la campagna senza ricopiare manualmente le impostazioni."
-            : isPercorsoAwareness
-            ? "Esporta il file strutturato per importare la campagna in Meta Ads Manager senza ricopiare manualmente le impostazioni."
-            : isPercorsoEcommerce || isPercorsoInstore
-            ? "Esporta il file strutturato per importare la campagna in Meta Ads Manager senza ricopiare manualmente le impostazioni."
-            : isPercorsoLeads || isPercorsoBookings
-            ? "Affianco prepara il file strutturato per importare la campagna in bozza su Meta Ads Manager senza ricopiare manualmente testi e impostazioni."
-            : "Inserisci gli ID account Meta, poi esporta il CSV Anti-Fuffa pronto per l'importazione in blocco."}
+          Affianco prepara una bozza strutturata da completare in Ads Manager:
+          riduci il lavoro di ricopiare struttura e copy.
         </p>
         {isPercorsoInstore ? (
           <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
@@ -4084,12 +4081,12 @@ export function FormConfigurazione({
             importazione.
           </p>
           <p className="mt-3 text-xs font-medium text-[var(--ink)]">
-            Custom Audience da collegare in Meta
+            Seleziona l&apos;audience di retargeting in Ads Manager.
           </p>
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-[var(--ink)]">
-            <li>Collega la Custom Audience nell&apos;Ad Set.</li>
+            <li>Seleziona l&apos;audience nell&apos;Ad Set.</li>
             <li>
-              Definisci la finestra della Custom Audience direttamente in Meta.
+              Definisci la finestra del pubblico direttamente in Meta.
             </li>
             <li>
               Verifica se escludere chi ha già completato l&apos;acquisto o la

@@ -17,6 +17,12 @@ import {
   generaCodiceImportMeta,
   scaricaFileMetaCsv,
 } from "@/data/meta-import-tsv";
+import {
+  LABEL_CTA_EXPORT_META,
+  ctaExportAbilitata,
+  valutaExportMeta,
+} from "@/lib/meta-export-readiness";
+import { BloccoPreExport } from "@/components/nuova-contatti/BloccoPreExport";
 import { richiedeModuloContatti } from "@/lib/launch-readiness";
 import {
   etichetteExportMeta,
@@ -117,7 +123,34 @@ export function MetaAdsImportCode({
     ],
   );
 
+  const exportCheck = useMemo(
+    () =>
+      valutaExportMeta({
+        config,
+        pageId,
+        formId,
+        objective,
+        bookingChannel,
+        destinationUrl,
+        whatsappNumber,
+        targetType,
+        creativitaMeta,
+      }),
+    [
+      config,
+      pageId,
+      formId,
+      objective,
+      bookingChannel,
+      destinationUrl,
+      whatsappNumber,
+      targetType,
+      creativitaMeta,
+    ],
+  );
+
   async function handleCopy() {
+    if (exportCheck.status === "NOT_EXPORTABLE" || !csvContent.trim()) return;
     try {
       await navigator.clipboard.writeText(csvContent);
       setCopiato(true);
@@ -141,8 +174,11 @@ export function MetaAdsImportCode({
     formIdMancante: formRichiesto && formId.trim() === "",
   });
 
+  const exportAbilitato =
+    exportUi.exportAbilitato && ctaExportAbilitata(exportCheck.status);
+
   function scaricaFileCsv() {
-    if (!exportUi.exportAbilitato) return;
+    if (!exportAbilitato) return;
     scaricaFileMetaCsv(csvContent);
     setGuidaAperta(true);
     if (campaignId) {
@@ -171,7 +207,8 @@ export function MetaAdsImportCode({
       <button
         type="button"
         onClick={() => void handleCopy()}
-        className="mb-3 flex w-full items-center justify-center gap-2 rounded-full border border-[var(--border)] bg-white px-5 py-2.5 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--surface-hover)]"
+        disabled={!exportAbilitato}
+        className="mb-3 flex w-full items-center justify-center gap-2 rounded-full border border-[var(--border)] bg-white px-5 py-2.5 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
       >
         {copiato ? (
           <>
@@ -226,35 +263,34 @@ export function MetaAdsImportCode({
             </p>
           ) : null}
 
+          <BloccoPreExport
+            validation={exportCheck}
+            haNomeFileCreativita={(creativitaMeta?.length ?? 0) > 0}
+            destinationUrl={destinationUrl}
+          />
+
           <button
             type="button"
             onClick={scaricaFileCsv}
-            disabled={!exportUi.exportAbilitato}
+            disabled={!exportAbilitato}
             className="flex w-full items-center justify-center gap-2 rounded-full bg-[var(--ink)] px-5 py-3.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Download className="h-4 w-4" strokeWidth={1.75} />
-            {exportUi.labelCta}
+            {LABEL_CTA_EXPORT_META}
           </button>
-          <p className="mt-2 text-center text-xs leading-relaxed text-[var(--ink-muted)]">
-            {exportUi.microcopy}
-          </p>
-          {exportUi.exportAbilitato ? (
-            <p className="mt-1 text-center text-xs text-[var(--ink-muted)]">
+          {exportAbilitato ? (
+            <p className="mt-2 text-center text-xs text-[var(--ink-muted)]">
               Al download si apre la guida passo-passo per Ads Manager.
             </p>
           ) : null}
-          {objective === "RETARGETING" ? (
+          {exportCheck.profile === "AWARENESS_REACH" ? (
             <p className="mt-3 text-center text-xs leading-relaxed text-[var(--ink-muted)]">
-              L&apos;export prepara struttura, obiettivo, evento e impostazioni
-              principali della campagna. La Custom Audience non viene collegata
-              automaticamente.
+              Profilo copertura: nessuna destinazione web richiesta.
             </p>
           ) : null}
-          {objective === "AWARENESS" ? (
+          {exportCheck.profile === "AWARENESS_LINK" ? (
             <p className="mt-3 text-center text-xs leading-relaxed text-[var(--ink-muted)]">
-              L&apos;export prepara struttura, obiettivo e impostazioni
-              principali della campagna. Reach, click e frequenza effettivi
-              dipenderanno dalla delivery Meta.
+              Profilo click: la destinazione va verificata in Ads Manager.
             </p>
           ) : null}
 
@@ -294,24 +330,28 @@ export function MetaAdsImportCode({
           </p>
         </div>
 
+        <BloccoPreExport
+          validation={exportCheck}
+          haNomeFileCreativita={(creativitaMeta?.length ?? 0) > 0}
+          destinationUrl={destinationUrl}
+        />
+
         <div className="mb-4 flex flex-col gap-2.5">
           <button
             type="button"
             onClick={scaricaFileCsv}
-            disabled={!exportUi.exportAbilitato}
+            disabled={!exportAbilitato}
             className="flex w-full items-center justify-center gap-2 rounded-full bg-[var(--ink)] px-5 py-3.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Download className="h-4 w-4" strokeWidth={1.75} />
-            {exportUi.labelCta}
+            {LABEL_CTA_EXPORT_META}
           </button>
-          <p className="text-center text-xs leading-relaxed text-[var(--ink-muted)]">
-            {exportUi.microcopy}
-          </p>
 
           <button
             type="button"
             onClick={() => void handleCopy()}
-            className="flex w-full items-center justify-center gap-2 rounded-full border border-[var(--border)] bg-white px-5 py-3 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--surface-hover)]"
+            disabled={!exportAbilitato}
+            className="flex w-full items-center justify-center gap-2 rounded-full border border-[var(--border)] bg-white px-5 py-3 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {copiato ? (
               <>

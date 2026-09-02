@@ -8,8 +8,7 @@ import type { CreativitaMeta } from "@/lib/creativita";
 import { etichetteCreativitaPerObiettivo } from "@/lib/creativita";
 import { nomeCampagnaRetargeting } from "@/data/defaults-contatti";
 import { isUrlMapsIndicazioni } from "@/lib/url-maps";
-
-const LINK_ATTRAGGIO = "https://www.google.com";
+import { valutaExportMeta, raggioExportKm, type MetaExportProfile } from "@/lib/meta-export-readiness";
 
 /**
  * CSV Anti-Fuffa per Importa file in blocco (Meta Ads Manager).
@@ -110,12 +109,11 @@ type VarianteRiga = {
 };
 
 function profiloObiettivo(
-  objective: CampagnaObjective,
-  bookingChannel?: BookingChannel,
+  profile: MetaExportProfile,
   targetType?: TargetType,
   destinationUrl?: string,
 ) {
-  if (objective === "ECOMMERCE") {
+  if (profile === "ECOMMERCE") {
     return {
       campaignNameFallback: "Vendite Online",
       campaignObjective: "Outcome Sales",
@@ -128,7 +126,7 @@ function profiloObiettivo(
       adSetNamePrefix: "AdSet",
     };
   }
-  if (objective === "IN_STORE") {
+  if (profile === "INSTORE") {
     return {
       campaignNameFallback: "Traffico Negozio",
       campaignObjective: "Outcome Traffic",
@@ -141,7 +139,7 @@ function profiloObiettivo(
       adSetNamePrefix: "AdSet Locale",
     };
   }
-  if (objective === "RETARGETING") {
+  if (profile === "RETARGETING") {
     const isB2bLead = targetType === "B2B";
     return {
       campaignNameFallback: "Retargeting / Recupero",
@@ -155,15 +153,27 @@ function profiloObiettivo(
       adSetNamePrefix: "AdSet Retargeting",
     };
   }
-  if (objective === "AWARENESS") {
-    const url = (destinationUrl ?? "").trim();
-    const hasUrl = Boolean(url);
-    const isMaps = hasUrl && isUrlMapsIndicazioni(url);
+  if (profile === "AWARENESS_REACH") {
     return {
       campaignNameFallback: "Apertura / Lancio Locale",
       campaignObjective: "Outcome Awareness",
       destinationType: "WEBSITE",
-      optimizationGoal: hasUrl ? "LINK_CLICKS" : "REACH",
+      optimizationGoal: "REACH",
+      callToAction: "LEARN_MORE",
+      titleDefault: "Scopri di più",
+      includeLeadForm: false,
+      conversionEvent: "",
+      adSetNamePrefix: "AdSet Awareness Locale - Raggio Stretto",
+    };
+  }
+  if (profile === "AWARENESS_LINK") {
+    const url = (destinationUrl ?? "").trim();
+    const isMaps = Boolean(url) && isUrlMapsIndicazioni(url);
+    return {
+      campaignNameFallback: "Apertura / Lancio Locale",
+      campaignObjective: "Outcome Awareness",
+      destinationType: "WEBSITE",
+      optimizationGoal: "LINK_CLICKS",
       callToAction: isMaps ? "GET_DIRECTIONS" : "LEARN_MORE",
       titleDefault: isMaps ? "Ottieni indicazioni" : "Scopri di più",
       includeLeadForm: false,
@@ -171,61 +181,59 @@ function profiloObiettivo(
       adSetNamePrefix: "AdSet Awareness Locale - Raggio Stretto",
     };
   }
-  if (objective === "BOOKINGS") {
-    const channel = bookingChannel ?? "WHATSAPP";
-    if (channel === "WHATSAPP") {
-      return {
-        campaignNameFallback: "Prenotazioni",
-        campaignObjective: "Outcome Engagement",
-        destinationType: "MESSAGING",
-        optimizationGoal: "CONVERSATIONS",
-        callToAction: "SEND_WHATSAPP_MESSAGE",
-        titleDefault: "Invia un messaggio su WhatsApp",
-        includeLeadForm: false,
-        conversionEvent: "",
-        adSetNamePrefix: "AdSet Locale",
-      };
-    }
-    if (channel === "BOOKING_LINK") {
-      return {
-        campaignNameFallback: "Prenotazioni",
-        campaignObjective: "Outcome Traffic",
-        destinationType: "WEBSITE",
-        optimizationGoal: "LINK_CLICKS",
-        callToAction: "BOOK_NOW",
-        titleDefault: "Prenota subito",
-        includeLeadForm: false,
-        conversionEvent: "",
-        adSetNamePrefix: "AdSet Locale",
-      };
-    }
-    if (channel === "PHONE_CALL") {
-      return {
-        campaignNameFallback: "Prenotazioni",
-        campaignObjective: "Outcome Leads",
-        destinationType: "PHONE_CALL",
-        optimizationGoal: "QUALITY_CALL",
-        callToAction: "CALL_NOW",
-        titleDefault: "Chiama ora",
-        includeLeadForm: false,
-        conversionEvent: "",
-        adSetNamePrefix: "AdSet Locale",
-      };
-    }
-    if (channel === "INSTAGRAM_DM") {
-      return {
-        campaignNameFallback: "Prenotazioni",
-        campaignObjective: "Outcome Engagement",
-        destinationType: "MESSAGING",
-        optimizationGoal: "CONVERSATIONS",
-        callToAction: "MESSAGE_PAGE",
-        titleDefault: "Invia un messaggio",
-        includeLeadForm: false,
-        conversionEvent: "",
-        adSetNamePrefix: "AdSet Locale",
-      };
-    }
-    // LEAD_FORM (legacy)
+  if (profile === "BOOKINGS_WHATSAPP") {
+    return {
+      campaignNameFallback: "Prenotazioni",
+      campaignObjective: "Outcome Engagement",
+      destinationType: "MESSAGING",
+      optimizationGoal: "CONVERSATIONS",
+      callToAction: "SEND_WHATSAPP_MESSAGE",
+      titleDefault: "Invia un messaggio su WhatsApp",
+      includeLeadForm: false,
+      conversionEvent: "",
+      adSetNamePrefix: "AdSet Locale",
+    };
+  }
+  if (profile === "BOOKINGS_WEBSITE") {
+    return {
+      campaignNameFallback: "Prenotazioni",
+      campaignObjective: "Outcome Traffic",
+      destinationType: "WEBSITE",
+      optimizationGoal: "LINK_CLICKS",
+      callToAction: "BOOK_NOW",
+      titleDefault: "Prenota subito",
+      includeLeadForm: false,
+      conversionEvent: "",
+      adSetNamePrefix: "AdSet Locale",
+    };
+  }
+  if (profile === "BOOKINGS_PHONE") {
+    return {
+      campaignNameFallback: "Prenotazioni",
+      campaignObjective: "Outcome Leads",
+      destinationType: "PHONE_CALL",
+      optimizationGoal: "QUALITY_CALL",
+      callToAction: "CALL_NOW",
+      titleDefault: "Chiama ora",
+      includeLeadForm: false,
+      conversionEvent: "",
+      adSetNamePrefix: "AdSet Locale",
+    };
+  }
+  if (profile === "BOOKINGS_IG_DM") {
+    return {
+      campaignNameFallback: "Prenotazioni",
+      campaignObjective: "Outcome Engagement",
+      destinationType: "MESSAGING",
+      optimizationGoal: "CONVERSATIONS",
+      callToAction: "MESSAGE_PAGE",
+      titleDefault: "Invia un messaggio",
+      includeLeadForm: false,
+      conversionEvent: "",
+      adSetNamePrefix: "AdSet Locale",
+    };
+  }
+  if (profile === "BOOKINGS_FORM") {
     return {
       campaignNameFallback: "Prenotazioni",
       campaignObjective: "Outcome Leads",
@@ -281,41 +289,31 @@ function rigaAnnuncio(
   config: ConfigurazioneContatti,
   variante: VarianteRiga,
   opzioni: OpzioniExportMetaCsv,
+  profile: MetaExportProfile,
 ): string[] {
   const citta = opzioni.citta?.trim() || "";
   const pageId = opzioni.pageId?.trim() || "";
   const formId = opzioni.formId?.trim() || "";
-  const budget = config.budgetGiornaliero || 20;
-  const raggio = config.raggioKm || 20;
+  const budget = config.budgetGiornaliero;
+  const raggio = raggioExportKm(config.raggioKm);
   const profilo = profiloObiettivo(
-    opzioni.objective ?? "LEADS",
-    opzioni.bookingChannel,
+    profile,
     opzioni.targetType,
     opzioni.destinationUrl,
   );
   const asset = assetPerVariante(variante.id, opzioni.creativitaMeta);
-  const destUrl = (() => {
-    const custom = (opzioni.destinationUrl ?? "").trim();
-    if (custom) return custom;
-    if (
-      opzioni.objective === "BOOKINGS" &&
-      opzioni.bookingChannel === "WHATSAPP"
-    ) {
-      return "";
-    }
-    // AWARENESS senza destinazione: mai google.com (placeholder legacy).
-    if (opzioni.objective === "AWARENESS") {
-      return "";
-    }
-    return LINK_ATTRAGGIO;
-  })();
+  const destUrl =
+    profile === "BOOKINGS_WHATSAPP" ||
+    profile === "BOOKINGS_PHONE" ||
+    profile === "BOOKINGS_IG_DM" ||
+    profile === "LEADS_FORM" ||
+    profile === "BOOKINGS_FORM" ||
+    profile === "AWARENESS_REACH"
+      ? ""
+      : (opzioni.destinationUrl ?? "").trim();
   const displayLink = (() => {
     const wa = (opzioni.whatsappNumber ?? "").trim();
-    if (
-      opzioni.objective === "BOOKINGS" &&
-      opzioni.bookingChannel === "WHATSAPP" &&
-      wa
-    ) {
+    if (profile === "BOOKINGS_WHATSAPP" && wa) {
       return wa.startsWith("http") ? wa : `https://wa.me/${wa.replace(/\D/g, "")}`;
     }
     return "";
@@ -328,13 +326,11 @@ function rigaAnnuncio(
       ? nomeCampagnaRetargeting(nomeClientePulito)
       : config.nomeCampagna?.trim() || profilo.campaignNameFallback;
   const adSetName =
-    opzioni.objective === "ECOMMERCE"
+    profile === "ECOMMERCE"
       ? `${profilo.adSetNamePrefix} - ${mercatoAdSet}`
-      : opzioni.objective === "RETARGETING"
-        ? nomeClientePulito
-          ? `AdSet Retargeting - ${nomeClientePulito}`
-          : "AdSet Retargeting - Custom Audience"
-        : `${profilo.adSetNamePrefix} - ${mercatoAdSet} (${raggio} km)`;
+      : profile === "RETARGETING"
+        ? "Retargeting · audience da selezionare"
+        : `${profilo.adSetNamePrefix} - ${mercatoAdSet} (${raggio ?? ""} km)`;
 
   return [
     campaignName,
@@ -356,12 +352,13 @@ function rigaAnnuncio(
     "IT",
     cittaMeta(citta),
     "home",
-    String(raggio),
+    String(raggio ?? ""),
     "kilometer",
     "facebook,instagram",
     "feed,facebook_reels,story",
     "stream,story,reels",
     "mobile,desktop",
+    // targetingBroad non è serializzabile come Advantage+ Audience: resta 0.
     "0",
     config.posizionamentiAdvantage ? "1" : "0",
     `Annuncio ${variante.etichetta}${asset ? ` · ${asset.nomeFile}` : ""}`,
@@ -411,6 +408,21 @@ export function generaCodiceImportMeta(
     whatsappNumber,
     targetType,
   };
+  const validation = valutaExportMeta({
+    config,
+    pageId,
+    formId,
+    objective,
+    bookingChannel,
+    destinationUrl,
+    whatsappNumber,
+    targetType,
+    creativitaMeta,
+  });
+  if (validation.status === "NOT_EXPORTABLE") {
+    return "";
+  }
+  const profile = validation.profile;
 
   const etichette =
     objective === "ECOMMERCE"
@@ -469,28 +481,18 @@ export function generaCodiceImportMeta(
     ] as const satisfies readonly VarianteRiga[]
   ).filter((v) => v.testo.length > 0);
 
-  const daEsportare =
-    varianti.length > 0
-      ? varianti
-      : [
-          {
-            id: "A" as const,
-            etichetta: etichette[0],
-            testo: "Inserisci il testo della Variante A prima dell'export.",
-          },
-        ];
+  if (varianti.length === 0) return "";
 
   const intestazione = INTESTAZIONI.map(escapeCsv).join(",");
-  const righe = daEsportare.map((v) =>
-    rigaAnnuncio(config, v, opzioni).map(escapeCsv).join(","),
+  const righe = varianti.map((v) =>
+    rigaAnnuncio(config, v, opzioni, profile).map(escapeCsv).join(","),
   );
 
   return `\uFEFF${intestazione}\n${righe.join("\n")}`;
 }
 
 /**
- * Il generatore emette un placeholder se A/B/C sono vuoti.
- * Senza almeno un testo reale il CSV non è un export valido.
+ * Senza almeno un testo A/B/C l'export non è valido.
  */
 export function csvMetaHaCopyEsportabile(input: {
   varianteA?: string | null;
@@ -508,6 +510,7 @@ export function scaricaFileMetaCsv(
   csvContent: string,
   nomeFile = "campagna_meta_antifuffa.csv",
 ): void {
+  if (!csvContent.trim()) return;
   const blob = new Blob([csvContent], {
     type: "text/csv;charset=utf-8;",
   });

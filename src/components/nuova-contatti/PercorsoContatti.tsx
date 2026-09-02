@@ -2184,7 +2184,7 @@ export function PercorsoContatti({
   }
 
   const sottotitolo = isInStore
-    ? "Assistente guidato per retail, ristorazione e attività su strada. Completa i 6 passaggi ed esporta la campagna pronta per Meta."
+    ? "Assistente guidato per retail, ristorazione e attività su strada. Completa i 6 passaggi e prepara una bozza da completare in Ads Manager."
     : isAwareness
       ? "Assistente guidato per inaugurazioni e lanci locali. Stima copertura, genera i copy e prepara l'export Meta."
       : isRetargeting
@@ -2194,7 +2194,7 @@ export function PercorsoContatti({
           : isBookings
             ? "Assistente guidato per studi, saloni e servizi locali. Calcola il CPA sostenibile e prepara l'export Meta."
             : contesto.settore
-              ? `Assistente guidato per ${contesto.settore.toLowerCase()}${contesto.citta ? ` a ${contesto.citta}` : ""}. Completa i 6 passaggi e esporta la campagna pronta per Meta.`
+              ? `Assistente guidato per ${contesto.settore.toLowerCase()}${contesto.citta ? ` a ${contesto.citta}` : ""}. Completa i 6 passaggi e riduci il lavoro di ricopiare struttura e copy.`
               : "Assistente guidato in 6 passaggi: obiettivo, economia, messaggio, creatività, diagnosi e export Meta.";
 
   const titoloPagina = isAwareness

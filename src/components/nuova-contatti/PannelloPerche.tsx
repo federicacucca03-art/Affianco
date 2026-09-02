@@ -208,9 +208,8 @@ export function PannelloPerche({
           {isPercorsoRetargeting ? (
             <>
               💡 Affianco prepara struttura, messaggio ed economia del recupero.
-              Il pubblico di retargeting (Custom Audience, finestra ed
-              esclusioni) va collegato in Meta Ads Manager prima della
-              pubblicazione.
+              Seleziona l&apos;audience di retargeting in Ads Manager prima
+              della pubblicazione.
             </>
           ) : isPercorsoAwareness ? (
             <>
@@ -269,7 +268,7 @@ export function PannelloPerche({
             Da configurare in Meta
           </p>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-[var(--ink)]">
-            <li>Custom Audience</li>
+            <li>Audience di retargeting</li>
             <li>Finestra del pubblico</li>
             <li>Eventuali esclusioni</li>
           </ul>

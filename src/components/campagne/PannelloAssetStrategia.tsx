@@ -5,13 +5,15 @@ import type { Campagna } from "@/types/campagne";
 import { BottoneCopia } from "@/components/nuova-contatti/BottoneCopia";
 import { ModaleGuidaImportMeta } from "@/components/nuova-contatti/ModaleGuidaImportMeta";
 import {
+  csvMetaHaCopyEsportabile,
   generaCodiceImportMeta,
   scaricaFileMetaCsv,
 } from "@/data/meta-import-tsv";
 import type { ConfigurazioneContatti } from "@/types/campagne";
 import { assicuraVariantiCampagna } from "@/lib/assicura-varianti";
 import { logCampagnaEsportata } from "@/lib/campaign-logs";
-import { csvMetaHaCopyEsportabile } from "@/data/meta-import-tsv";
+import { valutaExportMeta, LABEL_CTA_EXPORT_META, ctaExportAbilitata } from "@/lib/meta-export-readiness";
+import { BloccoPreExport } from "@/components/nuova-contatti/BloccoPreExport";
 import { calculateLaunchReadiness, richiedeModuloContatti } from "@/lib/launch-readiness";
 import { calculateStrategicScore } from "@/lib/strategic-score";
 import { etichetteExportMeta, raccomandaLancio } from "@/lib/guidance";
@@ -42,10 +44,10 @@ function configDaCampagna(campagna: Campagna): ConfigurazioneContatti {
               : isBookings
                 ? `${campagna.nomeCliente} - Prenotazioni`
                 : `${campagna.nomeCliente} - Richieste Contatto`),
-    budgetGiornaliero: campagna.budgetGiornaliero ?? 20,
+    budgetGiornaliero: campagna.budgetGiornaliero ?? 0,
     cboAttivo: true,
     raggioKm:
-      campagna.awarenessRadiusKm ?? campagna.raggioKm ?? 20,
+      campagna.awarenessRadiusKm ?? campagna.raggioKm ?? 0,
     etaMin: campagna.etaMin ?? 25,
     etaMax: campagna.etaMax ?? 65,
     genere: "Tutti",
@@ -81,6 +83,22 @@ function configDaCampagna(campagna: Campagna): ConfigurazioneContatti {
   };
 }
 
+function destinationUrlExport(campagna: Campagna): string | undefined {
+  const url = campagna.website?.trim();
+  if (!url) return undefined;
+  const obj = campagna.objective;
+  if (
+    obj === "ECOMMERCE" ||
+    obj === "IN_STORE" ||
+    obj === "RETARGETING" ||
+    obj === "AWARENESS" ||
+    (obj === "BOOKINGS" && campagna.bookingChannel === "BOOKING_LINK")
+  ) {
+    return url;
+  }
+  return undefined;
+}
+
 function scaricaCsvMeta(campagna: Campagna) {
   const csv = generaCodiceImportMeta(
     configDaCampagna(campagna),
@@ -90,10 +108,7 @@ function scaricaCsvMeta(campagna: Campagna) {
     campagna.objective ?? "LEADS",
     campagna.bookingChannel,
     campagna.creativitaMeta,
-    campagna.objective === "BOOKINGS" &&
-      campagna.bookingChannel === "BOOKING_LINK"
-      ? campagna.website
-      : undefined,
+    destinationUrlExport(campagna),
   );
   scaricaFileMetaCsv(csv);
 }
@@ -227,10 +242,11 @@ export function PannelloAssetStrategia({ campagna, onEsportata }: Props) {
 
   const website = campagnaConCopy.website?.trim();
   const brief = campagnaConCopy.elevatorPitch?.trim();
-  const raggio = campagnaConCopy.raggioKm ?? 20;
+  const raggio =
+    campagnaConCopy.awarenessRadiusKm ?? campagnaConCopy.raggioKm;
   const etaMin = campagnaConCopy.etaMin ?? 25;
   const etaMax = campagnaConCopy.etaMax ?? 65;
-  const budget = campagnaConCopy.budgetGiornaliero ?? 20;
+  const budget = campagnaConCopy.budgetGiornaliero;
   const exportUi = useMemo(() => {
     const haCopy = csvMetaHaCopyEsportabile(campagnaConCopy);
     const launchReadiness = calculateLaunchReadiness({
@@ -291,12 +307,24 @@ export function PannelloAssetStrategia({ campagna, onEsportata }: Props) {
       campagnaConCopy.objective,
       campagnaConCopy.bookingChannel,
     );
-    return etichetteExportMeta({
+    const labels = etichetteExportMeta({
       statoLancio: raccomandazione.stato,
       haCopyExport: haCopy,
       pageIdMancante: !(campagnaConCopy.pageId ?? "").trim(),
       formIdMancante: formRichiesto && !(campagnaConCopy.formId ?? "").trim(),
     });
+    const check = valutaExportMeta({
+      config: configDaCampagna(campagnaConCopy),
+      pageId: campagnaConCopy.pageId,
+      formId: campagnaConCopy.formId,
+      objective: campagnaConCopy.objective,
+      bookingChannel: campagnaConCopy.bookingChannel,
+      destinationUrl: destinationUrlExport(campagnaConCopy),
+      creativitaMeta: campagnaConCopy.creativitaMeta,
+    });
+    const exportAbilitato =
+      labels.exportAbilitato && ctaExportAbilitata(check.status);
+    return { ...labels, exportAbilitato, check };
   }, [campagnaConCopy]);
 
   return (
@@ -403,10 +431,13 @@ export function PannelloAssetStrategia({ campagna, onEsportata }: Props) {
           <div className="rounded-xl bg-[var(--surface-hover)] px-4 py-3">
             <dt className="text-xs text-[var(--ink-muted)]">Raggio locale</dt>
             <dd className="mt-0.5 text-sm font-medium text-[var(--ink)]">
-              {raggio} km
-              {campagnaConCopy.citta
-                ? ` intorno a ${campagnaConCopy.citta}`
-                : ""}
+              {raggio && raggio > 0
+                ? `${raggio} km${
+                    campagnaConCopy.citta
+                      ? ` intorno a ${campagnaConCopy.citta}`
+                      : ""
+                  }`
+                : "—"}
             </dd>
           </div>
           <div className="rounded-xl bg-[var(--surface-hover)] px-4 py-3">
@@ -416,15 +447,22 @@ export function PannelloAssetStrategia({ campagna, onEsportata }: Props) {
             </dd>
           </div>
           <div className="rounded-xl bg-[var(--surface-hover)] px-4 py-3">
-            <dt className="text-xs text-[var(--ink-muted)]">Budget</dt>
+            <dt className="text-xs text-[var(--ink-muted)]">
+              Budget giornaliero campagna
+            </dt>
             <dd className="mt-0.5 text-sm font-medium text-[var(--ink)]">
-              {budget}€/giorno
+              {budget && budget > 0 ? `${budget}€/giorno` : "—"}
             </dd>
           </div>
         </dl>
       </section>
 
       <div className="pb-4">
+        <BloccoPreExport
+          validation={exportUi.check}
+          haNomeFileCreativita={(campagnaConCopy.creativitaMeta?.length ?? 0) > 0}
+          destinationUrl={destinationUrlExport(campagnaConCopy)}
+        />
         <button
           type="button"
           disabled={!exportUi.exportAbilitato}
@@ -438,11 +476,8 @@ export function PannelloAssetStrategia({ campagna, onEsportata }: Props) {
           }}
           className="inline-flex w-full items-center justify-center rounded-full bg-[var(--ink)] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
         >
-          {exportUi.labelCta}
+          {LABEL_CTA_EXPORT_META}
         </button>
-        <p className="mt-2 max-w-xl text-xs leading-relaxed text-[var(--ink-muted)]">
-          {exportUi.microcopy}
-        </p>
       </div>
 
       <ModaleGuidaImportMeta

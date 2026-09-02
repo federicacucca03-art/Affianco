@@ -309,6 +309,8 @@ const csvPrima = generaCodiceImportMeta(
     nomeCliente: "Studio",
   },
   "Roma",
+  "111",
+  "222",
 );
 const csvDopo = generaCodiceImportMeta(
   {
@@ -318,6 +320,8 @@ const csvDopo = generaCodiceImportMeta(
     nomeCliente: "Studio",
   },
   "Roma",
+  "111",
+  "222",
 );
 const righePrima = csvPrima.trim().split("\n");
 const righeDopo = csvDopo.trim().split("\n");

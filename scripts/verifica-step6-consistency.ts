@@ -225,8 +225,7 @@ assert(
 
 console.log("\n=== TEST 5 — Page/Form vuoti: CSV si genera ===");
 const csvVuoto = generaCodiceImportMeta(configBase, "Roma", "", "", "LEADS");
-assert(csvVuoto.includes("Campaign Name"), "T5: intestazione presente");
-assert(csvVuoto.includes(COPY), "T5: copy nel file");
+assert(!csvVuoto.trim(), "T5: senza Form ID il CSV non è un export valido");
 assert(csvMetaHaCopyEsportabile(configBase), "T5: ha copy esportabile");
 const exportT5 = etichetteExportMeta({
   statoLancio: "NOT_READY",
@@ -234,7 +233,7 @@ const exportT5 = etichetteExportMeta({
   pageIdMancante: true,
   formIdMancante: true,
 });
-assert(exportT5.exportAbilitato, "T5: Page/Form non bloccano l'export");
+assert(exportT5.exportAbilitato, "T5: etichette lancio ancora distinte dall'export CSV");
 
 console.log("\n=== TEST 6 — vero blocker: copy assente ===");
 assert(
@@ -263,6 +262,10 @@ assert(
 assert(
   srcPannello.includes("raccomandaLancio"),
   "T7: dettaglio usa raccomandaLancio, non un secondo motore",
+);
+assert(
+  srcPannello.includes("BloccoPreExport"),
+  "T7: dettaglio mostra readiness pre-export",
 );
 assert(
   !srcPannello.includes("🚀 Esporta Campagna Pronta per Meta"),

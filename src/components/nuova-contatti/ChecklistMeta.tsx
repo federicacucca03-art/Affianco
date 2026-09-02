@@ -7,7 +7,7 @@ const PASSAGGI = [
   {
     id: "fase-1",
     testo:
-      'Clicca su Esporta e scarica il file di importazione Meta (3 varianti + opt-out Advantage+).',
+      'Clicca su Esporta e scarica il file di importazione Meta (struttura e copy in bozza).',
   },
   {
     id: "fase-2",

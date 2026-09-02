@@ -33,10 +33,11 @@ export function ModaleGuidaImportMeta({ aperta, onChiudi }: Props) {
           id="guida-import-meta-title"
           className="mt-1 text-lg font-medium tracking-tight text-[var(--ink)]"
         >
-          🚀 Come caricare la campagna su Meta in 30 secondi
+          Come importare la bozza in Ads Manager
         </h2>
         <p className="mt-2 text-sm text-[var(--ink-muted)]">
-          Il file CSV è già in download. Segui questi tre passaggi.
+          Il file CSV è in download. Completa identità, creatività e dettagli
+          Meta in Ads Manager prima di pubblicare.
         </p>
 
         <ol className="mt-5 space-y-3">
