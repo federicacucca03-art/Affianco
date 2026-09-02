@@ -2812,6 +2812,305 @@ Risultati di 1 gruppo di inserzioni,200,10`;
       "M0.4C.1 trend still ONE_PERIOD with live+1 saved",
     );
 
+  function testiAzioni(
+    diagnosis: ReturnType<typeof diagnosticaDeterministica>,
+    health: ReturnType<typeof calcolaHealthStatus>,
+    trend?: ReturnType<typeof evaluateTrend>,
+  ) {
+    const acts = trend
+      ? azioniConsigliate(diagnosis, health, { trend })
+      : azioniConsigliate(diagnosis, health);
+    return {
+      acts,
+      blob: acts.map((x) => x.text).join(" | "),
+      low: acts.map((x) => x.text.toLowerCase()).join(" | "),
+    };
+  }
+
+  const greenImp = runDiagTrend(
+    [
+      checkStorico({ createdAt: d1, primaryCost: 70, threshold: 200 }),
+      checkStorico({ createdAt: d2, primaryCost: 50, threshold: 200 }),
+    ],
+    { objective: "LEADS", threshold: 200 },
+  );
+  const aGreenImp = testiAzioni(
+    greenImp.diagnosis,
+    greenImp.health,
+    greenImp.trend,
+  );
+  const caseA04dOk =
+    assert(greenImp.health.status === "GREEN", "M0.4D CASE A health GREEN") &&
+    assert(greenImp.trend.primary.direction === "IMPROVING", "M0.4D CASE A IMPROVING") &&
+    assert(
+      aGreenImp.low.includes("senza modifiche") || aGreenImp.low.includes("documenta"),
+      "M0.4D CASE A maintain",
+    ) &&
+    assert(aGreenImp.low.includes("3 giorni"), "M0.4D CASE A normal monitor") &&
+    assert(
+      !aGreenImp.low.includes("rivedi") && !aGreenImp.low.includes("ruota"),
+      "M0.4D CASE A no intervention",
+    );
+
+  const aGreenWors = testiAzioni(b04bM.diagnosis, b04bM.health, b04bM.trend);
+  const caseB04dOk =
+    assert(b04bM.health.status === "GREEN", "M0.4D CASE B GREEN") &&
+    assert(b04bM.trend.primary.direction === "WORSENING", "M0.4D CASE B WORSENING") &&
+    assert(
+      aGreenWors.blob.includes("Non modificare ancora la campagna"),
+      "M0.4D CASE B no drastic",
+    ) &&
+    assert(aGreenWors.low.includes("1–2 giorni"), "M0.4D CASE B recheck sooner");
+
+  const yellowMsg = runDiagTrend(
+    [
+      checkStorico({
+        createdAt: d1,
+        primaryCost: 92,
+        ctr: 2,
+        cpc: 1,
+        threshold: 113,
+      }),
+      checkStorico({
+        createdAt: d2,
+        primaryCost: 105,
+        ctr: 1.2,
+        cpc: 1.5,
+        threshold: 113,
+      }),
+    ],
+    { objective: "LEADS", threshold: 113 },
+  );
+  const aYellow = testiAzioni(
+    yellowMsg.diagnosis,
+    yellowMsg.health,
+    yellowMsg.trend,
+  );
+  const caseC04dOk =
+    assert(yellowMsg.health.status === "YELLOW", "M0.4D CASE C YELLOW") &&
+    assert(
+      yellowMsg.trend.primary.direction === "WORSENING",
+      "M0.4D CASE C WORSENING",
+    ) &&
+    assert(
+      aYellow.low.includes("creativ") || aYellow.low.includes("messaggio"),
+      "M0.4D CASE C verify message",
+    ) &&
+    assert(
+      aYellow.low.includes("scalare") || aYellow.low.includes("budget"),
+      "M0.4D CASE C no scaling",
+    ) &&
+    assert(!aYellow.low.includes("rivedi"), "M0.4D CASE C not HIGH verb");
+
+  const aRedImp = testiAzioni(b04bN.diagnosis, b04bN.health, b04bN.trend);
+  const caseD04dOk =
+    assert(b04bN.health.status === "RED", "M0.4D CASE D RED") &&
+    assert(b04bN.trend.primary.direction === "IMPROVING", "M0.4D CASE D IMPROVING") &&
+    assert(aRedImp.low.includes("recuperando"), "M0.4D CASE D no reset") &&
+    assert(aRedImp.low.includes("miglioramento"), "M0.4D CASE D monitor recovery") &&
+    assert(
+      !aRedImp.low.includes("rivedi messaggio") &&
+        !aRedImp.low.includes("ruota"),
+      "M0.4D CASE D no overhaul",
+    );
+
+  const aRedHigh = testiAzioni(b04bC.diagnosis, b04bC.health, b04bC.trend);
+  const caseE04dOk =
+    assert(b04bC.diagnosis.confidence === "HIGH", "M0.4D CASE E HIGH") &&
+    assert(aRedHigh.low.includes("rivedi messaggio"), "M0.4D CASE E targeted") &&
+    assert(
+      !aRedHigh.low.includes("sicuramente") &&
+        !aRedHigh.low.includes("certamente"),
+      "M0.4D CASE E no certainty",
+    );
+
+  const redLow = runDiagTrend(
+    [
+      checkStorico({ createdAt: d1, primaryCost: 70, threshold: redTh }),
+      checkStorico({ createdAt: d2, primaryCost: 90, threshold: redTh }),
+    ],
+    { objective: "LEADS", threshold: redTh },
+  );
+  const aRedLow = testiAzioni(redLow.diagnosis, redLow.health, redLow.trend);
+  const caseF04dOk =
+    assert(redLow.health.status === "RED", "M0.4D CASE F RED") &&
+    assert(redLow.diagnosis.confidence === "LOW", "M0.4D CASE F LOW") &&
+    assert(
+      !aRedLow.low.includes("rivedi") && !aRedLow.low.includes("ruota"),
+      "M0.4D CASE F no aggressive area",
+    ) &&
+    assert(
+      aRedLow.low.includes("verifica") || aRedLow.low.includes("elementi insieme"),
+      "M0.4D CASE F verify first",
+    );
+
+  const aFatHigh = testiAzioni(b04bG.diagnosis, b04bG.health, b04bG.trend);
+  const caseG04dOk =
+    assert(b04bG.diagnosis.area === "CREATIVE_FATIGUE", "M0.4D CASE G area") &&
+    assert(
+      aFatHigh.low.includes("ruota") || aFatHigh.low.includes("rivedi o ruota"),
+      "M0.4D CASE G refresh",
+    ) &&
+    assert(!aFatHigh.low.includes("saturat"), "M0.4D CASE G no saturation");
+
+  const fatLow = runDiagTrend([fatA, fatB], {
+    objective: "LEADS",
+    threshold: redTh,
+  });
+  const aFatLow = testiAzioni(fatLow.diagnosis, fatLow.health, fatLow.trend);
+  const caseH04dOk =
+    assert(
+      fatLow.diagnosis.confidence !== "HIGH",
+      "M0.4D CASE H not HIGH fatigue",
+    ) &&
+    assert(
+      aFatLow.low.includes("frequenza") && aFatLow.low.includes("ctr"),
+      "M0.4D CASE H monitor freq/CTR",
+    ) &&
+    assert(!aFatLow.low.includes("ruota le"), "M0.4D CASE H no forced rotation");
+
+  const aPost = testiAzioni(b04bJ.diagnosis, b04bJ.health, b04bJ.trend);
+  const caseI04dOk =
+    assert(b04bJ.diagnosis.area === "POST_CLICK", "M0.4D CASE I area") &&
+    assert(
+      aPost.low.includes("post-click") || aPost.low.includes("landing"),
+      "M0.4D CASE I post-click path",
+    ) &&
+    assert(!aPost.low.includes("è rotta"), "M0.4D CASE I no broken landing");
+
+  const aNoClear = testiAzioni(b04bI.diagnosis, b04bI.health, b04bI.trend);
+  const caseJ04dOk =
+    assert(b04bI.diagnosis.area === "NO_CLEAR_SIGNAL", "M0.4D CASE J area") &&
+    assert(
+      aNoClear.blob.includes("Non modificare più elementi insieme"),
+      "M0.4D CASE J no forced area",
+    ) &&
+    assert(aNoClear.low.includes("ads manager"), "M0.4D CASE J verify");
+
+  const aEcom = testiAzioni(b04bK.diagnosis, b04bK.health, b04bK.trend);
+  const caseK04dOk =
+    assert(b04bK.diagnosis.area === "ECONOMICS", "M0.4D CASE K area") &&
+    assert(
+      aEcom.low.includes("valore medio") || aEcom.low.includes("marginal"),
+      "M0.4D CASE K AOV/margin",
+    );
+
+  const aAwr = testiAzioni(b04bO.diagnosis, b04bO.health, b04bO.trend);
+  const caseL04dOk =
+    assert(b04bO.health.mode === "efficiency", "M0.4D CASE L awareness") &&
+    assert(
+      !aAwr.low.includes("cpl") &&
+        !aAwr.low.includes("cpa") &&
+        !/\blead\b/.test(aAwr.low) &&
+        !aAwr.low.includes("conversion"),
+      "M0.4D CASE L CPM/frequency language only",
+    );
+
+  const aCap = testiAzioni(b04bD.diagnosis, b04bD.health, b04bD.trend);
+  const caseM04dOk =
+    assert(b04bD.trend.caps.includes("SOURCE_CHANGE"), "M0.4D CASE M cap") &&
+    assert(aCap.low.includes("omogeneo"), "M0.4D CASE M cautious wording");
+
+  const legacyA = azioniConsigliate(a.diagnosis, a.health);
+  const legacyA2 = azioniConsigliate(a.diagnosis, a.health, {});
+  const legacyA3 = azioniConsigliate(a.diagnosis, a.health, {
+    trend: undefined,
+  });
+  const caseN04dOk =
+    assert(
+      JSON.stringify(legacyA) === JSON.stringify(legacyA2),
+      "M0.4D CASE N empty options",
+    ) &&
+    assert(
+      JSON.stringify(legacyA) === JSON.stringify(legacyA3),
+      "M0.4D CASE N trend undefined",
+    ) &&
+    assert(
+      legacyA[0]?.text.includes("entro la soglia"),
+      "M0.4D CASE N legacy GREEN text",
+    );
+
+  const allTrendActs = [
+    aGreenImp.acts,
+    aGreenWors.acts,
+    aYellow.acts,
+    aRedImp.acts,
+    aRedHigh.acts,
+    aRedLow.acts,
+    aFatHigh.acts,
+    aFatLow.acts,
+    aPost.acts,
+    aNoClear.acts,
+    aEcom.acts,
+    aAwr.acts,
+    aCap.acts,
+  ];
+  const caseO04dOk = assert(
+    allTrendActs.every((list) => list.length <= 3),
+    "M0.4D CASE O max 3",
+  );
+
+  const caseP04dOk = assert(
+    allTrendActs.every((list) => {
+      const keys = list.map((x) => {
+        const t = x.text.toLowerCase();
+        if (t.includes("ricontroll")) return "recheck";
+        if (t.includes("ctr") && t.includes("cpc")) return "ctr_cpc";
+        if (t.includes("ctr")) return "ctr";
+        return t.slice(0, 24);
+      });
+      return new Set(keys).size === keys.length;
+    }),
+    "M0.4D CASE P semantic dedupe",
+  );
+
+  const aDeliv = testiAzioni(
+    delivery04b.diagnosis,
+    delivery04b.health,
+    delivery04b.trend,
+  );
+  const delivery04dOk =
+    assert(delivery04b.diagnosis.area === "DELIVERY", "M0.4D DELIVERY area") &&
+    assert(
+      aDeliv.low.includes("delivery") || aDeliv.low.includes("asta"),
+      "M0.4D DELIVERY copy",
+    ) &&
+    assert(
+      aDeliv.low.includes("non restringere"),
+      "M0.4D DELIVERY no auto-narrow",
+    );
+
+  const m04dOk =
+    caseA04dOk &&
+    caseB04dOk &&
+    caseC04dOk &&
+    caseD04dOk &&
+    caseE04dOk &&
+    caseF04dOk &&
+    caseG04dOk &&
+    caseH04dOk &&
+    caseI04dOk &&
+    caseJ04dOk &&
+    caseK04dOk &&
+    caseL04dOk &&
+    caseM04dOk &&
+    caseN04dOk &&
+    caseO04dOk &&
+    caseP04dOk &&
+    delivery04dOk &&
+    assert(
+      risultatiUi.includes("{ trend: trendLive }"),
+      "M0.4D live actions wiring",
+    ) &&
+    assert(
+      !pannelloUi.includes("azioniConsigliate"),
+      "M0.4D no new detail actions UI",
+    ) &&
+    assert(
+      !legge("src/lib/campaign-trend.ts").includes("azioniConsigliate"),
+      "M0.4D trend engine untouched by actions",
+    );
+
   sezione("UNIFIED SEMAPHORE", unifiedOk && bandeOk);
   sezione("CAMPAIGN CHECKS", campaignChecksOk);
   sezione("RLS", rlsOk);
@@ -2836,6 +3135,23 @@ Risultati di 1 gruppo di inserzioni,200,10`;
   sezione("M0.4B TREND DIAGNOSIS", m04bOk);
   sezione("M0.4C TREND UI", m04cOk);
   sezione("M0.4C.1 UX CLEANUP", m04c1Ok);
+  sezione("M0.4D TREND-AWARE ACTIONS", m04dOk);
+  console.log(`M0.4D CASE A: ${caseA04dOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4D CASE B: ${caseB04dOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4D CASE C: ${caseC04dOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4D CASE D: ${caseD04dOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4D CASE E: ${caseE04dOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4D CASE F: ${caseF04dOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4D CASE G: ${caseG04dOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4D CASE H: ${caseH04dOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4D CASE I: ${caseI04dOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4D CASE J: ${caseJ04dOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4D CASE K: ${caseK04dOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4D CASE L: ${caseL04dOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4D CASE M: ${caseM04dOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4D CASE N: ${caseN04dOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4D CASE O: ${caseO04dOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4D CASE P: ${caseP04dOk ? "PASS" : "FAIL"}`);
   console.log(`M0.4C.1 CASE A: ${caseA04c1Ok ? "PASS" : "FAIL"}`);
   console.log(`M0.4C.1 CASE B: ${caseB04c1Ok ? "PASS" : "FAIL"}`);
   console.log(`M0.4C.1 CASE C: ${caseC04c1Ok ? "PASS" : "FAIL"}`);

@@ -776,6 +776,42 @@ function isDir(
   return metric?.direction === direction;
 }
 
+/** Action-only hypothesis from trend metrics. Does not change diagnosis. */
+function areaIpotesiDaTrend(
+  trend: import("@/lib/campaign-trend").TrendEvaluation,
+  awareness: boolean,
+): DiagnosisArea | null {
+  const primary = trend.primary;
+  const ctrT = trendMetric(trend, "ctr");
+  const cpcT = trendMetric(trend, "cpc");
+  const freqT = trendMetric(trend, "frequency");
+  const cpmT = trendMetric(trend, "cpm");
+  const roasT = trendMetric(trend, "roas");
+  const crT = trendMetric(trend, "conversionRate");
+  if (!isDir(primary, "WORSENING")) {
+    if (
+      (isDir(primary, "STABLE") || isDir(primary, "IMPROVING")) &&
+      isDir(roasT, "WORSENING")
+    ) {
+      return "ECONOMICS";
+    }
+    return null;
+  }
+  if (
+    freqT?.movement === "RISING" &&
+    isDir(ctrT, "WORSENING")
+  ) {
+    return "CREATIVE_FATIGUE";
+  }
+  if (!awareness && isDir(ctrT, "WORSENING") && isDir(cpcT, "WORSENING")) {
+    return "AD_MESSAGE";
+  }
+  if (isDir(roasT, "WORSENING")) return "ECONOMICS";
+  if (isDir(crT, "WORSENING") && !isDir(ctrT, "WORSENING")) return "POST_CLICK";
+  if (isDir(cpmT, "WORSENING") || isDir(cpcT, "WORSENING")) return "DELIVERY";
+  return null;
+}
+
 function qualifiesHighTrend(input: {
   trend: import("@/lib/campaign-trend").TrendEvaluation;
   health: HealthResult;
@@ -1577,7 +1613,306 @@ function diagnosticaTrasversale(
   });
 }
 
-export function azioniConsigliate(
+export type ActionOptions = {
+  trend?: import("@/lib/campaign-trend").TrendEvaluation;
+};
+
+function intentKeyAzione(text: string): string {
+  const t = text.toLowerCase();
+  if (t.includes("omogeneo")) return "homogeneous";
+  if (t.includes("ricontroll")) return "recheck";
+  if (t.includes("ads manager")) return "ads_manager";
+  if (t.includes("peggioramento continua")) return "watch_worsening";
+  if (
+    t.includes("creativ") ||
+    t.includes("messaggio") ||
+    t.includes("area creativa")
+  ) {
+    return "creative";
+  }
+  if (t.includes("frequenza") && t.includes("ctr")) return "freq_ctr";
+  if (t.includes("ctr") && t.includes("cpc")) return "ctr_cpc";
+  if (/\bctr\b/.test(t)) return "ctr";
+  if (
+    t.includes("post-click") ||
+    t.includes("dopo il click") ||
+    t.includes("landing") ||
+    t.includes("prenotazione") ||
+    t.includes("checkout") ||
+    t.includes("form")
+  ) {
+    return "post_click";
+  }
+  if (t.includes("delivery") || t.includes("asta") || t.includes("placement")) {
+    return "delivery";
+  }
+  if (
+    t.includes("marginal") ||
+    t.includes("valore medio") ||
+    t.includes("roas")
+  ) {
+    return "economics";
+  }
+  if (
+    t.includes("non aumentare") ||
+    t.includes("non cambiare budget") ||
+    t.includes("evita di scalare") ||
+    t.includes("evita scaling")
+  ) {
+    return "no_scale";
+  }
+  if (
+    t.includes("più elementi insieme") ||
+    t.includes("modifiche simultanee") ||
+    t.includes("modifiche drastiche") ||
+    t.includes("rebuild")
+  ) {
+    return "no_multi";
+  }
+  if (t.includes("raccogliere dati") || t.includes("più dati")) return "collect";
+  if (t.includes("tracking")) return "tracking";
+  if (t.includes("documenta")) return "document";
+  if (
+    t.includes("continua senza") ||
+    t.includes("mantieni") ||
+    t.includes("monitorare prima")
+  ) {
+    return "maintain";
+  }
+  return t.replace(/\s+/g, " ").slice(0, 56);
+}
+
+function dedupeAzioni(actions: RecommendedAction[]): RecommendedAction[] {
+  const seen = new Set<string>();
+  const out: RecommendedAction[] = [];
+  for (const action of actions) {
+    const key = intentKeyAzione(action.text);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(action);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+function withCapTrend(
+  actions: RecommendedAction[],
+  hasCaps: boolean,
+): RecommendedAction[] {
+  if (!hasCaps) return actions;
+  if (actions.some((a) => a.text.includes("omogeneo"))) return actions;
+  const caution: RecommendedAction = {
+    text: "Prima di intervenire, verifica che il confronto sia omogeneo.",
+    priority: "media",
+  };
+  const primary = actions[0];
+  if (!primary) return [caution];
+  const recheck = actions.find((a) => intentKeyAzione(a.text) === "recheck");
+  const rest = actions.filter((a) => a !== primary && a !== recheck);
+  return [primary, caution, recheck ?? rest[0]].filter(
+    (a): a is RecommendedAction => a != null,
+  );
+}
+
+function recheckDaStato(
+  health: HealthStatus,
+  dir: import("@/lib/campaign-trend").TrendDirection,
+  afterChange: boolean,
+): RecommendedAction {
+  if (afterChange) {
+    return { text: "Ricontrolla dopo la modifica.", priority: "media" };
+  }
+  if (health === "INSUFFICIENT") {
+    return {
+      text: "Ricontrolla quando avrai raccolto più dati.",
+      priority: "media",
+    };
+  }
+  if (health === "RED") {
+    return {
+      text: "Ricontrolla al prossimo controllo utile (circa 1 giorno).",
+      priority: "media",
+    };
+  }
+  if (health === "YELLOW" || dir === "WORSENING") {
+    return { text: "Ricontrolla tra 1–2 giorni.", priority: "media" };
+  }
+  return {
+    text: "Ricontrolla la campagna tra circa 3 giorni",
+    priority: "media",
+  };
+}
+
+function azioniAreaTrend(
+  area: DiagnosisArea,
+  confidence: DiagnosisConfidence,
+  awareness: boolean,
+): { primary: RecommendedAction; support: RecommendedAction | null; afterChange: boolean } {
+  if (area === "AD_MESSAGE") {
+    if (confidence === "HIGH") {
+      return {
+        primary: {
+          text: "Rivedi messaggio e creatività prima di aumentare la spesa.",
+          priority: "alta",
+        },
+        support: {
+          text: "Confronta CTR e CPC delle varianti attive.",
+          priority: "media",
+        },
+        afterChange: true,
+      };
+    }
+    if (confidence === "MEDIUM") {
+      return {
+        primary: {
+          text: "Verifica per prima l'area creativa/messaggio.",
+          priority: "alta",
+        },
+        support: {
+          text: "Confronta le varianti attive e testa una sola modifica.",
+          priority: "media",
+        },
+        afterChange: false,
+      };
+    }
+    return {
+      primary: {
+        text: "Verifica CTR e CPC, senza sostituire subito creatività o messaggio.",
+        priority: "alta",
+      },
+      support: null,
+      afterChange: false,
+    };
+  }
+  if (area === "CREATIVE_FATIGUE") {
+    if (confidence === "HIGH") {
+      return {
+        primary: {
+          text: "Rivedi o ruota le creatività più esposte, tenendo offerta e targeting che funzionano.",
+          priority: "alta",
+        },
+        support: {
+          text: "Confronta frequenza e CTR delle varianti attive.",
+          priority: "media",
+        },
+        afterChange: true,
+      };
+    }
+    if (confidence === "MEDIUM") {
+      return {
+        primary: {
+          text: "Valuta un test con una creatività nuova, una variabile alla volta.",
+          priority: "media",
+        },
+        support: {
+          text: "Monitora frequenza e CTR prima di una rotazione ampia.",
+          priority: "media",
+        },
+        afterChange: false,
+      };
+    }
+    return {
+      primary: {
+        text: "Monitora frequenza e CTR, senza sostituire subito le creatività.",
+        priority: "media",
+      },
+      support: null,
+      afterChange: false,
+    };
+  }
+  if (area === "POST_CLICK") {
+    if (awareness) {
+      return {
+        primary: {
+          text: "Verifica CPM e frequenza: non usare un obiettivo di conversione.",
+          priority: "media",
+        },
+        support: null,
+        afterChange: false,
+      };
+    }
+    if (confidence === "HIGH") {
+      return {
+        primary: {
+          text: "Intervieni prima sul percorso post-click: chiarezza della pagina, form o checkout.",
+          priority: "alta",
+        },
+        support: {
+          text: "Verifica tracking e il rapporto click/risultato.",
+          priority: "media",
+        },
+        afterChange: true,
+      };
+    }
+    if (confidence === "MEDIUM") {
+      return {
+        primary: {
+          text: "Verifica landing, form o flusso di prenotazione dopo il click.",
+          priority: "alta",
+        },
+        support: {
+          text: "Verifica tracking e il rapporto click/risultato.",
+          priority: "media",
+        },
+        afterChange: false,
+      };
+    }
+    return {
+      primary: {
+        text: "Verifica tracking e il rapporto click/risultato.",
+        priority: "alta",
+      },
+      support: null,
+      afterChange: false,
+    };
+  }
+  if (area === "DELIVERY") {
+    if (confidence === "LOW") {
+      return {
+        primary: {
+          text: "Verifica l'andamento di CPM e CPC.",
+          priority: "media",
+        },
+        support: null,
+        afterChange: false,
+      };
+    }
+    return {
+      primary: {
+        text: "Ispeziona il contesto di delivery e asta; non restringere il pubblico in automatico.",
+        priority: "alta",
+      },
+      support: {
+        text: "Confronta placement e ampiezza audience solo come verifica, non come primo taglio.",
+        priority: "media",
+      },
+      afterChange: false,
+    };
+  }
+  if (area === "ECONOMICS") {
+    return {
+      primary: {
+        text: "Verifica valore medio ordine, marginalità e ipotesi di ROAS prima di scalare.",
+        priority: "alta",
+      },
+      support: {
+        text: "Non cambiare budget solo in base al ROAS se il CPA è in soglia.",
+        priority: "media",
+      },
+      afterChange: false,
+    };
+  }
+  return {
+    primary: {
+      text: "Verifica le metriche al prossimo controllo.",
+      priority: "media",
+    },
+    support: null,
+    afterChange: false,
+  };
+}
+
+function azioniConsigliateLegacy(
   diagnosis: DiagnosisResult,
   health: HealthResult,
 ): RecommendedAction[] {
@@ -1719,6 +2054,251 @@ export function azioniConsigliate(
   }
 
   return actions.slice(0, 3);
+}
+
+function azioniConsigliateConTrend(
+  diagnosis: DiagnosisResult,
+  health: HealthResult,
+  trend: import("@/lib/campaign-trend").TrendEvaluation,
+): RecommendedAction[] {
+  const dir = trend.primary.direction;
+  const metricWord = health.mode === "efficiency" ? "CPM" : "costo";
+  const awareness = health.mode === "efficiency";
+  const hasCaps = trend.caps.length > 0;
+  const insufficient =
+    health.status === "INSUFFICIENT" ||
+    diagnosis.area === "DATA_INSUFFICIENT" ||
+    trend.level === "INSUFFICIENT_TREND_DATA";
+
+  const pack = (items: RecommendedAction[]) =>
+    dedupeAzioni(withCapTrend(items, hasCaps));
+
+  if (insufficient) {
+    return pack([
+      {
+        text: "Continua a raccogliere dati prima di giudicare",
+        priority: "alta",
+      },
+      {
+        text: "Verifica che il tracking dei risultati sia corretto",
+        priority: "media",
+      },
+      {
+        text: "Evita modifiche drastiche troppo presto",
+        priority: "media",
+      },
+    ]);
+  }
+
+  if (health.status === "GREEN" && dir === "WORSENING") {
+    return pack([
+      {
+        text: `Non modificare ancora la campagna: il ${metricWord} è ancora entro soglia.`,
+        priority: "alta",
+      },
+      {
+        text: "Controlla se il peggioramento continua al prossimo check.",
+        priority: "media",
+      },
+      { text: "Ricontrolla tra 1–2 giorni.", priority: "media" },
+    ]);
+  }
+
+  if (health.status === "GREEN" && dir === "IMPROVING") {
+    if (diagnosis.area === "ECONOMICS") {
+      return pack([
+        {
+          text: "Verifica valore medio ordine e marginalità: il CPA è in soglia ma il valore può muoversi.",
+          priority: "alta",
+        },
+        {
+          text: "Non cambiare budget solo in base al ROAS se il CPA è in soglia.",
+          priority: "media",
+        },
+        recheckDaStato("GREEN", dir, false),
+      ]);
+    }
+    return pack([
+      {
+        text: `Continua senza modifiche importanti: il ${metricWord} è in miglioramento.`,
+        priority: "media",
+      },
+      {
+        text: "Documenta cosa sta funzionando (creatività, offerta o targeting).",
+        priority: "bassa",
+      },
+      recheckDaStato("GREEN", dir, false),
+    ]);
+  }
+
+  if (health.status === "GREEN") {
+    if (diagnosis.area === "ECONOMICS") {
+      return pack([
+        {
+          text: "Verifica valore medio ordine e marginalità rispetto al ROAS",
+          priority: "alta",
+        },
+        {
+          text: "Non cambiare budget solo in base al ROAS se il CPA è in soglia",
+          priority: "media",
+        },
+        recheckDaStato("GREEN", dir, false),
+      ]);
+    }
+    return pack([
+      {
+        text: "Mantieni l'assetto attuale: il risultato resta entro soglia.",
+        priority: "media",
+      },
+      {
+        text: "Documenta cosa sta funzionando per il prossimo confronto.",
+        priority: "bassa",
+      },
+      recheckDaStato("GREEN", dir, false),
+    ]);
+  }
+
+  if (health.status === "RED" && dir === "IMPROVING") {
+    return pack([
+      {
+        text: `Evita modifiche drastiche mentre il ${metricWord} sta recuperando.`,
+        priority: "alta",
+      },
+      {
+        text: "Mantieni l'assetto e verifica che il miglioramento continui.",
+        priority: "alta",
+      },
+      { text: "Ricontrolla presto.", priority: "media" },
+    ]);
+  }
+
+  if (health.status === "YELLOW") {
+    if (dir === "IMPROVING") {
+      return pack([
+        {
+          text: "Non aumentare il budget: lascia tempo al recupero.",
+          priority: "alta",
+        },
+        {
+          text: "Mantieni l'assetto attuale e osserva se il miglioramento si conferma.",
+          priority: "media",
+        },
+        recheckDaStato("YELLOW", dir, false),
+      ]);
+    }
+    if (diagnosis.contradictions.length === 0) {
+      const hypo = areaIpotesiDaTrend(trend, awareness);
+      const noScaleYellow: RecommendedAction = {
+        text: "Evita di scalare il budget finché lo stato resta incerto.",
+        priority: "alta",
+      };
+      if (hypo) {
+        const area = azioniAreaTrend(hypo, "MEDIUM", awareness);
+        return pack([
+          area.primary,
+          noScaleYellow,
+          recheckDaStato("YELLOW", dir, false),
+        ]);
+      }
+      return pack([
+        noScaleYellow,
+        {
+          text: "Verifica i dati prima di un intervento strutturale.",
+          priority: "media",
+        },
+        recheckDaStato("YELLOW", dir, false),
+      ]);
+    }
+  }
+
+  const unclear =
+    diagnosis.area === "NO_CLEAR_SIGNAL" || diagnosis.contradictions.length > 0;
+
+  if (unclear) {
+    return pack([
+      {
+        text: "Non modificare più elementi insieme.",
+        priority: "alta",
+      },
+      {
+        text: "Verifica le metriche al prossimo controllo.",
+        priority: "media",
+      },
+      {
+        text: "Confronta il dato con Ads Manager prima di intervenire.",
+        priority: "media",
+      },
+    ]);
+  }
+
+  const namedArea =
+    diagnosis.area === "AD_MESSAGE" ||
+    diagnosis.area === "CREATIVE_FATIGUE" ||
+    diagnosis.area === "POST_CLICK" ||
+    diagnosis.area === "DELIVERY" ||
+    diagnosis.area === "ECONOMICS";
+
+  if (namedArea) {
+    const area = azioniAreaTrend(
+      diagnosis.area,
+      diagnosis.confidence,
+      awareness,
+    );
+    const noScale: RecommendedAction = {
+      text:
+        health.status === "YELLOW"
+          ? "Evita di scalare il budget finché lo stato resta incerto."
+          : "Non aumentare il budget finché non hai verificato l'intervento.",
+      priority: "alta",
+    };
+    const afterChange =
+      diagnosis.confidence === "HIGH" && dir === "WORSENING" && area.afterChange;
+    const third = recheckDaStato(health.status, dir, afterChange);
+    if (health.status === "YELLOW") {
+      return pack([area.primary, noScale, third]);
+    }
+    if (area.support) {
+      return pack([area.primary, area.support, third]);
+    }
+    return pack([area.primary, noScale, third]);
+  }
+
+  if (health.status === "YELLOW") {
+    return pack([
+      {
+        text: "Evita di scalare il budget finché lo stato resta incerto.",
+        priority: "alta",
+      },
+      {
+        text: "Verifica i dati prima di un intervento strutturale.",
+        priority: "media",
+      },
+      recheckDaStato("YELLOW", dir, false),
+    ]);
+  }
+
+  return pack([
+    {
+      text: "Intervieni solo dopo aver verificato l'area più debole.",
+      priority: "alta",
+    },
+    {
+      text: "Evita un rebuild totale senza un segnale più chiaro.",
+      priority: "alta",
+    },
+    recheckDaStato(health.status, dir, false),
+  ]);
+}
+
+export function azioniConsigliate(
+  diagnosis: DiagnosisResult,
+  health: HealthResult,
+  options?: ActionOptions,
+): RecommendedAction[] {
+  if (!options?.trend) {
+    return azioniConsigliateLegacy(diagnosis, health);
+  }
+  return azioniConsigliateConTrend(diagnosis, health, options.trend);
 }
 
 export function healthBadgeClasses(status: HealthStatus): string {

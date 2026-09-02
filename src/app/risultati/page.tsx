@@ -625,8 +625,8 @@ function RisultatiPage() {
   );
 
   const actions = useMemo(
-    () => azioniConsigliate(diagnosis, health),
-    [diagnosis, health],
+    () => azioniConsigliate(diagnosis, health, { trend: trendLive }),
+    [diagnosis, health, trendLive],
   );
 
   const costoCalcolato = useMemo(
