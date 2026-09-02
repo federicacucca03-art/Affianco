@@ -104,7 +104,10 @@ export async function getMetaConnectionForUser(
   return toRecord(data as MetaConnectionRow);
 }
 
-export async function getDecryptedMetaAccessToken(userId: string): Promise<string> {
+export async function getDecryptedMetaAccessToken(
+  userId: string,
+  options?: { ignoreStatus?: boolean },
+): Promise<string> {
   const uid = assertUserId(userId);
   const { data, error } = await adminClient()
     .from("meta_connections")
@@ -125,7 +128,10 @@ export async function getDecryptedMetaAccessToken(userId: string): Promise<strin
   if (row.user_id !== uid) {
     throw new MetaError("META_CONNECTION_NOT_FOUND", "Nessuna connessione Meta.");
   }
-  if (row.status === "REAUTH_REQUIRED" || row.status === "REVOKED") {
+  if (
+    !options?.ignoreStatus &&
+    (row.status === "REAUTH_REQUIRED" || row.status === "REVOKED")
+  ) {
     throw new MetaError("META_REAUTH_REQUIRED", "Ricollega Meta per continuare.");
   }
   return decryptMetaToken(row.access_token_encrypted);

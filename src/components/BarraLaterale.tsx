@@ -133,14 +133,23 @@ export function BarraLaterale({ aperta, onChiudi }: Props) {
         </nav>
 
         <div className="mt-auto flex flex-col items-center gap-4 px-2">
-          <span
-            className="flex h-12 w-12 cursor-default items-center justify-center rounded-full text-[var(--ink-muted)]/50"
-            aria-disabled
-            title="Impostazioni — presto disponibile"
+          <Link
+            href="/impostazioni/integrazioni"
+            onClick={onChiudi}
+            title="Impostazioni"
+            aria-label="Impostazioni"
+            aria-current={
+              pathname.startsWith("/impostazioni") ? "page" : undefined
+            }
+            className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
+              pathname.startsWith("/impostazioni")
+                ? "bg-[var(--primary-soft)] text-[var(--primary)] shadow-[var(--shadow-card)]"
+                : "text-[var(--ink-muted)] hover:bg-white/80 hover:text-[var(--ink)]"
+            }`}
           >
             <Settings className="h-[22px] w-[22px]" strokeWidth={1.75} />
-            <span className="sr-only">Impostazioni, presto disponibile</span>
-          </span>
+            <span className="sr-only">Impostazioni</span>
+          </Link>
           <button
             type="button"
             onClick={() => void esci()}

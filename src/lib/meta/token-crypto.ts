@@ -7,7 +7,7 @@ const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
 const KEY_LENGTH = 32;
 
-function chiaveCifratura(failed: MetaErrorCode): Buffer {
+export function metaTokenEncryptionKeyBytes(failed: MetaErrorCode): Buffer {
   const raw = process.env.META_TOKEN_ENCRYPTION_KEY?.trim() ?? "";
   if (!raw) {
     throw new MetaError(failed, "Cifratura token non configurata.");
@@ -49,7 +49,7 @@ export function encryptMetaToken(token: string): string {
   }
 
   try {
-    const key = chiaveCifratura("META_TOKEN_ENCRYPTION_FAILED");
+    const key = metaTokenEncryptionKeyBytes("META_TOKEN_ENCRYPTION_FAILED");
     const iv = randomBytes(IV_LENGTH);
     const cipher = createCipheriv("aes-256-gcm", key, iv);
     const encrypted = Buffer.concat([
@@ -81,7 +81,7 @@ export function decryptMetaToken(payload: string): string {
   }
 
   try {
-    const key = chiaveCifratura("META_TOKEN_DECRYPTION_FAILED");
+    const key = metaTokenEncryptionKeyBytes("META_TOKEN_DECRYPTION_FAILED");
     const iv = fromB64Url(parts[1] ?? "");
     const encrypted = fromB64Url(parts[2] ?? "");
     const tag = fromB64Url(parts[3] ?? "");
