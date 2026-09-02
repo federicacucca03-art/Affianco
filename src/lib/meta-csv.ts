@@ -208,10 +208,11 @@ function pulisciSimboli(raw: string): string {
  * percent: 2,397% → 2.397 (la % forza il separatore decimale).
  * decimal: 435,52 → 435.52; 43.758 / 1.049 → migliaia.
  * count: interi; 100.5 → null.
+ * ratio: frequenza (decimale, anche 2,488795). Non è un intero.
  */
 export function parseMetaCsvNumber(
   raw: string | null | undefined,
-  kind: "count" | "decimal" | "percent",
+  kind: "count" | "decimal" | "percent" | "ratio",
 ): number | null {
   if (raw == null) return null;
   const trimmed = String(raw).trim();
@@ -223,7 +224,8 @@ export function parseMetaCsvNumber(
   if (!cleaned || cleaned.startsWith("-")) return null;
   if (/[eEkKmMbB]/.test(cleaned)) return null;
 
-  const mode: "decimal" | "percent" = hasPercent || kind === "percent" ? "percent" : "decimal";
+  const mode: "decimal" | "percent" =
+    hasPercent || kind === "percent" || kind === "ratio" ? "percent" : "decimal";
   const lastComma = cleaned.lastIndexOf(",");
   const lastDot = cleaned.lastIndexOf(".");
   let normalized: string;
@@ -307,7 +309,7 @@ export function mapMetaCsvRow(
     ctr: parseMetaCsvNumber(cella(cells, idx.ctr), "percent"),
     cpc: parseMetaCsvNumber(cella(cells, idx.cpc), "decimal"),
     cpm: parseMetaCsvNumber(cella(cells, idx.cpm), "decimal"),
-    frequency: parseMetaCsvNumber(cella(cells, idx.frequency), "decimal"),
+    frequency: parseMetaCsvNumber(cella(cells, idx.frequency), "ratio"),
     roas: parseMetaCsvNumber(cella(cells, idx.roas), "decimal"),
     clicks: parseMetaCsvNumber(cella(cells, idx.clicks), "count"),
     impressions: parseMetaCsvNumber(cella(cells, idx.impressions), "count"),

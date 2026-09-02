@@ -1341,6 +1341,50 @@ Risultati di 1 gruppo di inserzioni,200,10`;
     assert(editedFromCsv.cpc === 1, "M0.3C.1 CASE N recalc CPC") &&
     assert(rowBoth?.clicks === 100, "M0.3C.1 link click priority over clicks");
 
+  const csvFreqIt = `Frequenza,Clic sul link
+"2,488795",1049`;
+  const parsedFreqIt = parseAdsManagerCsv(csvFreqIt);
+  const rowFreqIt = parsedFreqIt.ok ? parsedFreqIt.autoRow : null;
+  const csvFreqEn = `Frequency,Link clicks
+2.488795,1049`;
+  const parsedFreqEn = parseAdsManagerCsv(csvFreqEn);
+  const rowFreqEn = parsedFreqEn.ok ? parsedFreqEn.autoRow : null;
+  const csvFreqShort = `Frequenza
+"2,49"`;
+  const parsedFreqShort = parseAdsManagerCsv(csvFreqShort);
+  const rowFreqShort = parsedFreqShort.ok ? parsedFreqShort.autoRow : null;
+  const csvRealFreq = `Importo speso (EUR),Risultati,Clic sul link,Impression,Frequenza
+"435,52",64,1049,"43.758","2,488795"`;
+  const parsedRealFreq = parseAdsManagerCsv(csvRealFreq);
+  const rowRealFreq = parsedRealFreq.ok ? parsedRealFreq.autoRow : null;
+  const formRealFreq = rowRealFreq ? kpiFormDaRigaMeta(rowRealFreq) : null;
+
+  const caseFreqAOk =
+    assert(rowFreqIt?.frequency === 2.488795, "M0.3C.1 FREQ CASE A 2,488795") &&
+    assert(
+      rowFreqIt != null && kpiFormDaRigaMeta(rowFreqIt).frequency === "2.488795",
+      "M0.3C.1 FREQ CASE A form",
+    );
+  const caseFreqBOk = assert(
+    rowFreqEn?.frequency === 2.488795,
+    "M0.3C.1 FREQ CASE B 2.488795",
+  );
+  const caseFreqCOk = assert(
+    rowFreqShort?.frequency === 2.49,
+    "M0.3C.1 FREQ CASE C 2,49",
+  );
+  const caseFreqDOk = assert(
+    rowPartial?.frequency == null,
+    "M0.3C.1 FREQ CASE D missing → null",
+  );
+  const caseFreqEOk =
+    assert(rowRealFreq?.spend === 435.52, "M0.3C.1 FREQ CASE E spend") &&
+    assert(rowRealFreq?.results === 64, "M0.3C.1 FREQ CASE E results") &&
+    assert(rowRealFreq?.clicks === 1049, "M0.3C.1 FREQ CASE E clicks") &&
+    assert(rowRealFreq?.impressions === 43_758, "M0.3C.1 FREQ CASE E impressions") &&
+    assert(rowRealFreq?.frequency === 2.488795, "M0.3C.1 FREQ CASE E frequency") &&
+    assert(formRealFreq?.frequency === "2.488795", "M0.3C.1 FREQ CASE E form");
+
   const m03c1Ok =
     caseACsvOk &&
     caseBCsvOk &&
@@ -1356,6 +1400,11 @@ Risultati di 1 gruppo di inserzioni,200,10`;
     caseLCsvOk &&
     caseMCsvOk &&
     caseNCsvOk &&
+    caseFreqAOk &&
+    caseFreqBOk &&
+    caseFreqCOk &&
+    caseFreqDOk &&
+    caseFreqEOk &&
     assert(parseCsvRows('"a,b",c').length === 1, "CSV quoted comma") &&
     assert(
       legge("src/lib/meta-csv.ts").includes("HEADER_CLICKS_PRIORITY"),
