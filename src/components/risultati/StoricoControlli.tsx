@@ -3,20 +3,25 @@
 import {
   etichettaHealth,
   etichettaSegnaleDiagnosi,
-  etichettaTrend,
   formatDataCheck,
   formatEuro,
-  trendVsPrecedente,
 } from "@/lib/control-room";
 import type { CampaignCheck } from "@/lib/campaign-checks-db";
 import { StatoChip, chipDaHealth } from "@/components/nuova-contatti/StatoChip";
+import {
+  direzionePrimaryTraDue,
+  etichettaDirezioneRiga,
+} from "@/lib/campaign-trend";
+import type { CampagnaObjective } from "@/types/campagne";
 
 export function StoricoControlli({
   checks,
   metricLabel,
+  objective,
 }: {
   checks: CampaignCheck[];
   metricLabel: string;
+  objective: CampagnaObjective;
 }) {
   if (checks.length === 0) {
     return (
@@ -45,8 +50,8 @@ export function StoricoControlli({
         <tbody>
           {visibili.map((check, i) => {
             const precedente = visibili[i + 1];
-            const trend = precedente
-              ? trendVsPrecedente(precedente.primaryCost, check.primaryCost)
+            const direzione = precedente
+              ? direzionePrimaryTraDue(precedente, check, objective)
               : null;
             return (
               <tr
@@ -69,7 +74,7 @@ export function StoricoControlli({
                   {formatEuro(check.threshold)}
                 </td>
                 <td className="px-3 py-2.5 text-[var(--ink)]">
-                  {i === 0 && trend ? etichettaTrend(trend) : trend ? etichettaTrend(trend) : "—"}
+                  {direzione ? etichettaDirezioneRiga(direzione) : "—"}
                 </td>
                 <td className="max-w-[220px] px-3 py-2.5 text-[var(--ink-muted)]">
                   {etichettaSegnaleDiagnosi(check.signal)}

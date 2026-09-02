@@ -21,6 +21,7 @@ import {
   getPrimaryOutcome,
   HEALTH_GREEN_MAX_RATIO,
   primaryMetricTypeDaObjective,
+  riassuntoAndamento,
   thresholdModeDaHealth,
   trendVsPrecedente,
   type ControlRoomKpis,
@@ -41,6 +42,21 @@ import {
   parseMetaCsvNumber,
   parseCsvRows,
 } from "@/lib/meta-csv";
+import type { CampaignCheck } from "@/lib/campaign-checks-db";
+import {
+  canonicalHistoricalMetrics,
+  evaluateTrend,
+  direzionePrimaryTraDue,
+  etichettaDirezioneRiga,
+  etichettaLivelloTrend,
+  evidenzeDiagnosiBrevi,
+  snapshotCheckLive,
+  testiCapTrend,
+  testoAndamentoDiagnosi,
+  trendPerLiveCheck,
+  metricaDiagnostica,
+  normalizeCampaignCheckHistory,
+} from "@/lib/campaign-trend";
 
 const ROOT = process.cwd();
 
@@ -431,8 +447,10 @@ async function main() {
 
   const engineSrc = legge("src/lib/control-room.ts");
   const noHighOk = assert(
-    !/confidence:\s*"HIGH"/.test(engineSrc),
-    "M0.2 engine never assigns HIGH confidence",
+    caseA.diagnosis.confidence !== "HIGH" &&
+      caseB.diagnosis.confidence !== "HIGH" &&
+      caseC.diagnosis.confidence !== "HIGH",
+    "M0.2 no-trend path never HIGH",
   );
 
   const m02Ok =
@@ -1425,8 +1443,8 @@ Risultati di 1 gruppo di inserzioni,200,10`;
     assert(pannello.includes("/risultati?campaignId="), "link a /risultati?campaignId=") &&
     assert(risultati.includes("StoricoControlli"), "/risultati mostra storico") &&
     assert(risultati.includes("Nota del media buyer"), "campo nota") &&
-    assert(risultati.includes("etichettaConfidenza"), "/risultati mostra confidenza") &&
-    assert(pannello.includes("etichettaSegnaleDiagnosi"), "detail mostra diagnosi distinta");
+    assert(risultati.includes("BloccoDiagnosiTrend"), "/risultati mostra confidenza") &&
+    assert(pannello.includes("BloccoDiagnosiTrend"), "detail mostra diagnosi distinta");
 
   const overview = legge("src/components/risultati/ControlRoomOverview.tsx");
   const m021Ok =
@@ -1580,6 +1598,1145 @@ Risultati di 1 gruppo di inserzioni,200,10`;
       "soglia ECOMMERCE invariata",
     );
 
+  function checkStorico(
+    partial: Partial<CampaignCheck> & { createdAt: string },
+  ): CampaignCheck {
+    const { createdAt, id, ...rest } = partial;
+    return {
+      id: id ?? `id-${createdAt}`,
+      campaignId: "camp-1",
+      userId: "user-1",
+      createdAt,
+      daysActive: 7,
+      spend: null,
+      resultsCount: null,
+      primaryCost: null,
+      ctr: null,
+      cpm: null,
+      cpc: null,
+      frequency: null,
+      roas: null,
+      clicks: null,
+      impressions: null,
+      healthStatus: "GREEN",
+      signal: null,
+      actions: [],
+      note: null,
+      objective: "LEADS",
+      threshold: 100,
+      thresholdMode: "BREAK_EVEN",
+      source: "MANUAL",
+      ...rest,
+    };
+  }
+
+  const d1 = "2026-08-01T10:00:00+02:00";
+  const d2 = "2026-08-02T10:00:00+02:00";
+  const d3 = "2026-08-03T10:00:00+02:00";
+
+  const trendEngineSrc = legge("src/lib/campaign-trend.ts");
+  const isolationOk =
+    assert(
+      !trendEngineSrc.includes("calcolaHealthStatus"),
+      "M0.4A non tocca health",
+    ) &&
+    assert(
+      !trendEngineSrc.includes("diagnosticaDeterministica"),
+      "M0.4A non tocca diagnosis",
+    ) &&
+    assert(
+      !trendEngineSrc.includes("azioniConsigliate"),
+      "M0.4A non tocca actions",
+    );
+
+  const caseA04 = evaluateTrend(
+    [checkStorico({ createdAt: d1, primaryCost: 60 })],
+    "LEADS",
+  );
+  const caseA04Ok =
+    assert(caseA04.level === "INSUFFICIENT_TREND_DATA", "M0.4A CASE A insufficient") &&
+    assert(caseA04.alignedPattern === "NONE", "M0.4A CASE A pattern NONE");
+
+  const caseB04 = evaluateTrend(
+    [
+      checkStorico({ createdAt: d1, primaryCost: 60 }),
+      checkStorico({ createdAt: d2, primaryCost: 80 }),
+    ],
+    "LEADS",
+  );
+  const caseB04Ok =
+    assert(caseB04.level === "ONE_PERIOD_CHANGE", "M0.4A CASE B one-period") &&
+    assert(caseB04.primary.direction === "WORSENING", "M0.4A CASE B WORSENING") &&
+    assert(caseB04.primary.consistent === false, "M0.4A CASE B not consistent");
+
+  const caseC04 = evaluateTrend(
+    [
+      checkStorico({ createdAt: d1, primaryCost: 60 }),
+      checkStorico({ createdAt: d2, primaryCost: 70 }),
+      checkStorico({ createdAt: d3, primaryCost: 85 }),
+    ],
+    "LEADS",
+  );
+  const caseC04Ok =
+    assert(caseC04.level === "CONSISTENT_TREND", "M0.4A CASE C consistent level") &&
+    assert(caseC04.primary.direction === "WORSENING", "M0.4A CASE C WORSENING") &&
+    assert(caseC04.primary.consistent === true, "M0.4A CASE C consistent true");
+
+  const caseD04 = evaluateTrend(
+    [
+      checkStorico({ createdAt: d1, primaryCost: 60 }),
+      checkStorico({ createdAt: d2, primaryCost: 85 }),
+      checkStorico({ createdAt: d3, primaryCost: 70 }),
+    ],
+    "LEADS",
+  );
+  const caseD04Ok =
+    assert(caseD04.level === "ONE_PERIOD_CHANGE", "M0.4A CASE D not consistent level") &&
+    assert(caseD04.primary.consistent === false, "M0.4A CASE D consistent false");
+
+  const caseE04 = evaluateTrend(
+    [
+      checkStorico({ createdAt: d1, primaryCost: 60 }),
+      checkStorico({ createdAt: d2, primaryCost: 60.5 }),
+      checkStorico({ createdAt: d3, primaryCost: 60.2 }),
+    ],
+    "LEADS",
+  );
+  const caseE04Ok =
+    assert(caseE04.primary.direction === "STABLE", "M0.4A CASE E STABLE") &&
+    assert(caseE04.level !== "CONSISTENT_TREND", "M0.4A CASE E not CONSISTENT_TREND") &&
+    assert(caseE04.primary.consistent === false, "M0.4A CASE E consistent false");
+
+  const oldRawNull = checkStorico({
+    createdAt: d1,
+    primaryCost: 60,
+    ctr: 1.4,
+    cpc: 2,
+    cpm: 18,
+    clicks: null,
+    impressions: null,
+  });
+  const newWithCounts = checkStorico({
+    createdAt: d2,
+    primaryCost: 60,
+    spend: 200,
+    resultsCount: 10,
+    ctr: 1.4,
+    cpc: 2,
+    cpm: 18,
+    clicks: 100,
+    impressions: 10_000,
+  });
+  const canonOld = canonicalHistoricalMetrics(oldRawNull, "LEADS");
+  const canonNew = canonicalHistoricalMetrics(newWithCounts, "LEADS");
+  const caseF04Ok =
+    assert(canonOld.ctr === 1.4, "M0.4A CASE F old CTR stored") &&
+    assert(canonNew.ctr === 1, "M0.4A CASE F new CTR derived") &&
+    assert(canonNew.cpc === 2, "M0.4A CASE F new CPC derived") &&
+    assert(canonNew.cpm === 20, "M0.4A CASE F new CPM derived");
+
+  const caseG04 = evaluateTrend(
+    [
+      checkStorico({ createdAt: d1, primaryCost: 60, objective: "LEADS" }),
+      checkStorico({ createdAt: d2, primaryCost: 80, objective: "LEADS" }),
+      checkStorico({
+        createdAt: d3,
+        primaryCost: 12,
+        cpm: 12,
+        objective: "AWARENESS",
+      }),
+    ],
+    "LEADS",
+  );
+  const caseG04Ok =
+    assert(
+      normalizeCampaignCheckHistory(
+        [
+          checkStorico({ createdAt: d1, objective: "LEADS" }),
+          checkStorico({ createdAt: d2, objective: "LEADS" }),
+          checkStorico({ createdAt: d3, objective: "AWARENESS" }),
+        ],
+        "LEADS",
+      ).length === 2,
+      "M0.4A CASE G ignore AWARENESS",
+    ) &&
+    assert(caseG04.level === "ONE_PERIOD_CHANGE", "M0.4A CASE G two LEADS points") &&
+    assert(caseG04.primary.current === 80, "M0.4A CASE G primary 80");
+
+  const caseH04 = evaluateTrend(
+    [
+      checkStorico({ createdAt: d1, primaryCost: 60, objective: null }),
+      checkStorico({ createdAt: d2, primaryCost: 80, objective: null }),
+    ],
+    "LEADS",
+  );
+  const caseH04Ok =
+    assert(caseH04.level === "ONE_PERIOD_CHANGE", "M0.4A CASE H legacy null objective") &&
+    assert(caseH04.primary.direction === "WORSENING", "M0.4A CASE H usable");
+
+  const caseISeries = normalizeCampaignCheckHistory(
+    [
+      checkStorico({
+        id: "morning",
+        createdAt: "2026-08-01T08:00:00+02:00",
+        primaryCost: 50,
+      }),
+      checkStorico({
+        id: "evening",
+        createdAt: "2026-08-01T20:00:00+02:00",
+        primaryCost: 60,
+      }),
+      checkStorico({
+        id: "next",
+        createdAt: d2,
+        primaryCost: 80,
+      }),
+    ],
+    "LEADS",
+  );
+  const caseI04 = evaluateTrend(
+    [
+      checkStorico({
+        id: "morning",
+        createdAt: "2026-08-01T08:00:00+02:00",
+        primaryCost: 50,
+      }),
+      checkStorico({
+        id: "evening",
+        createdAt: "2026-08-01T20:00:00+02:00",
+        primaryCost: 60,
+      }),
+      checkStorico({ id: "next", createdAt: d2, primaryCost: 80 }),
+    ],
+    "LEADS",
+  );
+  const caseI04Ok =
+    assert(caseISeries.length === 2, "M0.4A CASE I two days after dedupe") &&
+    assert(caseISeries[0]?.id === "evening", "M0.4A CASE I keep latest same-day") &&
+    assert(caseI04.primary.previous === 60, "M0.4A CASE I previous 60 not 50") &&
+    assert(caseI04.level === "ONE_PERIOD_CHANGE", "M0.4A CASE I not 3-point consistent");
+
+  const caseJ04 = evaluateTrend(
+    [
+      checkStorico({ createdAt: d1, primaryCost: 60, source: "MANUAL" }),
+      checkStorico({ createdAt: d2, primaryCost: 80, source: "CSV" }),
+    ],
+    "LEADS",
+  );
+  const caseJ04Ok = assert(
+    caseJ04.caps.includes("SOURCE_CHANGE"),
+    "M0.4A CASE J SOURCE_CHANGE",
+  );
+
+  const caseK04 = evaluateTrend(
+    [
+      checkStorico({ createdAt: d1, primaryCost: 60, threshold: 100 }),
+      checkStorico({ createdAt: d2, primaryCost: 62, threshold: 120 }),
+    ],
+    "LEADS",
+  );
+  const caseK04Ok =
+    assert(
+      caseK04.caps.includes("THRESHOLD_CHANGE"),
+      "M0.4A CASE K THRESHOLD_CHANGE",
+    ) &&
+    assert(
+      caseK04.primary.direction === "STABLE" ||
+        caseK04.primary.direction === "WORSENING",
+      "M0.4A CASE K still compares actuals",
+    );
+
+  const caseL04 = evaluateTrend(
+    [
+      checkStorico({
+        createdAt: "2026-08-01T10:00:00+02:00",
+        primaryCost: 60,
+      }),
+      checkStorico({
+        createdAt: "2026-08-20T10:00:00+02:00",
+        primaryCost: 80,
+      }),
+    ],
+    "LEADS",
+  );
+  const caseL04Ok = assert(
+    caseL04.caps.includes("UNEVEN_SPACING"),
+    "M0.4A CASE L UNEVEN_SPACING",
+  );
+
+  const caseM04 = evaluateTrend(
+    [
+      checkStorico({
+        createdAt: d1,
+        primaryCost: 12,
+        cpm: 12,
+        objective: "AWARENESS",
+      }),
+      checkStorico({
+        createdAt: d2,
+        primaryCost: 10,
+        cpm: 10,
+        objective: "AWARENESS",
+      }),
+      checkStorico({
+        createdAt: d3,
+        primaryCost: 8,
+        cpm: 8,
+        objective: "AWARENESS",
+      }),
+    ],
+    "AWARENESS",
+  );
+  const caseM04Ok =
+    assert(caseM04.level === "CONSISTENT_TREND", "M0.4A CASE M consistent") &&
+    assert(caseM04.primary.direction === "IMPROVING", "M0.4A CASE M CPM IMPROVING");
+
+  const caseN04 = evaluateTrend(
+    [
+      checkStorico({
+        createdAt: d1,
+        primaryCost: 40,
+        roas: 2,
+        objective: "ECOMMERCE",
+      }),
+      checkStorico({
+        createdAt: d2,
+        primaryCost: 40,
+        roas: 2.5,
+        objective: "ECOMMERCE",
+      }),
+      checkStorico({
+        createdAt: d3,
+        primaryCost: 40,
+        roas: 3,
+        objective: "ECOMMERCE",
+      }),
+    ],
+    "ECOMMERCE",
+  );
+  const roasTrend = metricaDiagnostica(caseN04, "roas");
+  const caseN04Ok =
+    assert(roasTrend?.direction === "IMPROVING", "M0.4A CASE N ROAS IMPROVING") &&
+    assert(roasTrend?.consistent === true, "M0.4A CASE N ROAS consistent") &&
+    assert(caseN04.alignedPattern === "NONE", "M0.4A CASE N no diagnosis pattern");
+
+  const caseO04 = evaluateTrend(
+    [
+      checkStorico({
+        createdAt: d1,
+        primaryCost: 20,
+        resultsCount: 5,
+        clicks: 100,
+      }),
+      checkStorico({
+        createdAt: d2,
+        primaryCost: 20,
+        resultsCount: 8,
+        clicks: 100,
+      }),
+    ],
+    "LEADS",
+  );
+  const crTrend = metricaDiagnostica(caseO04, "conversionRate");
+  const caseO04Ok =
+    assert(crTrend?.previous === 5, "M0.4A CASE O CR 5%") &&
+    assert(crTrend?.current === 8, "M0.4A CASE O CR 8%");
+
+  const caseP04 = evaluateTrend(
+    [
+      checkStorico({ createdAt: d1, primaryCost: 0 }),
+      checkStorico({ createdAt: d2, primaryCost: 80 }),
+    ],
+    "LEADS",
+  );
+  const caseP04Ok =
+    assert(caseP04.primary.deltaPercent === null, "M0.4A CASE P deltaPercent null") &&
+    assert(
+      Number.isFinite(caseP04.primary.deltaAbsolute ?? 0),
+      "M0.4A CASE P no NaN absolute",
+    ) &&
+    assert(caseP04.primary.direction === "UNKNOWN", "M0.4A CASE P UNKNOWN not Infinity");
+
+  const caseQ04 = evaluateTrend(
+    [
+      checkStorico({ createdAt: d1, primaryCost: 60, frequency: 2.49 }),
+      checkStorico({ createdAt: d2, primaryCost: 60, frequency: 2.51 }),
+    ],
+    "LEADS",
+  );
+  const freqTrend = metricaDiagnostica(caseQ04, "frequency");
+  const caseQ04Ok =
+    assert(freqTrend?.movement === "STABLE", "M0.4A CASE Q frequency STABLE") &&
+    assert(
+      freqTrend?.direction !== "IMPROVING" &&
+        freqTrend?.direction !== "WORSENING",
+      "M0.4A CASE Q frequency not quality",
+    );
+
+  const caseR04 = evaluateTrend(
+    [
+      checkStorico({ createdAt: d1, primaryCost: 60, ctr: 1 }),
+      checkStorico({ createdAt: d2, primaryCost: 60, ctr: 1.04 }),
+    ],
+    "LEADS",
+  );
+  const ctrTrend = metricaDiagnostica(caseR04, "ctr");
+  const caseR04Ok =
+    assert(ctrTrend?.direction === "STABLE", "M0.4A CASE R CTR STABLE") &&
+    assert(ctrTrend?.movement === "STABLE", "M0.4A CASE R CTR movement STABLE");
+
+  const uiCompatOk =
+    assert(
+      legge("src/components/risultati/StoricoControlli.tsx").includes(
+        "direzionePrimaryTraDue",
+      ),
+      "M0.4A Storico uses canonical row trend",
+    ) &&
+    assert(
+      legge("src/app/risultati/page.tsx").includes("trendPerLiveCheck"),
+      "M0.4A /risultati uses live trend helper",
+    ) &&
+    assert(etichettaTrend(t1) === "Migliorato", "M0.4A old trend API unchanged");
+
+  const m04aOk =
+    isolationOk &&
+    caseA04Ok &&
+    caseB04Ok &&
+    caseC04Ok &&
+    caseD04Ok &&
+    caseE04Ok &&
+    caseF04Ok &&
+    caseG04Ok &&
+    caseH04Ok &&
+    caseI04Ok &&
+    caseJ04Ok &&
+    caseK04Ok &&
+    caseL04Ok &&
+    caseM04Ok &&
+    caseN04Ok &&
+    caseO04Ok &&
+    caseP04Ok &&
+    caseQ04Ok &&
+    caseR04Ok &&
+    uiCompatOk;
+
+  function runDiagTrend(
+    checks: CampaignCheck[],
+    opts: {
+      objective: Campagna["objective"];
+      threshold: number;
+      extra?: Partial<ControlRoomKpis>;
+      days?: number;
+      results?: number;
+      campagna?: Partial<Campagna>;
+    },
+  ) {
+    const objective = opts.objective ?? "LEADS";
+    const trend = evaluateTrend(checks, objective);
+    const last = checks[checks.length - 1];
+    const actual =
+      objective === "AWARENESS"
+        ? (last?.cpm ?? last?.primaryCost ?? 0)
+        : (last?.primaryCost ?? 0);
+    const kpi = kpis({
+      costPerResult: actual,
+      cpm: last?.cpm ?? null,
+      ctr: last?.ctr ?? null,
+      cpc: last?.cpc ?? null,
+      frequency: last?.frequency ?? null,
+      roas: last?.roas ?? null,
+      clicks: last?.clicks ?? null,
+      impressions: last?.impressions ?? null,
+      results: last?.resultsCount ?? opts.results ?? 4,
+      spend: last?.spend ?? null,
+      ...opts.extra,
+    });
+    const campagna = {
+      id: "m04b",
+      nomeCliente: "Test",
+      iniziali: "TE",
+      stato: "Attiva",
+      giudizio: "Ancora presto",
+      objective,
+      nomeCampagna: "M04B",
+      maxSustainableCpa: opts.threshold,
+      estimatedCpm: opts.threshold,
+      ...opts.campagna,
+    } as Campagna;
+    const economic = buildEconomicContext(
+      campagna,
+      kpi,
+      opts.threshold,
+      objective,
+    );
+    const health = calcolaHealthStatus(
+      economic.actual,
+      economic.threshold,
+      economic.healthMode,
+      {
+        daysActive: opts.days ?? 7,
+        resultsCount: opts.results ?? last?.resultsCount ?? 4,
+      },
+    );
+    const diagnosis = diagnosticaDeterministica(kpi, health, economic, {
+      trend,
+    });
+    return { trend, health, diagnosis, economic };
+  }
+
+  const redTh = 50;
+  const up1 = checkStorico({
+    createdAt: d1,
+    primaryCost: 60,
+    ctr: 2,
+    cpc: 1,
+    threshold: redTh,
+  });
+  const up2 = checkStorico({
+    createdAt: d2,
+    primaryCost: 80,
+    ctr: 1.2,
+    cpc: 1.4,
+    threshold: redTh,
+  });
+  const up3a = checkStorico({
+    createdAt: d1,
+    primaryCost: 60,
+    ctr: 2,
+    cpc: 1,
+    threshold: redTh,
+  });
+  const up3b = checkStorico({
+    createdAt: d2,
+    primaryCost: 70,
+    ctr: 1.6,
+    cpc: 1.2,
+    threshold: redTh,
+  });
+  const up3c = checkStorico({
+    createdAt: d3,
+    primaryCost: 85,
+    ctr: 1.2,
+    cpc: 1.5,
+    threshold: redTh,
+  });
+
+  const b04bA = runDiagTrend(
+    [checkStorico({ createdAt: d1, primaryCost: 80, threshold: redTh })],
+    { objective: "LEADS", threshold: redTh },
+  );
+  const caseA04bOk =
+    assert(b04bA.trend.level === "INSUFFICIENT_TREND_DATA", "M0.4B CASE A trend insufficient") &&
+    assert(b04bA.diagnosis.confidence === "LOW", "M0.4B CASE A LOW") &&
+    assert(b04bA.diagnosis.confidence !== "HIGH", "M0.4B CASE A no HIGH");
+
+  const b04bB = runDiagTrend([up1, up2], { objective: "LEADS", threshold: redTh });
+  const caseB04bOk =
+    assert(b04bB.diagnosis.area === "AD_MESSAGE", "M0.4B CASE B upstream") &&
+    assert(b04bB.diagnosis.confidence === "MEDIUM", "M0.4B CASE B MEDIUM") &&
+    assert(b04bB.diagnosis.confidence !== "HIGH", "M0.4B CASE B not HIGH");
+
+  const b04bC = runDiagTrend([up3a, up3b, up3c], {
+    objective: "LEADS",
+    threshold: redTh,
+  });
+  const caseC04bOk =
+    assert(b04bC.diagnosis.area === "AD_MESSAGE", "M0.4B CASE C AD_MESSAGE") &&
+    assert(b04bC.diagnosis.confidence === "HIGH", "M0.4B CASE C HIGH") &&
+    assert(
+      b04bC.diagnosis.body.includes("fortemente coerenti"),
+      "M0.4B CASE C probabilistic HIGH",
+    ) &&
+    assert(
+      !b04bC.diagnosis.body.toLowerCase().includes("sicuramente"),
+      "M0.4B CASE C no certezza",
+    ) &&
+    assert(
+      b04bC.diagnosis.trendSummary.includes("aumentato negli ultimi due intervalli"),
+      "M0.4B CASE C trend summary",
+    );
+
+  const b04bD = runDiagTrend(
+    [up3a, up3b, { ...up3c, source: "CSV" }],
+    { objective: "LEADS", threshold: redTh },
+  );
+  const caseD04bOk =
+    assert(b04bD.trend.caps.includes("SOURCE_CHANGE"), "M0.4B CASE D cap source") &&
+    assert(b04bD.diagnosis.area === "AD_MESSAGE", "M0.4B CASE D still AD_MESSAGE") &&
+    assert(b04bD.diagnosis.confidence === "MEDIUM", "M0.4B CASE D MEDIUM max") &&
+    assert(
+      b04bD.diagnosis.evidence.some((e) => e.includes("Fonte dati cambiata")),
+      "M0.4B CASE D cap evidence",
+    );
+
+  const b04bE = runDiagTrend(
+    [up3a, up3b, { ...up3c, threshold: 120 }],
+    { objective: "LEADS", threshold: redTh },
+  );
+  const caseE04bOk =
+    assert(b04bE.trend.caps.includes("THRESHOLD_CHANGE"), "M0.4B CASE E cap threshold") &&
+    assert(b04bE.diagnosis.confidence === "MEDIUM", "M0.4B CASE E MEDIUM max") &&
+    assert(
+      b04bE.diagnosis.evidence.some((e) => e.includes("soglia economica è cambiata")),
+      "M0.4B CASE E cap copy",
+    );
+
+  const far1 = "2026-07-01T10:00:00+02:00";
+  const far2 = "2026-07-20T10:00:00+02:00";
+  const far3 = "2026-08-10T10:00:00+02:00";
+  const b04bF = runDiagTrend(
+    [
+      { ...up3a, createdAt: far1 },
+      { ...up3b, createdAt: far2 },
+      { ...up3c, createdAt: far3 },
+    ],
+    { objective: "LEADS", threshold: redTh },
+  );
+  const caseF04bOk =
+    assert(b04bF.trend.caps.includes("UNEVEN_SPACING"), "M0.4B CASE F cap spacing") &&
+    assert(b04bF.diagnosis.confidence === "MEDIUM", "M0.4B CASE F MEDIUM max");
+
+  const fatA = checkStorico({
+    createdAt: d1,
+    primaryCost: 60,
+    frequency: 1.8,
+    ctr: 2,
+    threshold: redTh,
+  });
+  const fatB = checkStorico({
+    createdAt: d2,
+    primaryCost: 70,
+    frequency: 2.2,
+    ctr: 1.7,
+    threshold: redTh,
+  });
+  const fatC = checkStorico({
+    createdAt: d3,
+    primaryCost: 85,
+    frequency: 2.8,
+    ctr: 1.3,
+    threshold: redTh,
+  });
+  const b04bG = runDiagTrend([fatA, fatB, fatC], {
+    objective: "LEADS",
+    threshold: redTh,
+  });
+  const caseG04bOk =
+    assert(b04bG.diagnosis.area === "CREATIVE_FATIGUE", "M0.4B CASE G fatigue") &&
+    assert(b04bG.diagnosis.confidence === "HIGH", "M0.4B CASE G HIGH") &&
+    assert(
+      !b04bG.diagnosis.body.toLowerCase().includes("saturat"),
+      "M0.4B CASE G no saturation",
+    );
+
+  const b04bH = runDiagTrend(
+    [
+      checkStorico({
+        createdAt: d1,
+        primaryCost: 85,
+        frequency: 1.8,
+        ctr: 2,
+        threshold: redTh,
+      }),
+      checkStorico({
+        createdAt: d2,
+        primaryCost: 70,
+        frequency: 2.2,
+        ctr: 1.7,
+        threshold: redTh,
+      }),
+      checkStorico({
+        createdAt: d3,
+        primaryCost: 55,
+        frequency: 2.8,
+        ctr: 1.3,
+        threshold: redTh,
+      }),
+    ],
+    { objective: "LEADS", threshold: redTh },
+  );
+  const caseH04bOk =
+    assert(b04bH.diagnosis.area !== "CREATIVE_FATIGUE", "M0.4B CASE H not fatigue") &&
+    assert(b04bH.diagnosis.confidence !== "HIGH", "M0.4B CASE H not HIGH") &&
+    assert(b04bH.diagnosis.contradictions.length > 0, "M0.4B CASE H contradiction");
+
+  const b04bI = runDiagTrend(
+    [
+      checkStorico({
+        createdAt: d1,
+        primaryCost: 60,
+        ctr: 1.2,
+        cpc: 2,
+        threshold: redTh,
+      }),
+      checkStorico({
+        createdAt: d2,
+        primaryCost: 70,
+        ctr: 1.5,
+        cpc: 1.6,
+        threshold: redTh,
+      }),
+      checkStorico({
+        createdAt: d3,
+        primaryCost: 85,
+        ctr: 1.9,
+        cpc: 1.2,
+        threshold: redTh,
+      }),
+    ],
+    { objective: "LEADS", threshold: redTh },
+  );
+  const caseI04bOk =
+    assert(b04bI.diagnosis.area === "NO_CLEAR_SIGNAL", "M0.4B CASE I NO_CLEAR_SIGNAL") &&
+    assert(b04bI.diagnosis.confidence === "LOW", "M0.4B CASE I LOW") &&
+    assert(
+      b04bI.diagnosis.body.includes("non indicano una causa unica"),
+      "M0.4B CASE I copy",
+    );
+
+  const b04bJ = runDiagTrend(
+    [
+      checkStorico({
+        createdAt: d1,
+        primaryCost: 60,
+        ctr: 1.5,
+        cpc: 1,
+        clicks: 100,
+        resultsCount: 10,
+        threshold: redTh,
+      }),
+      checkStorico({
+        createdAt: d2,
+        primaryCost: 70,
+        ctr: 1.5,
+        cpc: 1,
+        clicks: 100,
+        resultsCount: 8,
+        threshold: redTh,
+      }),
+      checkStorico({
+        createdAt: d3,
+        primaryCost: 85,
+        ctr: 1.5,
+        cpc: 1,
+        clicks: 100,
+        resultsCount: 6,
+        threshold: redTh,
+      }),
+    ],
+    { objective: "LEADS", threshold: redTh, results: 6 },
+  );
+  const caseJ04bOk =
+    assert(b04bJ.diagnosis.area === "POST_CLICK", "M0.4B CASE J POST_CLICK") &&
+    assert(b04bJ.diagnosis.confidence === "HIGH", "M0.4B CASE J HIGH") &&
+    assert(
+      b04bJ.diagnosis.body.includes("quota minore dei click"),
+      "M0.4B CASE J post-click copy",
+    ) &&
+    assert(
+      !b04bJ.diagnosis.body.toLowerCase().includes("landing non converte"),
+      "M0.4B CASE J no landing claim",
+    );
+
+  const b04bK = runDiagTrend(
+    [
+      checkStorico({
+        createdAt: d1,
+        primaryCost: 40,
+        roas: 3,
+        objective: "ECOMMERCE",
+        threshold: 30,
+      }),
+      checkStorico({
+        createdAt: d2,
+        primaryCost: 50,
+        roas: 2.4,
+        objective: "ECOMMERCE",
+        threshold: 30,
+      }),
+      checkStorico({
+        createdAt: d3,
+        primaryCost: 65,
+        roas: 1.8,
+        objective: "ECOMMERCE",
+        threshold: 30,
+      }),
+    ],
+    { objective: "ECOMMERCE", threshold: 30 },
+  );
+  const caseK04bOk =
+    assert(b04bK.diagnosis.area === "ECONOMICS", "M0.4B CASE K ECONOMICS") &&
+    assert(
+      b04bK.diagnosis.confidence === "MEDIUM" ||
+        b04bK.diagnosis.confidence === "HIGH",
+      "M0.4B CASE K MEDIUM or HIGH",
+    ) &&
+    assert(
+      b04bK.diagnosis.confidence !== "HIGH" ||
+        b04bK.trend.diagnostics.filter((d) => d.direction === "WORSENING")
+          .length >= 2,
+      "M0.4B CASE K HIGH only with 2+ diagnostics",
+    );
+
+  const b04bL = runDiagTrend(
+    [
+      checkStorico({
+        createdAt: d1,
+        primaryCost: 40,
+        roas: 2,
+        objective: "ECOMMERCE",
+        threshold: 30,
+      }),
+      checkStorico({
+        createdAt: d2,
+        primaryCost: 50,
+        roas: 2.5,
+        objective: "ECOMMERCE",
+        threshold: 30,
+      }),
+      checkStorico({
+        createdAt: d3,
+        primaryCost: 65,
+        roas: 3,
+        objective: "ECOMMERCE",
+        threshold: 30,
+      }),
+    ],
+    { objective: "ECOMMERCE", threshold: 30 },
+  );
+  const caseL04bOk =
+    assert(b04bL.diagnosis.confidence !== "HIGH", "M0.4B CASE L not HIGH") &&
+    assert(
+      b04bL.diagnosis.contradictions.length > 0 ||
+        b04bL.diagnosis.area === "NO_CLEAR_SIGNAL",
+      "M0.4B CASE L contradiction / no clear",
+    );
+
+  const b04bM = runDiagTrend(
+    [
+      checkStorico({ createdAt: d1, primaryCost: 50, ctr: 2, cpc: 1 }),
+      checkStorico({ createdAt: d2, primaryCost: 58, ctr: 1.6, cpc: 1.2 }),
+      checkStorico({ createdAt: d3, primaryCost: 70, ctr: 1.2, cpc: 1.5 }),
+    ],
+    { objective: "LEADS", threshold: 113 },
+  );
+  const caseM04bOk =
+    assert(b04bM.health.status === "GREEN", "M0.4B CASE M health GREEN") &&
+    assert(b04bM.diagnosis.area !== "AD_MESSAGE", "M0.4B CASE M no aggressive area") &&
+    assert(
+      b04bM.diagnosis.body.includes("entro la soglia"),
+      "M0.4B CASE M green worsening copy",
+    );
+
+  const b04bN = runDiagTrend(
+    [
+      checkStorico({ createdAt: d1, primaryCost: 90, threshold: redTh }),
+      checkStorico({ createdAt: d2, primaryCost: 75, threshold: redTh }),
+      checkStorico({ createdAt: d3, primaryCost: 60, threshold: redTh }),
+    ],
+    { objective: "LEADS", threshold: redTh },
+  );
+  const caseN04bOk =
+    assert(b04bN.health.status === "RED", "M0.4B CASE N health RED") &&
+    assert(
+      b04bN.diagnosis.body.includes("resta sopra soglia") &&
+        b04bN.diagnosis.body.includes("migliorando"),
+      "M0.4B CASE N recovery copy",
+    ) &&
+    assert(b04bN.diagnosis.area === "NO_CLEAR_SIGNAL", "M0.4B CASE N no failure area");
+
+  const b04bO = runDiagTrend(
+    [
+      checkStorico({
+        createdAt: d1,
+        primaryCost: 12,
+        cpm: 12,
+        frequency: 1.8,
+        objective: "AWARENESS",
+      }),
+      checkStorico({
+        createdAt: d2,
+        primaryCost: 14,
+        cpm: 14,
+        frequency: 2.2,
+        objective: "AWARENESS",
+      }),
+      checkStorico({
+        createdAt: d3,
+        primaryCost: 18,
+        cpm: 18,
+        frequency: 2.8,
+        objective: "AWARENESS",
+      }),
+    ],
+    { objective: "AWARENESS", threshold: 10 },
+  );
+  const caseO04bOk =
+    assert(b04bO.health.mode === "efficiency", "M0.4B CASE O CPM health") &&
+    assert(b04bO.diagnosis.confidence !== "HIGH", "M0.4B CASE O not HIGH") &&
+    assert(
+      !b04bO.diagnosis.body.includes("CPL") &&
+        !b04bO.diagnosis.body.toLowerCase().includes("lead"),
+      "M0.4B CASE O no CPL/lead copy",
+    );
+
+  const staticOnly = runM02({
+    actual: 200,
+    days: 7,
+    results: 4,
+    threshold: 113,
+    objective: "LEADS",
+    extra: { ctr: 0.5 },
+  });
+  const caseP04bOk =
+    assert(staticOnly.diagnosis.confidence !== "HIGH", "M0.4B CASE P static never HIGH") &&
+    assert(
+      staticOnly.diagnosis.trendSummary === "",
+      "M0.4B CASE P no trend input",
+    );
+
+  const caseQ04bOk =
+    assert(
+      calcolaHealthStatus(50, 113, "economic", { daysActive: 7, resultsCount: 4 })
+        .status === "GREEN",
+      "M0.4B CASE Q GREEN invariato",
+    ) &&
+    assert(
+      calcolaHealthStatus(100, 113, "economic", { daysActive: 7, resultsCount: 4 })
+        .status === "YELLOW",
+      "M0.4B CASE Q YELLOW invariato",
+    ) &&
+    assert(
+      calcolaHealthStatus(200, 113, "economic", { daysActive: 7, resultsCount: 4 })
+        .status === "RED",
+      "M0.4B CASE Q RED invariato",
+    );
+
+  const delivery04b = runDiagTrend(
+    [
+      checkStorico({
+        createdAt: d1,
+        primaryCost: 60,
+        ctr: 1.5,
+        cpc: 1,
+        cpm: 10,
+        spend: 100,
+        impressions: 10_000,
+        threshold: redTh,
+      }),
+      checkStorico({
+        createdAt: d2,
+        primaryCost: 70,
+        ctr: 1.5,
+        cpc: 1.3,
+        cpm: 14,
+        spend: 140,
+        impressions: 10_000,
+        threshold: redTh,
+      }),
+      checkStorico({
+        createdAt: d3,
+        primaryCost: 85,
+        ctr: 1.5,
+        cpc: 1.6,
+        cpm: 18,
+        spend: 180,
+        impressions: 10_000,
+        threshold: redTh,
+      }),
+    ],
+    { objective: "LEADS", threshold: redTh },
+  );
+
+  const uiNotWiredOk = assert(
+    legge("src/app/risultati/page.tsx").includes("trendPerLiveCheck"),
+    "M0.4B /risultati collega il trend in M0.4C",
+  );
+
+  const m04bOk =
+    caseA04bOk &&
+    caseB04bOk &&
+    caseC04bOk &&
+    caseD04bOk &&
+    caseE04bOk &&
+    caseF04bOk &&
+    caseG04bOk &&
+    caseH04bOk &&
+    caseI04bOk &&
+    caseJ04bOk &&
+    caseK04bOk &&
+    caseL04bOk &&
+    caseM04bOk &&
+    caseN04bOk &&
+    caseO04bOk &&
+    caseP04bOk &&
+    caseQ04bOk &&
+    uiNotWiredOk &&
+    assert(delivery04b.diagnosis.area === "DELIVERY", "M0.4B delivery pattern") &&
+    assert(delivery04b.diagnosis.confidence !== "HIGH", "M0.4B delivery not over-prioritized") &&
+    assert(
+      riassuntoAndamento(b04bA.trend, "CPL").includes("almeno due controlli"),
+      "M0.4B riassunto insufficient",
+    );
+
+  const bloccoUi = legge("src/components/risultati/BloccoDiagnosiTrend.tsx");
+  const storicoUi = legge("src/components/risultati/StoricoControlli.tsx");
+  const pannelloUi = legge("src/components/campagne/PannelloDiagnosiPerformance.tsx");
+  const risultatiUi = legge("src/app/risultati/page.tsx");
+
+  const liveA = snapshotCheckLive({
+    campaignId: "c1",
+    daysActive: 7,
+    spend: 200,
+    resultsCount: 4,
+    primaryCost: 80,
+    ctr: 1.2,
+    cpm: 18,
+    cpc: 1.5,
+    frequency: 2,
+    roas: null,
+    clicks: null,
+    impressions: null,
+    healthStatus: "RED",
+    objective: "LEADS",
+    threshold: 50,
+    thresholdMode: "BREAK_EVEN",
+    source: "MANUAL",
+  });
+  const tLiveA = trendPerLiveCheck([], liveA, false, "LEADS");
+  const caseA04cOk =
+    assert(tLiveA.level === "INSUFFICIENT_TREND_DATA", "M0.4C CASE A insufficient") &&
+    assert(
+      etichettaLivelloTrend(tLiveA.level) === "Storico ancora insufficiente",
+      "M0.4C CASE A human level",
+    ) &&
+    assert(
+      testoAndamentoDiagnosi(tLiveA, b04bA.diagnosis.trendSummary).includes(
+        "almeno due controlli",
+      ) ||
+        testoAndamentoDiagnosi(tLiveA, undefined) ===
+          "Storico ancora insufficiente",
+      "M0.4C CASE A andamento copy",
+    );
+
+  const tLiveB = trendPerLiveCheck([up1], up2, false, "LEADS");
+  const caseB04cOk =
+    assert(tLiveB.level === "ONE_PERIOD_CHANGE", "M0.4C CASE B one period") &&
+    assert(
+      etichettaLivelloTrend(tLiveB.level).includes("Variazione rispetto"),
+      "M0.4C CASE B human level",
+    );
+
+  const caseC04cOk =
+    assert(
+      testoAndamentoDiagnosi(b04bC.trend, b04bC.diagnosis.trendSummary).includes(
+        "aumentato negli ultimi due intervalli",
+      ),
+      "M0.4C CASE C trend sentence",
+    ) &&
+    assert(b04bC.diagnosis.confidence === "HIGH", "M0.4C CASE C HIGH") &&
+    assert(
+      bloccoUi.includes("Basata su più segnali coerenti"),
+      "M0.4C CASE C HIGH microcopy",
+    ) &&
+    assert(!bloccoUi.includes("Diagnosi certa"), "M0.4C CASE C no certezza");
+
+  const caseD04cOk =
+    assert(b04bM.health.status === "GREEN", "M0.4C CASE D health GREEN") &&
+    assert(b04bM.trend.primary.direction === "WORSENING", "M0.4C CASE D trend worsening") &&
+    assert(
+      bloccoUi.includes("chipDaHealth(healthStatus)"),
+      "M0.4C CASE D health chip independent",
+    );
+
+  const caseE04cOk =
+    assert(b04bN.health.status === "RED", "M0.4C CASE E health RED") &&
+    assert(b04bN.trend.primary.direction === "IMPROVING", "M0.4C CASE E trend improving");
+
+  const caseF04cOk =
+    assert(b04bI.diagnosis.area === "NO_CLEAR_SIGNAL", "M0.4C CASE F no clear") &&
+    assert(b04bI.diagnosis.confidence === "LOW", "M0.4C CASE F LOW") &&
+    assert(bloccoUi.includes("NO_CLEAR_SIGNAL"), "M0.4C CASE F UI handles no cause");
+
+  const caseG04cOk =
+    assert(testiCapTrend(["SOURCE_CHANGE"]).some((l) => l.includes("Fonte dati")), "M0.4C CASE G cap copy") &&
+    assert(b04bD.diagnosis.confidence === "MEDIUM", "M0.4C CASE G MEDIUM max");
+
+  const caseH04cOk =
+    assert(
+      testoAndamentoDiagnosi(b04bO.trend, b04bO.diagnosis.trendSummary).includes("CPM") ||
+        b04bO.economic.metricLabel === "CPM",
+      "M0.4C CASE H CPM wording",
+    ) &&
+    assert(
+      !testoAndamentoDiagnosi(b04bO.trend, b04bO.diagnosis.trendSummary).includes("CPL"),
+      "M0.4C CASE H no CPL in trend",
+    );
+
+  const legacyOld = checkStorico({
+    createdAt: d1,
+    primaryCost: 60,
+    ctr: 1.4,
+    clicks: null,
+    impressions: null,
+    objective: null,
+  });
+  const tLegacy = evaluateTrend(
+    [legacyOld, checkStorico({ createdAt: d2, primaryCost: 80, ctr: 1 })],
+    "LEADS",
+  );
+  const caseI04cOk =
+    assert(tLegacy.level === "ONE_PERIOD_CHANGE", "M0.4C CASE I no crash") &&
+    assert(canonicalHistoricalMetrics(legacyOld, "LEADS").ctr === 1.4, "M0.4C CASE I stored CTR");
+
+  const dirRow = direzionePrimaryTraDue(up1, up2, "LEADS");
+  const caseJ04cOk =
+    assert(dirRow === "WORSENING", "M0.4C CASE J canonical row") &&
+    assert(etichettaDirezioneRiga(dirRow) === "Peggiora", "M0.4C CASE J Peggiora") &&
+    assert(storicoUi.includes("direzionePrimaryTraDue"), "M0.4C CASE J storico wiring");
+
+  const sameDaySaved = trendPerLiveCheck(
+    [up2],
+    { ...liveA, createdAt: up2.createdAt },
+    true,
+    "LEADS",
+  );
+  const instoreLabel = etichettaMetricaPrimaria("IN_STORE");
+  const retargetLabel = etichettaMetricaPrimaria("RETARGETING");
+  const ecomLabel = etichettaMetricaPrimaria("ECOMMERCE");
+
+  const m04cOk =
+    caseA04cOk &&
+    caseB04cOk &&
+    caseC04cOk &&
+    caseD04cOk &&
+    caseE04cOk &&
+    caseF04cOk &&
+    caseG04cOk &&
+    caseH04cOk &&
+    caseI04cOk &&
+    caseJ04cOk &&
+    assert(risultatiUi.includes("trendPerLiveCheck"), "M0.4C live wiring") &&
+    assert(risultatiUi.includes("BloccoDiagnosiTrend"), "M0.4C live diagnosis UI") &&
+    assert(pannelloUi.includes("diagnosticaDeterministica"), "M0.4C campaign detail engine") &&
+    assert(pannelloUi.includes("evaluateTrend"), "M0.4C campaign detail trend") &&
+    assert(!pannelloUi.includes("azioniConsigliate"), "M0.4C no action engine change") &&
+    assert(risultatiUi.includes("azioniConsigliate"), "M0.4C actions still existing helper") &&
+    assert(!bloccoUi.includes("grid-cols-4"), "M0.4C diagnosis stacked not 4-col") &&
+    assert(!bloccoUi.includes("INSUFFICIENT_TREND_DATA"), "M0.4C no raw trend enum in UI") &&
+    assert(sameDaySaved.level === "INSUFFICIENT_TREND_DATA", "M0.4C same-day not doubled") &&
+    assert(instoreLabel.includes("proxy"), "M0.4C INSTORE label") &&
+    assert(retargetLabel === "Costo per risultato", "M0.4C RETARGETING label") &&
+    assert(ecomLabel === "CPA", "M0.4C ECOMMERCE CPA") &&
+    assert(
+      evidenzeDiagnosiBrevi(["CPL in aumento", "CTR in calo", "CPC in aumento", "extra"]).length === 3,
+      "M0.4C evidence max 3",
+    ) &&
+    assert(
+      legge("src/lib/control-room.ts").includes("export function azioniConsigliate"),
+      "M0.4C azioniConsigliate still present",
+    );
+
   sezione("UNIFIED SEMAPHORE", unifiedOk && bandeOk);
   sezione("CAMPAIGN CHECKS", campaignChecksOk);
   sezione("RLS", rlsOk);
@@ -1600,6 +2757,54 @@ Risultati di 1 gruppo di inserzioni,200,10`;
   sezione("M0.3B FUNNEL DERIVATION", m03bOk);
   sezione("M0.3C SCREENSHOT COUNTS", m03cOk);
   sezione("M0.3C.1 META CSV IMPORT", m03c1Ok);
+  sezione("M0.4A TREND ENGINE", m04aOk);
+  sezione("M0.4B TREND DIAGNOSIS", m04bOk);
+  sezione("M0.4C TREND UI", m04cOk);
+  console.log(`M0.4C CASE A: ${caseA04cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4C CASE B: ${caseB04cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4C CASE C: ${caseC04cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4C CASE D: ${caseD04cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4C CASE E: ${caseE04cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4C CASE F: ${caseF04cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4C CASE G: ${caseG04cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4C CASE H: ${caseH04cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4C CASE I: ${caseI04cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4C CASE J: ${caseJ04cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4B CASE A: ${caseA04bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4B CASE B: ${caseB04bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4B CASE C: ${caseC04bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4B CASE D: ${caseD04bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4B CASE E: ${caseE04bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4B CASE F: ${caseF04bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4B CASE G: ${caseG04bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4B CASE H: ${caseH04bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4B CASE I: ${caseI04bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4B CASE J: ${caseJ04bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4B CASE K: ${caseK04bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4B CASE L: ${caseL04bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4B CASE M: ${caseM04bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4B CASE N: ${caseN04bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4B CASE O: ${caseO04bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4B CASE P: ${caseP04bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4B CASE Q: ${caseQ04bOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE A: ${caseA04Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE B: ${caseB04Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE C: ${caseC04Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE D: ${caseD04Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE E: ${caseE04Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE F: ${caseF04Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE G: ${caseG04Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE H: ${caseH04Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE I: ${caseI04Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE J: ${caseJ04Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE K: ${caseK04Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE L: ${caseL04Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE M: ${caseM04Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE N: ${caseN04Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE O: ${caseO04Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE P: ${caseP04Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE Q: ${caseQ04Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4A CASE R: ${caseR04Ok ? "PASS" : "FAIL"}`);
   console.log(`M0.3C.1 CASE A: ${caseACsvOk ? "PASS" : "FAIL"}`);
   console.log(`M0.3C.1 CASE B: ${caseBCsvOk ? "PASS" : "FAIL"}`);
   console.log(`M0.3C.1 CASE C: ${caseCCsvOk ? "PASS" : "FAIL"}`);

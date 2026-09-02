@@ -19,10 +19,6 @@ import {
   calcolaHealthStatus,
   descrizioneLogControllo,
   diagnosticaDeterministica,
-  etichettaAreaDiagnosi,
-  etichettaCompleteness,
-  etichettaConfidenza,
-  etichettaTrend,
   formatEuro,
   normalizzaCtrDaApi,
   parseCtrInput,
@@ -31,7 +27,6 @@ import {
   priorityLabel,
   resolveThresholdFromCampaign,
   thresholdModeDaHealth,
-  trendVsPrecedente,
   type ControlRoomKpis,
 } from "@/lib/control-room";
 import { StatoChip, chipDaHealth } from "@/components/nuova-contatti/StatoChip";
@@ -61,6 +56,12 @@ import {
   ordinaRigheControlRoom,
 } from "@/components/risultati/ControlRoomOverview";
 import { StoricoControlli } from "@/components/risultati/StoricoControlli";
+import { BloccoDiagnosiTrend } from "@/components/risultati/BloccoDiagnosiTrend";
+import {
+  snapshotCheckLive,
+  testoAndamentoDiagnosi,
+  trendPerLiveCheck,
+} from "@/lib/campaign-trend";
 import {
   logErroreSupabaseDev,
   messaggioErroreSupabase,
@@ -564,12 +565,62 @@ function RisultatiPage() {
     [giorniAttiva, kpis.results],
   );
 
+  const giaSalvatoOggi = Boolean(
+    storicoChecks[0] && stessaGiornataLocale(storicoChecks[0].createdAt),
+  );
+
+  const trendLive = useMemo(() => {
+    const live = snapshotCheckLive({
+      campaignId: campagnaId || "live",
+      daysActive: parseNum(giorniAttiva),
+      spend: kpis.spend,
+      resultsCount: kpis.results,
+      primaryCost: economic.actual,
+      ctr: kpis.ctr,
+      cpm: kpis.cpm,
+      cpc: kpis.cpc,
+      frequency: kpis.frequency,
+      roas: kpis.roas,
+      clicks: kpis.clicks,
+      impressions: kpis.impressions,
+      healthStatus: health.status,
+      objective: economic.objective,
+      threshold: economic.threshold,
+      thresholdMode: thresholdModeDaHealth(economic.healthMode),
+      source:
+        importOrigin === "csv"
+          ? "CSV"
+          : importOrigin === "screenshot"
+            ? "SCREENSHOT"
+            : "MANUAL",
+    });
+    return trendPerLiveCheck(
+      storicoChecks,
+      live,
+      giaSalvatoOggi,
+      economic.objective,
+    );
+  }, [
+    campagnaId,
+    giorniAttiva,
+    kpis,
+    economic.actual,
+    economic.objective,
+    economic.threshold,
+    economic.healthMode,
+    health.status,
+    importOrigin,
+    storicoChecks,
+    giaSalvatoOggi,
+  ]);
+
   const diagnosis = useMemo(
     () =>
       diagnosticaDeterministica(kpis, health, economic, {
         datiLimitati: datiLimitati.show,
+        trend: trendLive,
       }),
-    [kpis, health, economic, datiLimitati.show],
+    [kpis, health, economic, datiLimitati.show, trendLive],
   );
 
   const actions = useMemo(
@@ -862,16 +913,18 @@ function RisultatiPage() {
   const haSelezione = Boolean(campagnaAttiva) || manuale;
   const mostraOverview = !campagnaId && !manuale;
   const metricLabel = economic.metricLabel;
-  const giaSalvatoOggi = Boolean(
-    storicoChecks[0] && stessaGiornataLocale(storicoChecks[0].createdAt),
+  const trendStoricoSalvato = useMemo(
+    () =>
+      storicoChecks.length > 0
+        ? trendPerLiveCheck(
+            storicoChecks,
+            storicoChecks[0]!,
+            true,
+            economic.objective,
+          )
+        : null,
+    [storicoChecks, economic.objective],
   );
-  const trendStorico =
-    storicoChecks.length >= 2
-      ? trendVsPrecedente(
-          storicoChecks[1].primaryCost,
-          storicoChecks[0].primaryCost,
-        )
-      : null;
 
   const righeOverview = useMemo(
     () =>
@@ -1662,26 +1715,11 @@ function RisultatiPage() {
               </p>
 
               {diagnosis.canDiagnose || diagnosis.signal === "dati_insufficienti" ? (
-                <div className="mt-4">
-                  <p className="text-xs font-medium text-[var(--ink-muted)]">
-                    {etichettaAreaDiagnosi(diagnosis.area)}
-                    {" · "}
-                    {etichettaConfidenza(diagnosis.confidence)}
-                    {" · "}
-                    {etichettaCompleteness(diagnosis.completeness)}
-                  </p>
-                  <p className="mt-2 text-sm font-medium text-[var(--ink)]">
-                    {diagnosis.title}
-                  </p>
-                  <p className="mt-2 text-sm leading-relaxed text-[var(--ink-muted)]">
-                    {diagnosis.body}
-                  </p>
-                  {diagnosis.hint ? (
-                    <p className="mt-3 rounded-xl bg-[var(--surface-hover)] px-3 py-2 text-xs text-[var(--ink-muted)]">
-                      {diagnosis.hint}
-                    </p>
-                  ) : null}
-                </div>
+                <BloccoDiagnosiTrend
+                  healthStatus={health.status}
+                  diagnosis={diagnosis}
+                  trend={trendLive}
+                />
               ) : null}
             </section>
 
@@ -1771,18 +1809,16 @@ function RisultatiPage() {
           <h2 className="text-lg font-medium text-[var(--ink)]">
             Storico controlli
           </h2>
-          {trendStorico ? (
-            <p className="text-sm text-[var(--ink-muted)]">
-              vs check precedente:{" "}
-              <span className="font-medium text-[var(--ink)]">
-                {etichettaTrend(trendStorico)}
-              </span>
+          {trendStoricoSalvato ? (
+            <p className="max-w-xl text-sm text-[var(--ink-muted)]">
+              {testoAndamentoDiagnosi(trendStoricoSalvato, undefined)}
             </p>
           ) : null}
         </div>
         <StoricoControlli
           checks={storicoChecks}
           metricLabel={metricLabel}
+          objective={economic.objective}
         />
       </section>
       </>

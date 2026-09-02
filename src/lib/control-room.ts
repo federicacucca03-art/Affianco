@@ -120,6 +120,15 @@ export type DiagnosisResult = {
   explanation: string;
   evidence: string[];
   completeness: MetricCompleteness;
+  /** Plain-text trend sentence. Empty when diagnosis ran without history. */
+  trendSummary: string;
+  contradictions: string[];
+};
+
+export type DiagnosisOptions = {
+  datiLimitati?: boolean;
+  /** M0.4B: omit to keep M0.2/M0.3 cross-sectional diagnosis. */
+  trend?: import("@/lib/campaign-trend").TrendEvaluation;
 };
 
 /**
@@ -653,17 +662,662 @@ export function diagnosisConfidenceReduced(
 }
 
 function packDiagnosis(
-  input: Omit<DiagnosisResult, "explanation"> & { explanation?: string },
+  input: Omit<DiagnosisResult, "explanation" | "trendSummary" | "contradictions"> & {
+    explanation?: string;
+    trendSummary?: string;
+    contradictions?: string[];
+  },
 ): DiagnosisResult {
   const explanation = input.explanation ?? input.body;
-  return { ...input, explanation };
+  return {
+    ...input,
+    explanation,
+    trendSummary: input.trendSummary ?? "",
+    contradictions: input.contradictions ?? [],
+  };
+}
+
+export function riassuntoAndamento(
+  trend: import("@/lib/campaign-trend").TrendEvaluation,
+  metricLabel: string,
+): string {
+  if (trend.level === "INSUFFICIENT_TREND_DATA") {
+    return "Servono almeno due controlli con lo stesso obiettivo per leggere un andamento.";
+  }
+  const label = metricLabel;
+  if (trend.level === "CONSISTENT_TREND") {
+    if (trend.primary.direction === "WORSENING") {
+      return `Il ${label} è aumentato negli ultimi due intervalli.`;
+    }
+    if (trend.primary.direction === "IMPROVING") {
+      return `Il ${label} sta migliorando da due controlli.`;
+    }
+  }
+  if (trend.primary.direction === "WORSENING") {
+    return `Rispetto al controllo precedente il ${label} è aumentato.`;
+  }
+  if (trend.primary.direction === "IMPROVING") {
+    return `Rispetto al controllo precedente il ${label} è diminuito.`;
+  }
+  if (trend.primary.direction === "STABLE") {
+    return `Rispetto al controllo precedente il ${label} è stabile.`;
+  }
+  return `Lo storico del ${label} non indica un andamento chiaro.`;
+}
+
+function trendMetric(
+  trend: import("@/lib/campaign-trend").TrendEvaluation,
+  key: import("@/lib/campaign-trend").HistoricalMetricKey,
+): import("@/lib/campaign-trend").MetricTrend | undefined {
+  if (key === "primary") return trend.primary;
+  return trend.diagnostics.find((item) => item.metric === key);
+}
+
+function capEvidenceLines(
+  trend: import("@/lib/campaign-trend").TrendEvaluation,
+): string[] {
+  const lines: string[] = [];
+  if (trend.caps.includes("SOURCE_CHANGE")) {
+    lines.push("Fonte dati cambiata tra gli ultimi controlli.");
+  }
+  if (trend.caps.includes("THRESHOLD_CHANGE")) {
+    lines.push("La soglia economica è cambiata.");
+  }
+  if (trend.caps.includes("UNEVEN_SPACING")) {
+    lines.push("I controlli non sono a distanza regolare.");
+  }
+  return lines;
+}
+
+function hasTrendConfidenceCap(
+  trend: import("@/lib/campaign-trend").TrendEvaluation,
+): boolean {
+  return (
+    trend.caps.includes("SOURCE_CHANGE") ||
+    trend.caps.includes("THRESHOLD_CHANGE") ||
+    trend.caps.includes("UNEVEN_SPACING")
+  );
+}
+
+function finalizeTrendConfidence(
+  desired: DiagnosisConfidence,
+  trend: import("@/lib/campaign-trend").TrendEvaluation,
+  health: HealthResult,
+): DiagnosisConfidence {
+  if (health.status === "INSUFFICIENT") return "LOW";
+  if (desired === "HIGH" && hasTrendConfidenceCap(trend)) return "MEDIUM";
+  return desired;
+}
+
+function isDir(
+  metric: import("@/lib/campaign-trend").MetricTrend | undefined,
+  direction: import("@/lib/campaign-trend").TrendDirection,
+): boolean {
+  return metric?.direction === direction;
+}
+
+function qualifiesHighTrend(input: {
+  trend: import("@/lib/campaign-trend").TrendEvaluation;
+  health: HealthResult;
+  namedPattern: boolean;
+  supportingAligned: number;
+  supportingConsistent: boolean;
+  contradictions: string[];
+}): boolean {
+  return (
+    input.namedPattern &&
+    input.trend.level === "CONSISTENT_TREND" &&
+    input.trend.primary.consistent === true &&
+    input.supportingAligned >= 2 &&
+    input.supportingConsistent &&
+    input.contradictions.length === 0 &&
+    input.health.status !== "INSUFFICIENT" &&
+    !hasTrendConfidenceCap(input.trend)
+  );
 }
 
 export function diagnosticaDeterministica(
   kpis: ControlRoomKpis,
   health: HealthResult,
   economic: EconomicContext,
-  options?: { datiLimitati?: boolean },
+  options?: DiagnosisOptions,
+): DiagnosisResult {
+  if (options?.trend) {
+    return diagnosticaConTrend(
+      kpis,
+      health,
+      economic,
+      options.trend,
+      options.datiLimitati,
+    );
+  }
+  return diagnosticaTrasversale(kpis, health, economic, options?.datiLimitati);
+}
+
+function diagnosticaConTrend(
+  kpis: ControlRoomKpis,
+  health: HealthResult,
+  economic: EconomicContext,
+  trend: import("@/lib/campaign-trend").TrendEvaluation,
+  datiLimitati?: boolean,
+): DiagnosisResult {
+  const completeness = valutaCompleteness(kpis, economic.objective);
+  const trendSummary = riassuntoAndamento(trend, economic.metricLabel);
+  const capLines = capEvidenceLines(trend);
+  const primary = trend.primary;
+  const ctrT = trendMetric(trend, "ctr");
+  const cpcT = trendMetric(trend, "cpc");
+  const cpmT = trendMetric(trend, "cpm");
+  const freqT = trendMetric(trend, "frequency");
+  const roasT = trendMetric(trend, "roas");
+  const crT = trendMetric(trend, "conversionRate");
+  const objective = economic.objective;
+  const metricLabel = economic.metricLabel;
+
+  const contradictions: string[] = [];
+  if (
+    isDir(primary, "WORSENING") &&
+    isDir(ctrT, "IMPROVING") &&
+    isDir(cpcT, "IMPROVING")
+  ) {
+    contradictions.push("Costo in aumento con CTR e CPC in miglioramento");
+  }
+  if (
+    freqT?.movement === "RISING" &&
+    isDir(ctrT, "WORSENING") &&
+    isDir(primary, "IMPROVING")
+  ) {
+    contradictions.push(
+      "Frequenza in crescita e CTR in calo, ma costo in miglioramento",
+    );
+  }
+  if (
+    objective === "ECOMMERCE" &&
+    isDir(primary, "WORSENING") &&
+    isDir(roasT, "IMPROVING")
+  ) {
+    contradictions.push("CPA in aumento e ROAS in miglioramento");
+  }
+
+  const crAvailable =
+    crT != null && crT.current != null && crT.previous != null;
+  const suppressAdMessage = contradictions.some((c) => c.includes("CTR e CPC"));
+  const suppressFatigue = contradictions.some((c) =>
+    c.includes("costo in miglioramento"),
+  );
+  const suppressHighEconomics = contradictions.some((c) =>
+    c.includes("ROAS in miglioramento"),
+  );
+
+  const base = {
+    completeness,
+    trendSummary,
+    contradictions,
+  };
+
+  if (health.status === "INSUFFICIENT") {
+    return packDiagnosis({
+      ...base,
+      signal: "dati_insufficienti",
+      title: "Dati ancora insufficienti",
+      body: "Dati ancora insufficienti per una diagnosi affidabile.",
+      canDiagnose: false,
+      hint: "Continua a raccogliere dati prima di cambiare budget o creatività.",
+      area: "DATA_INSUFFICIENT",
+      confidence: "LOW",
+      evidence: capLines,
+    });
+  }
+
+  if (datiLimitati) {
+    return packDiagnosis({
+      ...base,
+      signal: "dati_insufficienti",
+      title: "Dati ancora limitati",
+      body: "La campagna ha ancora pochi giorni o pochi risultati. Eventuali segnali diagnostici restano indicativi.",
+      canDiagnose: true,
+      hint: "Verifica di nuovo tra qualche giorno prima di cambiare struttura o budget.",
+      area: "DATA_INSUFFICIENT",
+      confidence: "LOW",
+      evidence: capLines,
+    });
+  }
+
+  if (trend.level === "INSUFFICIENT_TREND_DATA") {
+    const cross = diagnosticaTrasversale(kpis, health, economic, datiLimitati);
+    return packDiagnosis({
+      ...cross,
+      trendSummary,
+      contradictions,
+      confidence: "LOW",
+      evidence: [...cross.evidence, ...capLines],
+    });
+  }
+
+  if (health.status === "GREEN" || health.status === "YELLOW") {
+    const worsening = isDir(primary, "WORSENING");
+    const ecommerceTension =
+      objective === "ECOMMERCE" &&
+      (isDir(primary, "STABLE") || isDir(primary, "IMPROVING")) &&
+      isDir(roasT, "WORSENING");
+    if (ecommerceTension) {
+      return packDiagnosis({
+        ...base,
+        signal: "economics_roas",
+        title: "Segnale economico sul ROAS",
+        body: "Il costo per acquisto non sta peggiorando, ma il ROAS è in calo. Verifica valore medio ordine e marginalità, senza trattare la campagna come un fallimento.",
+        canDiagnose: true,
+        hint: "Lo stato resta sul CPA. Il ROAS è un segnale economico secondario.",
+        area: "ECONOMICS",
+        confidence: finalizeTrendConfidence("MEDIUM", trend, health),
+        evidence: [
+          `${metricLabel} stabile o in miglioramento`,
+          "ROAS in calo",
+          ...capLines,
+        ],
+      });
+    }
+    const watchBody =
+      health.status === "GREEN" && worsening
+        ? `Il ${metricLabel} è ancora entro la soglia, ma sta aumentando.`
+        : health.status === "YELLOW" && worsening
+          ? `I costi sono ancora entro soglia, ma ${metricLabel.toLowerCase()} sta aumentando.`
+          : health.status === "GREEN"
+            ? health.mode === "efficiency"
+              ? "Il CPM è sotto il riferimento di piano. La campagna è in uno stato di efficienza coerente con il piano. Continua a monitorare prima di intervenire."
+              : "La campagna è entro la soglia. Continua a monitorare prima di intervenire."
+            : "I costi sono ancora entro soglia ma senza margine ampio. Meglio osservare prima di aumentare la spesa.";
+    const watchConfidence: DiagnosisConfidence =
+      worsening && trend.level === "CONSISTENT_TREND" ? "MEDIUM" : "LOW";
+    return packDiagnosis({
+      ...base,
+      signal: health.status === "YELLOW" ? "vicino_soglia" : "sotto_soglia",
+      title:
+        health.status === "YELLOW"
+          ? "Vicino al limite sostenibile"
+          : health.mode === "efficiency"
+            ? "CPM sotto il piano"
+            : "Entro la soglia economica",
+      body: watchBody,
+      canDiagnose: true,
+      hint: "Nessun intervento strutturale necessario solo per questo stato.",
+      area: "NO_CLEAR_SIGNAL",
+      confidence: finalizeTrendConfidence(watchConfidence, trend, health),
+      evidence: [
+        worsening ? `${metricLabel} in aumento` : "Outcome entro soglia",
+        ...capLines,
+      ],
+    });
+  }
+
+  if (health.status === "RED" && isDir(primary, "IMPROVING")) {
+    return packDiagnosis({
+      ...base,
+      signal: "soglia_superata",
+      title: "Costo fuori soglia, in miglioramento",
+      body: `Il ${metricLabel} resta sopra soglia, ma sta migliorando.`,
+      canDiagnose: true,
+      hint: "Evita di azzerare ciò che potrebbe stare recuperando. Continua a monitorare.",
+      area: "NO_CLEAR_SIGNAL",
+      confidence: finalizeTrendConfidence(
+        trend.level === "CONSISTENT_TREND" ? "MEDIUM" : "LOW",
+        trend,
+        health,
+      ),
+      evidence: [
+        `${metricLabel} in calo rispetto ai controlli precedenti`,
+        ...capLines,
+      ],
+    });
+  }
+
+  type Named =
+    | "AD_MESSAGE"
+    | "POST_CLICK"
+    | "CREATIVE_FATIGUE"
+    | "DELIVERY"
+    | "ECONOMICS"
+    | null;
+
+  const conversionObjectives =
+    objective === "LEADS" ||
+    objective === "BOOKINGS" ||
+    objective === "IN_STORE" ||
+    objective === "RETARGETING";
+
+  let named: Named = null;
+  let supportingAligned = 0;
+  let supportingConsistent = false;
+
+  if (objective === "ECOMMERCE" && isDir(roasT, "WORSENING")) {
+    if (isDir(primary, "WORSENING") && !suppressHighEconomics) {
+      named = "ECONOMICS";
+      supportingAligned = 1;
+      supportingConsistent = roasT?.consistent === true;
+      if (isDir(crT, "WORSENING")) {
+        supportingAligned += 1;
+        supportingConsistent =
+          supportingConsistent && crT?.consistent === true;
+      }
+    } else if (
+      (isDir(primary, "STABLE") || isDir(primary, "IMPROVING")) &&
+      isDir(roasT, "WORSENING")
+    ) {
+      named = "ECONOMICS";
+      supportingAligned = 1;
+      supportingConsistent = false;
+    }
+  }
+
+  if (
+    named == null &&
+    !suppressFatigue &&
+    isDir(primary, "WORSENING") &&
+    freqT?.movement === "RISING" &&
+    isDir(ctrT, "WORSENING")
+  ) {
+    named = "CREATIVE_FATIGUE";
+    supportingAligned = 2;
+    supportingConsistent =
+      freqT?.consistent === true && ctrT?.consistent === true;
+  }
+
+  if (
+    named == null &&
+    conversionObjectives &&
+    !suppressAdMessage &&
+    isDir(primary, "WORSENING") &&
+    isDir(ctrT, "WORSENING") &&
+    isDir(cpcT, "WORSENING")
+  ) {
+    named = "AD_MESSAGE";
+    supportingAligned = 2;
+    supportingConsistent =
+      ctrT?.consistent === true && cpcT?.consistent === true;
+  }
+
+  if (
+    named == null &&
+    conversionObjectives &&
+    isDir(primary, "WORSENING") &&
+    crAvailable &&
+    isDir(crT, "WORSENING") &&
+    (isDir(ctrT, "STABLE") || isDir(ctrT, "IMPROVING")) &&
+    (isDir(cpcT, "STABLE") || isDir(cpcT, "IMPROVING"))
+  ) {
+    named = "POST_CLICK";
+    supportingAligned = 2;
+    supportingConsistent = crT?.consistent === true;
+  }
+
+  if (
+    named == null &&
+    objective !== "AWARENESS" &&
+    isDir(primary, "WORSENING") &&
+    cpmT?.movement === "RISING" &&
+    isDir(cpcT, "WORSENING") &&
+    isDir(ctrT, "STABLE")
+  ) {
+    named = "DELIVERY";
+    supportingAligned = 2;
+    supportingConsistent =
+      cpmT?.consistent === true && cpcT?.consistent === true;
+  }
+
+  if (
+    named == null &&
+    objective === "AWARENESS" &&
+    isDir(primary, "WORSENING") &&
+    freqT?.movement === "RISING"
+  ) {
+    named = isDir(ctrT, "WORSENING") ? "CREATIVE_FATIGUE" : "DELIVERY";
+    supportingAligned = isDir(ctrT, "WORSENING") ? 2 : 1;
+    supportingConsistent =
+      freqT?.consistent === true &&
+      (named === "DELIVERY" || ctrT?.consistent === true);
+  }
+
+  const highOk = qualifiesHighTrend({
+    trend,
+    health,
+    namedPattern: named != null,
+    supportingAligned,
+    supportingConsistent,
+    contradictions: named === "ECONOMICS" && !suppressHighEconomics ? [] : contradictions,
+  });
+
+  if (suppressAdMessage) {
+    return packDiagnosis({
+      ...base,
+      signal: "soglia_superata",
+      title: "Costo fuori soglia, causa non attribuibile",
+      body: "Il costo sta peggiorando, ma le metriche non indicano una causa unica.",
+      canDiagnose: true,
+      hint: "Non forzare una causa: i segnali a monte del click non sono coerenti.",
+      area: "NO_CLEAR_SIGNAL",
+      confidence: "LOW",
+      evidence: [
+        `${metricLabel} in aumento`,
+        "CTR in miglioramento",
+        "CPC in calo",
+        ...capLines,
+      ],
+    });
+  }
+
+  if (suppressFatigue) {
+    return packDiagnosis({
+      ...base,
+      signal: "soglia_superata",
+      title: "Segnali non coerenti con un affaticamento",
+      body: "Frequenza e CTR si muovono in modo che potrebbe sembrare affaticamento, ma il costo è in miglioramento. Non è una diagnosi di saturazione.",
+      canDiagnose: true,
+      hint: "Non attribuire un affaticamento creativo con questo quadro.",
+      area: "NO_CLEAR_SIGNAL",
+      confidence: "LOW",
+      evidence: [
+        "Frequenza in crescita",
+        "CTR in calo",
+        `${metricLabel} in miglioramento`,
+        ...capLines,
+      ],
+    });
+  }
+
+  if (named === "AD_MESSAGE") {
+    const desired: DiagnosisConfidence = highOk
+      ? "HIGH"
+      : "MEDIUM";
+    const conf = finalizeTrendConfidence(desired, trend, health);
+    const high = conf === "HIGH";
+    return packDiagnosis({
+      ...base,
+      signal: "creativita_messaggio",
+      title: "Possibile problema a monte del click",
+      body: high
+        ? "I segnali sono fortemente coerenti con un possibile problema a monte del click."
+        : "I segnali possono indicare un problema a monte del click. Un solo scarto, o dati parziali, non basta per attribuire il problema alla creatività.",
+      canDiagnose: true,
+      hint: "Non è una prova che la creatività o l'audience siano sbagliate.",
+      area: "AD_MESSAGE",
+      confidence: conf,
+      evidence: [
+        primary.consistent
+          ? `${metricLabel} in aumento su 2 intervalli`
+          : `${metricLabel} in aumento`,
+        "CTR in calo",
+        "CPC in aumento",
+        ...capLines,
+      ],
+    });
+  }
+
+  if (named === "CREATIVE_FATIGUE") {
+    const desired: DiagnosisConfidence =
+      highOk && objective !== "AWARENESS" ? "HIGH" : "MEDIUM";
+    const conf = finalizeTrendConfidence(desired, trend, health);
+    const high = conf === "HIGH";
+    return packDiagnosis({
+      ...base,
+      signal: "fatica_creativa",
+      title: "Possibile affaticamento creativo",
+      body: high
+        ? "I segnali sono fortemente coerenti con un possibile affaticamento creativo."
+        : objective === "AWARENESS"
+          ? "Il CPM è in aumento e la frequenza cresce. È un'ipotesi cauta su delivery o creatività, non una saturazione dell'audience."
+          : "Costo in aumento, frequenza in crescita e CTR in calo: i segnali possono essere coerenti con un possibile affaticamento creativo.",
+      canDiagnose: true,
+      hint: "Non è una prova di saturazione del pubblico.",
+      area: "CREATIVE_FATIGUE",
+      confidence: conf,
+      evidence: [
+        `${metricLabel} in aumento`,
+        "Frequenza in crescita",
+        ...(isDir(ctrT, "WORSENING") ? ["CTR in calo"] : []),
+        ...capLines,
+      ],
+    });
+  }
+
+  if (named === "POST_CLICK") {
+    const desired: DiagnosisConfidence = highOk ? "HIGH" : "MEDIUM";
+    const conf = finalizeTrendConfidence(desired, trend, health);
+    const high = conf === "HIGH";
+    return packDiagnosis({
+      ...base,
+      signal: "conversione_post_click",
+      title: "Possibile perdita dopo il click",
+      body: high
+        ? "I segnali sono fortemente coerenti con una possibile perdita dopo il click. Il traffico non mostra un peggioramento evidente a monte, mentre una quota minore dei click genera risultati."
+        : "Il traffico non mostra un peggioramento evidente a monte, mentre una quota minore dei click genera risultati.",
+      canDiagnose: true,
+      hint: "Non è una conclusione sulla landing: è un’ipotesi da verificare su form, offerta e flusso.",
+      area: "POST_CLICK",
+      confidence: conf,
+      evidence: [
+        `${metricLabel} in aumento`,
+        "CTR stabile o in miglioramento",
+        "CPC stabile o in miglioramento",
+        "Tasso click → risultato in calo",
+        ...capLines,
+      ],
+    });
+  }
+
+  if (named === "DELIVERY") {
+    const conf = finalizeTrendConfidence("MEDIUM", trend, health);
+    return packDiagnosis({
+      ...base,
+      signal: "asta_audience",
+      title: "Possibile pressione in delivery",
+      body:
+        objective === "AWARENESS"
+          ? "Il CPM è in aumento e la frequenza cresce. I segnali restano cauti: non indicano da soli una saturazione."
+          : "Il costo elevato potrebbe dipendere dalla fase di delivery o dalla qualità del traffico. Il CTR non è il segnale debole.",
+      canDiagnose: true,
+      hint: "Non è una prova che l'audience sia sbagliata.",
+      area: "DELIVERY",
+      confidence: conf,
+      evidence: [
+        `${metricLabel} in aumento`,
+        ...(cpmT?.movement === "RISING" ? ["CPM in crescita"] : []),
+        ...(freqT?.movement === "RISING" ? ["Frequenza in crescita"] : []),
+        ...(isDir(cpcT, "WORSENING") ? ["CPC in aumento"] : []),
+        ...capLines,
+      ],
+    });
+  }
+
+  if (named === "ECONOMICS") {
+    const desired: DiagnosisConfidence =
+      highOk && !suppressHighEconomics ? "HIGH" : "MEDIUM";
+    const conf = finalizeTrendConfidence(
+      suppressHighEconomics ? "LOW" : desired,
+      trend,
+      health,
+    );
+    const cpaWorse = isDir(primary, "WORSENING");
+    return packDiagnosis({
+      ...base,
+      signal: "economics_roas",
+      title: "Segnale economico sul ROAS",
+      body: cpaWorse
+        ? conf === "HIGH"
+          ? "I segnali sono fortemente coerenti con un peggioramento economico: costo per acquisto e ROAS si muovono insieme in modo sfavorevole."
+          : "Il costo per acquisto e il ROAS stanno entrambi peggiorando. Verifica valore medio ordine e marginalità."
+        : "Il costo per acquisto non indica un peggioramento della campagna, ma il ROAS è in calo. Verifica valore medio ordine e marginalità.",
+      canDiagnose: true,
+      hint: "Lo stato resta sul CPA. Il ROAS è un segnale economico secondario.",
+      area: "ECONOMICS",
+      confidence: conf,
+      evidence: [
+        cpaWorse
+          ? `${metricLabel} in aumento`
+          : `${metricLabel} stabile o in miglioramento`,
+        "ROAS in calo",
+        ...capLines,
+      ],
+    });
+  }
+
+  if (suppressHighEconomics) {
+    return packDiagnosis({
+      ...base,
+      signal: "soglia_superata",
+      title: "Segnali economici non allineati",
+      body: "Il costo sta peggiorando, ma le metriche non indicano una causa unica.",
+      canDiagnose: true,
+      hint: "CPA e ROAS si muovono in direzioni opposte: non attribuire un unico verdetto economico.",
+      area: "NO_CLEAR_SIGNAL",
+      confidence: "LOW",
+      evidence: [
+        `${metricLabel} in aumento`,
+        "ROAS in miglioramento",
+        ...capLines,
+      ],
+    });
+  }
+
+  if (
+    isDir(primary, "WORSENING") &&
+    trend.level === "CONSISTENT_TREND" &&
+    health.status === "RED"
+  ) {
+    return packDiagnosis({
+      ...base,
+      signal: "soglia_superata",
+      title: "Costo fuori soglia",
+      body: `Il ${metricLabel} è sopra la soglia e sta aumentando, ma le metriche non isolano una causa unica.`,
+      canDiagnose: true,
+      hint: "Aggiungi o completa CTR, CPC, CPM e frequenza per capire dove intervenire.",
+      area: "NO_CLEAR_SIGNAL",
+      confidence: finalizeTrendConfidence("MEDIUM", trend, health),
+      evidence: [
+        primary.consistent
+          ? `${metricLabel} in aumento su 2 intervalli`
+          : `${metricLabel} in aumento`,
+        ...capLines,
+      ],
+    });
+  }
+
+  const fallback = diagnosticaTrasversale(kpis, health, economic, datiLimitati);
+  const capped: DiagnosisConfidence =
+    fallback.confidence === "HIGH" ? "MEDIUM" : fallback.confidence;
+  return packDiagnosis({
+    ...fallback,
+    trendSummary,
+    contradictions,
+    confidence: capped,
+    evidence: [...fallback.evidence, ...capLines],
+  });
+}
+
+function diagnosticaTrasversale(
+  kpis: ControlRoomKpis,
+  health: HealthResult,
+  economic: EconomicContext,
+  datiLimitati?: boolean,
 ): DiagnosisResult {
   const completeness = valutaCompleteness(kpis, economic.objective);
   const { ctr, cpc, frequency } = kpis;
@@ -699,7 +1353,7 @@ export function diagnosticaDeterministica(
     });
   }
 
-  if (options?.datiLimitati && hasFunnelSignals) {
+  if (datiLimitati && hasFunnelSignals) {
     return packDiagnosis({
       ...base,
       signal: "dati_insufficienti",

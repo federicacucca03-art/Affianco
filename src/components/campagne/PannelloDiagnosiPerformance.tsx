@@ -1,25 +1,52 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Campagna } from "@/types/campagne";
 import {
-  etichettaHealth,
+  buildEconomicContext,
+  calcolaHealthStatus,
+  diagnosticaDeterministica,
   etichettaMetricaPrimaria,
-  etichettaSegnaleDiagnosi,
-  etichettaTrend,
   formatDataCheck,
   formatEuro,
-  trendVsPrecedente,
+  type ControlRoomKpis,
 } from "@/lib/control-room";
-import { StatoChip, chipDaHealth } from "@/components/nuova-contatti/StatoChip";
 import { normalizzaObjective } from "@/types/campagne";
 import {
   leggiChecksCampagna,
   type CampaignCheck,
 } from "@/lib/campaign-checks-db";
 import { StoricoControlli } from "@/components/risultati/StoricoControlli";
+import { BloccoDiagnosiTrend } from "@/components/risultati/BloccoDiagnosiTrend";
+import { evaluateTrend } from "@/lib/campaign-trend";
+import { deriveFunnelMetrics } from "@/lib/funnel-metrics";
 import { logErroreSupabaseDev } from "@/lib/supabase-errori";
+
+function kpisDaCheck(check: CampaignCheck): ControlRoomKpis {
+  const funnel = deriveFunnelMetrics({
+    spend: check.spend,
+    results: check.resultsCount,
+    clicks: check.clicks,
+    impressions: check.impressions,
+    manualCtr: check.ctr,
+    manualCpc: check.cpc,
+    manualCpm: check.cpm,
+  });
+  return {
+    spend: check.spend,
+    results: check.resultsCount,
+    costPerResult: check.primaryCost,
+    ctr: funnel.ctr,
+    cpm: funnel.cpm,
+    cpc: funnel.cpc,
+    frequency: check.frequency,
+    roas: check.roas,
+    clicks: check.clicks,
+    impressions: check.impressions,
+    conversionRate: funnel.conversionRate,
+  };
+}
 
 export function PannelloDiagnosiPerformance({
   campagna,
@@ -57,13 +84,40 @@ export function PannelloDiagnosiPerformance({
   }, [campagna.id]);
 
   const ultimo = checks[0] ?? null;
-  const precedente = checks[1] ?? null;
   const objective = normalizzaObjective(campagna.objective);
   const metricLabel = etichettaMetricaPrimaria(objective);
-  const trend = precedente
-    ? trendVsPrecedente(precedente.primaryCost, ultimo?.primaryCost)
-    : null;
+
+  const trend = useMemo(
+    () => (checks.length > 0 ? evaluateTrend(checks, objective) : null),
+    [checks, objective],
+  );
+
+  const diagnosisLive = useMemo(() => {
+    if (!ultimo || !trend) return null;
+    const kpis = kpisDaCheck(ultimo);
+    const economic = buildEconomicContext(
+      campagna,
+      kpis,
+      ultimo.threshold,
+      objective,
+    );
+    const health = calcolaHealthStatus(
+      economic.actual,
+      economic.threshold,
+      economic.healthMode,
+      {
+        daysActive: ultimo.daysActive,
+        resultsCount: kpis.results,
+      },
+    );
+    const diagnosis = diagnosticaDeterministica(kpis, health, economic, {
+      trend,
+    });
+    return { health, diagnosis };
+  }, [ultimo, trend, campagna, objective]);
+
   const nextAction = ultimo?.actions[0]?.text ?? null;
+  const healthStatus = ultimo?.healthStatus ?? diagnosisLive?.health.status;
 
   return (
     <div className="mt-6 space-y-6">
@@ -94,7 +148,7 @@ export function PannelloDiagnosiPerformance({
           </p>
         ) : errore ? (
           <p className="mt-5 text-sm text-[#B42318]">{errore}</p>
-        ) : !ultimo ? (
+        ) : !ultimo || !healthStatus || !diagnosisLive ? (
           <div className="mt-5 rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-4 py-5">
             <p className="text-sm font-medium text-[var(--ink)]">
               Mai controllata
@@ -108,32 +162,13 @@ export function PannelloDiagnosiPerformance({
           <>
             <div className="mt-5 rounded-xl bg-white px-4 py-4 shadow-[var(--shadow-card)]">
               <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-                Stato
+                Ultimo controllo · {formatDataCheck(ultimo.createdAt)}
               </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <StatoChip
-                  kind={chipDaHealth(ultimo.healthStatus)}
-                  label={etichettaHealth(ultimo.healthStatus)}
-                />
-                <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-                  Ultimo controllo · {formatDataCheck(ultimo.createdAt)}
-                </p>
-              </div>
-              {ultimo.signal ? (
-                <div className="mt-3">
-                  <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-                    Diagnosi
-                  </p>
-                  <p className="mt-1 text-sm text-[var(--ink)]">
-                    {etichettaSegnaleDiagnosi(ultimo.signal)}
-                  </p>
-                </div>
-              ) : null}
-              {trend ? (
-                <p className="mt-2 text-xs text-[var(--ink-muted)]">
-                  vs check precedente: {etichettaTrend(trend)}
-                </p>
-              ) : null}
+              <BloccoDiagnosiTrend
+                healthStatus={ultimo.healthStatus}
+                diagnosis={diagnosisLive.diagnosis}
+                trend={trend}
+              />
             </div>
 
             <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -194,7 +229,11 @@ export function PannelloDiagnosiPerformance({
         <h3 className="text-sm font-medium text-[var(--ink)]">
           Storico controlli
         </h3>
-        <StoricoControlli checks={checks} metricLabel={metricLabel} />
+        <StoricoControlli
+          checks={checks}
+          metricLabel={metricLabel}
+          objective={objective}
+        />
       </section>
     </div>
   );
