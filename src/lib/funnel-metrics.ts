@@ -90,6 +90,85 @@ export function parseOptionalNonNegativeInteger(raw: string): ParseCountResult {
   return { ok: true, value: n };
 }
 
+/**
+ * Conteggio da screenshot. Integer | null.
+ * Supporta 100, 1.000, 1,000, 10.000, 10,000.
+ * Decimali significativi (es. 100.5) → null, senza arrotondare.
+ * Abbreviazioni 1K / 1.2K / 1M → null (euristica troppo fragile).
+ */
+export function parseScreenshotCount(raw: unknown): number | null {
+  if (raw == null || raw === "") return null;
+  if (typeof raw === "number") {
+    if (!Number.isFinite(raw) || raw < 0 || !Number.isInteger(raw)) return null;
+    return raw;
+  }
+  if (typeof raw !== "string") return null;
+  const s = raw.trim().replace(/[\s\u00a0]/g, "");
+  if (!s || s.startsWith("-")) return null;
+  if (/[eEkKmMbB]/.test(s)) return null;
+
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  let normalized: string;
+
+  if (lastComma >= 0 && lastDot >= 0) {
+    const decimalIsComma = lastComma > lastDot;
+    normalized = decimalIsComma
+      ? s.replace(/\./g, "").replace(",", ".")
+      : s.replace(/,/g, "");
+  } else if (lastComma >= 0) {
+    const parts = s.split(",");
+    const last = parts[parts.length - 1] ?? "";
+    if (parts.length > 2) {
+      if (!parts.every((p, i) => (i === 0 ? /^\d+$/.test(p) : /^\d{3}$/.test(p)))) {
+        return null;
+      }
+      normalized = s.replace(/,/g, "");
+    } else if (last.length === 3 && /^\d+$/.test(last)) {
+      normalized = s.replace(/,/g, "");
+    } else if (last.length <= 2) {
+      normalized = s.replace(",", ".");
+    } else {
+      return null;
+    }
+  } else if (lastDot >= 0) {
+    const parts = s.split(".");
+    const last = parts[parts.length - 1] ?? "";
+    if (parts.length > 2) {
+      if (!parts.every((p, i) => (i === 0 ? /^\d+$/.test(p) : /^\d{3}$/.test(p)))) {
+        return null;
+      }
+      normalized = s.replace(/\./g, "");
+    } else if (last.length === 3 && /^\d+$/.test(last)) {
+      normalized = s.replace(/\./g, "");
+    } else if (last.length <= 2) {
+      normalized = s;
+    } else {
+      return null;
+    }
+  } else {
+    normalized = s;
+  }
+
+  if (!/^\d+(\.\d+)?$/.test(normalized)) return null;
+  const n = Number(normalized);
+  if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) return null;
+  return n;
+}
+
+export function conteggiFormDaScreenshot(raw: {
+  clicks?: unknown;
+  impressions?: unknown;
+}): { clicks: string; impressions: string; apriFunnel: boolean } {
+  const clicks = parseScreenshotCount(raw.clicks);
+  const impressions = parseScreenshotCount(raw.impressions);
+  return {
+    clicks: clicks == null ? "" : String(clicks),
+    impressions: impressions == null ? "" : String(impressions),
+    apriFunnel: clicks != null || impressions != null,
+  };
+}
+
 export function avvisiConteggiFunnel(
   clicks: number | null,
   impressions: number | null,

@@ -7,6 +7,7 @@ import {
   ImagePlus,
   Loader2,
   Sparkles,
+  FileUp,
 } from "lucide-react";
 import { BENCHMARK_NAZIONALI } from "@/data/benchmarks-nazionali";
 import { etichettaObiettivo } from "@/lib/pre-lancio-check";
@@ -49,6 +50,7 @@ import {
 import { logControlloPerformanceSalvato } from "@/lib/campaign-logs";
 import {
   avvisiConteggiFunnel,
+  conteggiFormDaScreenshot,
   deriveFunnelMetrics,
   etichettaTassoClickRisultato,
   formatFunnelPercent,
@@ -68,11 +70,20 @@ import type { Campagna, CampagnaObjective } from "@/types/campagne";
 import { normalizzaObjective } from "@/types/campagne";
 import type { ScreenshotAnalysisResult } from "@/types/screenshot-analysis";
 import { getCampaigns, type SavedCampaign } from "@/utils/clientStorage";
+import {
+  etichettaRigaMetaCsv,
+  kpiFormDaRigaMeta,
+  parseAdsManagerCsv,
+  validaFileCsvMeta,
+  type MetaCsvMappedRow,
+} from "@/lib/meta-csv";
 
 const inputClass =
   "w-full rounded-xl border border-[var(--border)] bg-white px-3.5 py-2.5 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--ink-muted)] focus:border-[var(--accent)]";
 
-type InputMode = "kpi" | "screenshot";
+type InputMode = "kpi" | "import";
+type ImportTab = "screenshot" | "csv";
+type ImportOrigin = "screenshot" | "csv" | null;
 
 function inizialiDaNome(nome: string): string {
   const parti = nome.trim().split(/\s+/).filter(Boolean);
@@ -250,6 +261,7 @@ function campiBloccoDiagnostica(
 
 function RisultatiPage() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   const userIdRef = useRef<string | null>(null);
   const searchParams = useSearchParams();
@@ -279,6 +291,8 @@ function RisultatiPage() {
   const [giorniAttiva, setGiorniAttiva] = useState("5");
 
   const [inputMode, setInputMode] = useState<InputMode>("kpi");
+  const [importTab, setImportTab] = useState<ImportTab>("screenshot");
+  const [importOrigin, setImportOrigin] = useState<ImportOrigin>(null);
   const [kpiForm, setKpiForm] = useState(emptyKpiStrings);
 
   const [anteprima, setAnteprima] = useState<string | null>(null);
@@ -296,6 +310,11 @@ function RisultatiPage() {
     null,
   );
   const [okSalvataggio, setOkSalvataggio] = useState<string | null>(null);
+  const [funnelAperto, setFunnelAperto] = useState(false);
+  const [erroreCsv, setErroreCsv] = useState<string | null>(null);
+  const [feedbackCsv, setFeedbackCsv] = useState<string | null>(null);
+  const [righeCsv, setRigheCsv] = useState<MetaCsvMappedRow[]>([]);
+  const [trascinandoCsv, setTrascinandoCsv] = useState(false);
 
   const caricaLista = useCallback(async () => {
     setCaricamentoCampagne(true);
@@ -346,6 +365,7 @@ function RisultatiPage() {
       setImageBase64(null);
       setErroreAi(null);
       setInputMode("kpi");
+      setFunnelAperto(false);
     }
     userIdRef.current = uid;
   }, [user?.id]);
@@ -358,6 +378,7 @@ function RisultatiPage() {
     setImageBase64(null);
     setErroreAi(null);
     setInputMode("kpi");
+    setFunnelAperto(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset solo all'attivazione manuale
   }, [manuale]);
 
@@ -577,6 +598,12 @@ function RisultatiPage() {
     setNotaBuyer("");
     setErroreSalvataggio(null);
     setOkSalvataggio(null);
+    setFunnelAperto(false);
+    setImportOrigin(null);
+    setErroreCsv(null);
+    setFeedbackCsv(null);
+    setRigheCsv([]);
+    setImportTab("screenshot");
   }, []);
 
   function selezionaCampagna(id: string) {
@@ -615,6 +642,7 @@ function RisultatiPage() {
 
   function applicaKpiDaScreenshot(analisi: ScreenshotAnalysisResult) {
     const ctrNorm = normalizzaCtrDaApi(analisi.ctr);
+    const conteggi = conteggiFormDaScreenshot(analisi);
     setKpiForm({
       spend: analisi.spesaTotale > 0 ? String(analisi.spesaTotale) : "",
       results: analisi.risultati > 0 ? String(analisi.risultati) : "",
@@ -629,9 +657,59 @@ function RisultatiPage() {
       frequency: analisi.frequenza > 0 ? String(analisi.frequenza) : "",
       roas:
         analisi.roas != null && analisi.roas > 0 ? String(analisi.roas) : "",
-      clicks: "",
-      impressions: "",
+      clicks: conteggi.clicks,
+      impressions: conteggi.impressions,
     });
+    setFunnelAperto(conteggi.apriFunnel);
+    setImportOrigin("screenshot");
+    setFeedbackCsv(null);
+    setRigheCsv([]);
+  }
+
+  function applicaRigaCsv(row: MetaCsvMappedRow) {
+    const form = kpiFormDaRigaMeta(row);
+    setKpiForm(form);
+    setFunnelAperto(form.clicks !== "" || form.impressions !== "");
+    setImportOrigin("csv");
+    setAnalisiAi(null);
+    setRigheCsv([]);
+    setErroreCsv(null);
+    setFeedbackCsv(
+      `CSV importato · ${row.recognizedCount} metriche riconosciute`,
+    );
+    setInputMode("kpi");
+  }
+
+  async function gestisciFileCsv(file: File | undefined) {
+    if (!file) return;
+    const fileErr = validaFileCsvMeta(file);
+    if (fileErr) {
+      setErroreCsv(fileErr);
+      setRigheCsv([]);
+      return;
+    }
+    setErroreCsv(null);
+    try {
+      const text = await file.text();
+      const parsed = parseAdsManagerCsv(text);
+      if (!parsed.ok) {
+        setErroreCsv(parsed.error);
+        setRigheCsv([]);
+        return;
+      }
+      if (parsed.needsSelection) {
+        setRigheCsv(parsed.dataRows);
+        setFeedbackCsv("Il file contiene più righe. Scegli quale importare.");
+        setErroreCsv(null);
+        return;
+      }
+      if (parsed.autoRow) {
+        applicaRigaCsv(parsed.autoRow);
+      }
+    } catch {
+      setErroreCsv("Non riesco a leggere questo CSV.");
+      setRigheCsv([]);
+    }
   }
 
   async function analizzaScreenshot() {
@@ -742,7 +820,12 @@ function RisultatiPage() {
         objective: economic.objective,
         threshold: economic.threshold,
         thresholdMode: thresholdModeDaHealth(economic.healthMode),
-        source: analisiAi ? "SCREENSHOT" : "MANUAL",
+        source:
+          importOrigin === "csv"
+            ? "CSV"
+            : importOrigin === "screenshot" || analisiAi
+              ? "SCREENSHOT"
+              : "MANUAL",
       });
       setStoricoChecks((prev) => [salvato, ...prev].slice(0, 8));
       setUltimiChecks((prev) => {
@@ -1169,14 +1252,14 @@ function RisultatiPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setInputMode("screenshot")}
+                  onClick={() => setInputMode("import")}
                   className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                    inputMode === "screenshot"
+                    inputMode === "import"
                       ? "bg-[var(--accent-soft)] text-[var(--accent)]"
                       : "bg-[var(--surface-hover)] text-[var(--ink-muted)]"
                   }`}
                 >
-                  Analizza screenshot Ads Manager
+                  Importa da Ads Manager
                 </button>
               </div>
 
@@ -1255,7 +1338,15 @@ function RisultatiPage() {
                       {funnelMetrics.mismatches.map((m) => m.message).join(" ")}
                     </p>
                   ) : null}
-                  <details className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+                  <details
+                    className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
+                    open={funnelAperto}
+                    onToggle={(e) =>
+                      setFunnelAperto(
+                        (e.currentTarget as HTMLDetailsElement).open,
+                      )
+                    }
+                  >
                     <summary className="cursor-pointer text-xs font-medium text-[var(--ink-muted)]">
                       Metriche di funnel
                     </summary>
@@ -1264,6 +1355,23 @@ function RisultatiPage() {
                         ? "Facoltative · le impression aiutano a contestualizzare il CPM"
                         : "Facoltative · migliorano la precisione della diagnosi"}
                     </p>
+                    {analisiAi && funnelAperto && (kpiForm.clicks !== "" || kpiForm.impressions !== "") ? (
+                      <p className="mt-2 text-xs text-[var(--ink-muted)]">
+                        Trovati nello screenshot. Verificali e correggili se
+                        serve prima di salvare.
+                      </p>
+                    ) : null}
+                    {importOrigin === "csv" && funnelAperto && (kpiForm.clicks !== "" || kpiForm.impressions !== "") ? (
+                      <p className="mt-2 text-xs text-[var(--ink-muted)]">
+                        Trovati nel CSV. Verificali e correggili se serve prima
+                        di salvare.
+                      </p>
+                    ) : null}
+                    {feedbackCsv && inputMode === "kpi" ? (
+                      <p className="mt-2 text-xs text-[var(--ink-muted)]">
+                        {feedbackCsv}
+                      </p>
+                    ) : null}
                     <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <label className="block min-w-0">
                         <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
@@ -1329,6 +1437,120 @@ function RisultatiPage() {
                 </div>
               ) : (
                 <div className="mt-5">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setImportTab("screenshot")}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                        importTab === "screenshot"
+                          ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                          : "bg-[var(--surface-hover)] text-[var(--ink-muted)]"
+                      }`}
+                    >
+                      Screenshot
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImportTab("csv")}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                        importTab === "csv"
+                          ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                          : "bg-[var(--surface-hover)] text-[var(--ink-muted)]"
+                      }`}
+                    >
+                      CSV
+                    </button>
+                  </div>
+                  {importTab === "csv" ? (
+                    <div className="mt-4">
+                      <p className="text-sm text-[var(--ink-muted)]">
+                        Carica un export .csv di Ads Manager. Affianco legge le
+                        metriche senza AI.
+                      </p>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => csvInputRef.current?.click()}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            csvInputRef.current?.click();
+                          }
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setTrascinandoCsv(true);
+                        }}
+                        onDragLeave={() => setTrascinandoCsv(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setTrascinandoCsv(false);
+                          void gestisciFileCsv(e.dataTransfer.files[0]);
+                        }}
+                        className={`mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
+                          trascinandoCsv
+                            ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+                            : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent-muted)]"
+                        }`}
+                      >
+                        <FileUp
+                          className="h-9 w-9 text-[var(--accent)]"
+                          strokeWidth={1.5}
+                        />
+                        <p className="mt-3 text-sm font-medium text-[var(--ink)]">
+                          Trascina il CSV di Ads Manager
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--ink-muted)]">
+                          Solo file .csv
+                        </p>
+                        <input
+                          ref={csvInputRef}
+                          type="file"
+                          accept=".csv,text/csv"
+                          className="hidden"
+                          onChange={(e) => {
+                            void gestisciFileCsv(e.target.files?.[0]);
+                            e.target.value = "";
+                          }}
+                        />
+                      </div>
+                      {feedbackCsv ? (
+                        <p className="mt-3 text-xs text-[var(--ink-muted)]">
+                          {feedbackCsv}
+                        </p>
+                      ) : null}
+                      {erroreCsv ? (
+                        <p className="mt-3 text-sm text-[#B42318]">{erroreCsv}</p>
+                      ) : null}
+                      {righeCsv.length > 0 ? (
+                        <ul className="mt-4 space-y-2">
+                          {righeCsv.map((row, i) => (
+                            <li
+                              key={`${etichettaRigaMetaCsv(row)}-${i}`}
+                              className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5"
+                            >
+                              <p className="text-sm font-medium text-[var(--ink)]">
+                                {etichettaRigaMetaCsv(row)}
+                              </p>
+                              <p className="mt-1 text-xs text-[var(--ink-muted)]">
+                                Spesa {row.spend ?? "—"} · Risultati{" "}
+                                {row.results ?? "—"} · Click {row.clicks ?? "—"}{" "}
+                                · Impression {row.impressions ?? "—"}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => applicaRigaCsv(row)}
+                                className="mt-2 text-xs font-medium text-[var(--accent)]"
+                              >
+                                Usa questi dati
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  ) : (
+                <div className="mt-4">
                   <p className="text-sm text-[var(--ink-muted)]">
                     Non vuoi compilare i KPI? Carica uno screenshot di Ads
                     Manager e Affianco prova a leggerli per te.
@@ -1423,6 +1645,8 @@ function RisultatiPage() {
                       calcolato dalle regole Affianco, non dall&apos;AI.
                     </p>
                   ) : null}
+                </div>
+                  )}
                 </div>
               )}
             </section>

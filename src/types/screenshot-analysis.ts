@@ -18,6 +18,9 @@ export type ScreenshotAnalysisResult = {
   cpm: number;
   /** Solo se visibile nello screenshot. Non inventato. */
   cpc?: number | null;
+  /** Solo se visibile. Null se assente o non intero. Non ricostruito da CTR/CPC/CPM. */
+  clicks?: number | null;
+  impressions?: number | null;
   roas: number | null;
   faseApprendimento: FaseApprendimento;
   verdetto: VerdettoScreenshot;

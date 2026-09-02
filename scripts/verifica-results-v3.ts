@@ -28,9 +28,19 @@ import {
 import type { Campagna } from "@/types/campagne";
 import {
   avvisiConteggiFunnel,
+  conteggiFormDaScreenshot,
   deriveFunnelMetrics,
   parseOptionalNonNegativeInteger,
+  parseScreenshotCount,
 } from "@/lib/funnel-metrics";
+import { mockScreenshotAnalysis } from "@/lib/mock-screenshot-analysis";
+import {
+  isMetaCsvSummaryLabel,
+  kpiFormDaRigaMeta,
+  parseAdsManagerCsv,
+  parseMetaCsvNumber,
+  parseCsvRows,
+} from "@/lib/meta-csv";
 
 const ROOT = process.cwd();
 
@@ -970,9 +980,8 @@ async function main() {
       "clicks non nei KPI principali",
     ) &&
     assert(
-      !screenshotRoute.includes("clicks") &&
-        !screenshotType.includes("clicks"),
-      "M0.3C screenshot non toccato",
+      screenshotRoute.includes("parseScreenshotCount"),
+      "M0.3C API normalizza clicks/impressions",
     ) &&
     assert(
       controlRoomSrc.includes("conversionRate: number | null"),
@@ -1002,6 +1011,357 @@ async function main() {
     caseL03bOk &&
     persistCanonicalOk &&
     m03bUiOk;
+
+  const mockLegacy = mockScreenshotAnalysis({
+    image: "x",
+    obiettivo: "LEADS",
+    targetCpl: 45,
+    giorniAttiva: 5,
+  });
+  const formLegacy = conteggiFormDaScreenshot({});
+  const formB = conteggiFormDaScreenshot({ clicks: 100, impressions: 10_000 });
+  const derivedB = deriveFunnelMetrics({
+    spend: 200,
+    results: 10,
+    clicks: parseScreenshotCount(100),
+    impressions: parseScreenshotCount(10_000),
+    manualCtr: null,
+    manualCpc: null,
+    manualCpm: null,
+  });
+  const derivedC = deriveFunnelMetrics({
+    spend: 200,
+    results: 10,
+    clicks: 100,
+    impressions: 10_000,
+    manualCtr: 4,
+    manualCpc: null,
+    manualCpm: null,
+  });
+  const derivedD = deriveFunnelMetrics({
+    spend: 200,
+    results: null,
+    clicks: 100,
+    impressions: null,
+    manualCtr: 1.4,
+    manualCpc: null,
+    manualCpm: 18,
+  });
+  const derivedE = deriveFunnelMetrics({
+    spend: 200,
+    results: null,
+    clicks: null,
+    impressions: 10_000,
+    manualCtr: 1.4,
+    manualCpc: 2,
+    manualCpm: null,
+  });
+  const derivedG = deriveFunnelMetrics({
+    spend: 200,
+    results: 0,
+    clicks: 0,
+    impressions: 10_000,
+    manualCtr: null,
+    manualCpc: null,
+    manualCpm: null,
+  });
+  const derivedI0 = deriveFunnelMetrics({
+    spend: 200,
+    results: 10,
+    clicks: 100,
+    impressions: 10_000,
+    manualCtr: 1.4,
+    manualCpc: null,
+    manualCpm: null,
+  });
+  const derivedI1 = deriveFunnelMetrics({
+    spend: 200,
+    results: 10,
+    clicks: 200,
+    impressions: 10_000,
+    manualCtr: 1.4,
+    manualCpc: null,
+    manualCpm: null,
+  });
+  const payloadScreenshot = payloadNuovoCampaignCheck(
+    {
+      campaignId: "c1",
+      daysActive: 7,
+      spend: 200,
+      resultsCount: 10,
+      primaryCost: 20,
+      ctr: derivedB.ctr,
+      cpm: derivedB.cpm,
+      cpc: derivedB.cpc,
+      frequency: null,
+      roas: null,
+      clicks: 100,
+      impressions: 10_000,
+      healthStatus: "GREEN",
+      signal: null,
+      actions: [],
+      note: null,
+      objective: "LEADS",
+      threshold: 80,
+      thresholdMode: "BREAK_EVEN",
+      source: "SCREENSHOT",
+    },
+    "u1",
+  );
+  const healthAwShot = calcolaHealthStatus(20, 12.5, "efficiency", {
+    daysActive: 10,
+    resultsCount: 5,
+  });
+
+  const caseA03cOk =
+    assert(formLegacy.clicks === "", "M0.3C CASE A form clicks empty") &&
+    assert(formLegacy.impressions === "", "M0.3C CASE A form impressions empty") &&
+    assert(!formLegacy.apriFunnel, "M0.3C CASE A no auto-open") &&
+    assert(mockLegacy.clicks === null, "M0.3C CASE A mock clicks null") &&
+    assert(mockLegacy.impressions === null, "M0.3C CASE A mock impressions null") &&
+    assert(parseScreenshotCount(undefined) === null, "M0.3C CASE A missing → null");
+  const caseB03cOk =
+    assert(formB.clicks === "100", "M0.3C CASE B form clicks") &&
+    assert(formB.impressions === "10000", "M0.3C CASE B form impressions") &&
+    assert(formB.apriFunnel, "M0.3C CASE B auto-open funnel") &&
+    assert(derivedB.ctr === 1, "M0.3C CASE B CTR 1") &&
+    assert(derivedB.cpc === 2, "M0.3C CASE B CPC 2") &&
+    assert(derivedB.cpm === 20, "M0.3C CASE B CPM 20");
+  const caseC03cOk =
+    assert(derivedC.ctr === 1, "M0.3C CASE C canonical CTR") &&
+    assert(derivedC.mismatches.some((m) => m.metric === "ctr"), "M0.3C CASE C mismatch");
+  const caseD03cOk =
+    assert(derivedD.cpc === 2, "M0.3C CASE D CPC derived") &&
+    assert(derivedD.ctr === 1.4, "M0.3C CASE D CTR fallback") &&
+    assert(derivedD.cpm === 18, "M0.3C CASE D CPM fallback");
+  const caseE03cOk =
+    assert(derivedE.cpm === 20, "M0.3C CASE E CPM derived") &&
+    assert(derivedE.ctr === 1.4, "M0.3C CASE E CTR fallback") &&
+    assert(derivedE.cpc === 2, "M0.3C CASE E CPC fallback");
+  const caseF03cOk =
+    assert(parseScreenshotCount(100.5) === null, "M0.3C CASE F 100.5 number") &&
+    assert(parseScreenshotCount("100.5") === null, "M0.3C CASE F 100.5 string") &&
+    assert(parseScreenshotCount("1.000") === 1000, "M0.3C thousands 1.000") &&
+    assert(parseScreenshotCount("1,000") === 1000, "M0.3C thousands 1,000") &&
+    assert(parseScreenshotCount("10.000") === 10_000, "M0.3C thousands 10.000") &&
+    assert(parseScreenshotCount("10,000") === 10_000, "M0.3C thousands 10,000") &&
+    assert(parseScreenshotCount("1K") === null, "M0.3C no 1K abbreviation");
+  const caseG03cOk =
+    assert(parseScreenshotCount(0) === 0, "M0.3C CASE G zero preserved") &&
+    assert(derivedG.ctr === 0, "M0.3C CASE G CTR 0") &&
+    assert(derivedG.cpc === null, "M0.3C CASE G CPC null") &&
+    assert(conteggiFormDaScreenshot({ clicks: 0, impressions: 10_000 }).clicks === "0", "M0.3C CASE G form 0");
+  const caseH03cOk =
+    assert(healthAwShot.mode === "efficiency", "M0.3C CASE H CPM primary") &&
+    assert(healthAwShot.status === healthAwBase.status, "M0.3C CASE H health unchanged");
+  const caseI03cOk =
+    assert(derivedI0.ctr === 1, "M0.3C CASE I before edit CTR 1") &&
+    assert(derivedI1.ctr === 2, "M0.3C CASE I after edit CTR 2") &&
+    assert(derivedI1.cpc === 1, "M0.3C CASE I after edit CPC 1");
+  const caseJ03cOk =
+    assert(payloadScreenshot.source === "SCREENSHOT", "M0.3C CASE J payload SCREENSHOT") &&
+    assert(risultati.includes('"SCREENSHOT"'), "M0.3C CASE J UI source SCREENSHOT");
+
+  const m03cOk =
+    caseA03cOk &&
+    caseB03cOk &&
+    caseC03cOk &&
+    caseD03cOk &&
+    caseE03cOk &&
+    caseF03cOk &&
+    caseG03cOk &&
+    caseH03cOk &&
+    caseI03cOk &&
+    caseJ03cOk &&
+    assert(
+      screenshotRoute.includes("NON ricostruire clicks"),
+      "prompt: AI non deriva raw counts",
+    ) &&
+    assert(
+      !screenshotRoute.includes("deriveFunnelMetrics"),
+      "API non duplica deriveFunnelMetrics",
+    ) &&
+    assert(screenshotType.includes("clicks?:"), "contract clicks optional") &&
+    assert(screenshotType.includes("impressions?:"), "contract impressions optional") &&
+    assert(risultati.includes("conteggiFormDaScreenshot"), "UI idrata funnel da screenshot") &&
+    assert(risultati.includes("funnelAperto"), "UI auto-open funnel") &&
+    assert(risultati.includes("Trovati nello screenshot"), "feedback extraction");
+
+  const csvIt = `Nome della campagna,Risultati,Importo speso (EUR),Costo per risultato,Impression,Clic sul link,CTR (percentuale di clic sul link),CPC (costo per clic sul link),CPM (costo per 1.000 impression),Frequenza
+Aurora Lead,10,"200,00","20,00","10.000",100,"1,00%","2,00","20,00","1,40"`;
+  const parsedIt = parseAdsManagerCsv(csvIt);
+  const rowIt = parsedIt.ok ? parsedIt.autoRow : null;
+  const csvEn = `Campaign name,Results,Amount spent (EUR),Cost per result,Impressions,Link clicks,CTR (link click-through rate),CPC (cost per link click),CPM,Frequency
+Aurora Lead,10,200.00,20.00,"10,000",100,1.00%,2.00,20.00,1.40`;
+  const parsedEn = parseAdsManagerCsv(csvEn);
+  const rowEn = parsedEn.ok ? parsedEn.autoRow : null;
+  const csvPartial = `Risultati,Importo speso,Impression,Reach,LPV
+10,200,10000,50000,12`;
+  const parsedPartial = parseAdsManagerCsv(csvPartial);
+  const rowPartial = parsedPartial.ok ? parsedPartial.autoRow : null;
+  const csvBothClicks = `Impressions,Clicks,Link clicks,Importo speso
+10000,200,100,200`;
+  const parsedBoth = parseAdsManagerCsv(csvBothClicks);
+  const rowBoth = parsedBoth.ok ? parsedBoth.autoRow : null;
+  const csvConflict = `Importo speso,Clic sul link,Impression,CTR
+200,100,10000,4%`;
+  const parsedConflict = parseAdsManagerCsv(csvConflict);
+  const rowConflict = parsedConflict.ok ? parsedConflict.autoRow : null;
+  const derivedConflict = rowConflict
+    ? deriveFunnelMetrics({
+        spend: rowConflict.spend,
+        results: null,
+        clicks: rowConflict.clicks,
+        impressions: rowConflict.impressions,
+        manualCtr: rowConflict.ctr,
+        manualCpc: rowConflict.cpc,
+        manualCpm: rowConflict.cpm,
+      })
+    : null;
+  const csvMulti = `Nome della campagna,Importo speso,Risultati
+Alpha,100,5
+Beta,200,8`;
+  const parsedMulti = parseAdsManagerCsv(csvMulti);
+  const csvSummary = `Nome della campagna,Importo speso,Risultati
+Aurora,200,10
+Risultati di 1 gruppo di inserzioni,200,10`;
+  const parsedSummary = parseAdsManagerCsv(csvSummary);
+  const csvRatios = `CTR,CPC,CPM
+4,5,50`;
+  const parsedRatios = parseAdsManagerCsv(csvRatios);
+  const rowRatios = parsedRatios.ok ? parsedRatios.autoRow : null;
+  const derivedRatios = rowRatios
+    ? deriveFunnelMetrics({
+        spend: null,
+        results: null,
+        clicks: rowRatios.clicks,
+        impressions: rowRatios.impressions,
+        manualCtr: rowRatios.ctr,
+        manualCpc: rowRatios.cpc,
+        manualCpm: rowRatios.cpm,
+      })
+    : null;
+  const formIt = rowIt ? kpiFormDaRigaMeta(rowIt) : null;
+  const payloadCsv = payloadNuovoCampaignCheck(
+    {
+      campaignId: "c1",
+      daysActive: 7,
+      spend: 200,
+      resultsCount: 10,
+      primaryCost: 20,
+      ctr: 1,
+      cpm: 20,
+      cpc: 2,
+      frequency: null,
+      roas: null,
+      clicks: 100,
+      impressions: 10_000,
+      healthStatus: "GREEN",
+      signal: null,
+      actions: [],
+      note: null,
+      objective: "LEADS",
+      threshold: 80,
+      thresholdMode: "BREAK_EVEN",
+      source: "CSV",
+    },
+    "u1",
+  );
+
+  const caseACsvOk =
+    assert(parsedIt.ok, "M0.3C.1 CASE A parse IT") &&
+    assert(rowIt?.results === 10, "M0.3C.1 CASE A results") &&
+    assert(rowIt?.spend === 200, "M0.3C.1 CASE A spend") &&
+    assert(rowIt?.impressions === 10_000, "M0.3C.1 CASE A impressions") &&
+    assert(rowIt?.clicks === 100, "M0.3C.1 CASE A clicks") &&
+    assert(formIt?.clicks === "100", "M0.3C.1 CASE A form clicks");
+  const caseBCsvOk =
+    assert(parsedEn.ok, "M0.3C.1 CASE B parse EN") &&
+    assert(rowEn?.clicks === 100, "M0.3C.1 CASE B link clicks") &&
+    assert(rowEn?.impressions === 10_000, "M0.3C.1 CASE B impressions");
+  const caseCCsvOk =
+    assert(rowPartial?.clicks == null, "M0.3C.1 CASE C clicks null") &&
+    assert(rowPartial?.impressions === 10_000, "M0.3C.1 CASE C impressions") &&
+    assert(rowPartial?.spend === 200, "M0.3C.1 CASE C spend");
+  const caseDCsvOk = assert(
+    rowPartial != null && rowPartial.recognizedCount >= 3,
+    "M0.3C.1 CASE D unknown columns ignored",
+  );
+  const caseECsvOk =
+    assert(derivedConflict?.ctr === 1, "M0.3C.1 CASE E canonical CTR") &&
+    assert(
+      (derivedConflict?.mismatches.length ?? 0) > 0,
+      "M0.3C.1 CASE E mismatch",
+    );
+  const caseFCsvOk =
+    assert(parseMetaCsvNumber("435,52", "decimal") === 435.52, "M0.3C.1 CASE F 435,52") &&
+    assert(parseMetaCsvNumber("43.758", "count") === 43_758, "M0.3C.1 CASE F 43.758") &&
+    assert(parseMetaCsvNumber("1.049", "count") === 1049, "M0.3C.1 CASE F 1.049") &&
+    assert(parseMetaCsvNumber("2,397%", "percent") === 2.397, "M0.3C.1 CASE F 2,397%") &&
+    assert(parseMetaCsvNumber("€ 435,52", "decimal") === 435.52, "M0.3C.1 CASE F euro");
+  const caseGCsvOk =
+    assert(parseMetaCsvNumber("435.52", "decimal") === 435.52, "M0.3C.1 CASE G 435.52") &&
+    assert(parseMetaCsvNumber("43,758", "count") === 43_758, "M0.3C.1 CASE G 43,758") &&
+    assert(parseMetaCsvNumber("1,049", "count") === 1049, "M0.3C.1 CASE G 1,049") &&
+    assert(parseMetaCsvNumber("2.397%", "percent") === 2.397, "M0.3C.1 CASE G 2.397%");
+  const caseHCsvOk =
+    assert(parsedMulti.ok && parsedMulti.needsSelection, "M0.3C.1 CASE H selector") &&
+    assert(parsedMulti.ok && parsedMulti.autoRow === null, "M0.3C.1 CASE H no auto aggregate") &&
+    assert(parsedMulti.ok && parsedMulti.dataRows.length === 2, "M0.3C.1 CASE H two rows");
+  const caseICsvOk =
+    assert(isMetaCsvSummaryLabel("Risultati di 1 gruppo di inserzioni"), "M0.3C.1 CASE I summary label") &&
+    assert(parsedSummary.ok && parsedSummary.autoRow?.campaignName === "Aurora", "M0.3C.1 CASE I data row") &&
+    assert(parsedSummary.ok && !parsedSummary.needsSelection, "M0.3C.1 CASE I no double count");
+  const caseJCsvOk = assert(
+    !parseAdsManagerCsv("ciao mondo").ok,
+    "M0.3C.1 CASE J unreadable/no metrics",
+  );
+  const caseKCsvOk =
+    assert(rowRatios?.clicks == null, "M0.3C.1 CASE K no invented clicks") &&
+    assert(derivedRatios?.ctr === 4, "M0.3C.1 CASE K CTR fallback") &&
+    assert(derivedRatios?.cpc === 5, "M0.3C.1 CASE K CPC fallback");
+  const caseLCsvOk =
+    assert(payloadCsv.source === "CSV", "M0.3C.1 CASE L payload CSV") &&
+    assert(risultati.includes('importOrigin === "csv"'), "M0.3C.1 CASE L UI source CSV");
+  const caseMCsvOk =
+    assert(risultati.includes("applicaKpiDaScreenshot"), "M0.3C.1 CASE M screenshot hydration") &&
+    assert(risultati.includes("/api/analyze-screenshot"), "M0.3C.1 CASE M screenshot API") &&
+    assert(risultati.includes("Importa da Ads Manager"), "M0.3C.1 import tab");
+  const editedFromCsv = deriveFunnelMetrics({
+    spend: 200,
+    results: 10,
+    clicks: 200,
+    impressions: 10_000,
+    manualCtr: 1,
+    manualCpc: 2,
+    manualCpm: 20,
+  });
+  const caseNCsvOk =
+    assert(editedFromCsv.ctr === 2, "M0.3C.1 CASE N recalc CTR") &&
+    assert(editedFromCsv.cpc === 1, "M0.3C.1 CASE N recalc CPC") &&
+    assert(rowBoth?.clicks === 100, "M0.3C.1 link click priority over clicks");
+
+  const m03c1Ok =
+    caseACsvOk &&
+    caseBCsvOk &&
+    caseCCsvOk &&
+    caseDCsvOk &&
+    caseECsvOk &&
+    caseFCsvOk &&
+    caseGCsvOk &&
+    caseHCsvOk &&
+    caseICsvOk &&
+    caseJCsvOk &&
+    caseKCsvOk &&
+    caseLCsvOk &&
+    caseMCsvOk &&
+    caseNCsvOk &&
+    assert(parseCsvRows('"a,b",c').length === 1, "CSV quoted comma") &&
+    assert(
+      legge("src/lib/meta-csv.ts").includes("HEADER_CLICKS_PRIORITY"),
+      "click priority documented",
+    ) &&
+    assert(!risultati.includes("parseMetaCsvReport"), "no analyzer aggregate import");
 
   const unifiedOk =
     assert(risultati.includes("calcolaHealthStatus"), "/risultati usa control-room") &&
@@ -1189,6 +1549,32 @@ async function main() {
   sezione("M0.2.2 APPROVAL SEMANTICS", m022Ok);
   sezione("M0.3A CLICKS IMPRESSIONS SCHEMA", m03aOk);
   sezione("M0.3B FUNNEL DERIVATION", m03bOk);
+  sezione("M0.3C SCREENSHOT COUNTS", m03cOk);
+  sezione("M0.3C.1 META CSV IMPORT", m03c1Ok);
+  console.log(`M0.3C.1 CASE A: ${caseACsvOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C.1 CASE B: ${caseBCsvOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C.1 CASE C: ${caseCCsvOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C.1 CASE D: ${caseDCsvOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C.1 CASE E: ${caseECsvOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C.1 CASE F: ${caseFCsvOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C.1 CASE G: ${caseGCsvOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C.1 CASE H: ${caseHCsvOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C.1 CASE I: ${caseICsvOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C.1 CASE J: ${caseJCsvOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C.1 CASE K: ${caseKCsvOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C.1 CASE L: ${caseLCsvOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C.1 CASE M: ${caseMCsvOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C.1 CASE N: ${caseNCsvOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C CASE A: ${caseA03cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C CASE B: ${caseB03cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C CASE C: ${caseC03cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C CASE D: ${caseD03cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C CASE E: ${caseE03cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C CASE F: ${caseF03cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C CASE G: ${caseG03cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C CASE H: ${caseH03cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C CASE I: ${caseI03cOk ? "PASS" : "FAIL"}`);
+  console.log(`M0.3C CASE J: ${caseJ03cOk ? "PASS" : "FAIL"}`);
   console.log(`M0.3B CASE A: ${caseA03bOk ? "PASS" : "FAIL"}`);
   console.log(`M0.3B CASE B: ${caseB03bOk ? "PASS" : "FAIL"}`);
   console.log(`M0.3B CASE C: ${caseC03bOk ? "PASS" : "FAIL"}`);

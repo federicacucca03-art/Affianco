@@ -122,6 +122,8 @@ export function mockScreenshotAnalysis(
     frequenza,
     cpm,
     cpc: null,
+    clicks: null,
+    impressions: null,
     roas,
     faseApprendimento,
     verdetto,

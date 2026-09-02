@@ -7,6 +7,7 @@ import type {
 } from "@/types/screenshot-analysis";
 import { anthropicModelId } from "@/lib/anthropic-config";
 import { normalizzaCtrDaApi } from "@/lib/control-room";
+import { parseScreenshotCount } from "@/lib/funnel-metrics";
 import {
   anthropicConfigMissingResponse,
   anthropicErrorResponse,
@@ -28,6 +29,8 @@ Schema esatto (backward compatible):
   "frequenza": number,
   "cpm": number,
   "cpc": number | null (solo se visibile nello screenshot; non inventare),
+  "clicks": number | null (solo se visibile; intero >= 0; non inventare),
+  "impressions": number | null (solo se visibile; intero >= 0; non inventare),
   "roas": number | null,
   "faseApprendimento": "in_corso" | "completata" | "limitata",
   "verdetto": "ottimo" | "in_target" | "fuori_target" | "dati_insufficienti",
@@ -42,7 +45,15 @@ Se obiettivo è AWARENESS:
 - non interpretare i risultati come lead o acquisti
 - non scrivere "CPL" nella spiegazione
 
-cpc: includilo SOLO se visibile. Se non è visibile, usa null. Non calcolare CPC da altri KPI.`;
+cpc: includilo SOLO se visibile. Se non è visibile, usa null. Non calcolare CPC da altri KPI.
+
+clicks e impressions: estraili SOLO se chiaramente visibili nello screenshot.
+Label ammesse (italiano/inglese): Click, Clicks, Clic, Clic sul link, Link clicks; Impression, Impressions.
+Se lo screenshot mostra una di queste label, usa quel valore. Non distinguere ora clicks vs link_clicks: prendi la metrica click visibile.
+NON ricostruire clicks o impressions da CTR, CPC, CPM o spesa.
+Esempio: CTR 1% e Impressions 10000 visibili, Click non visibile → clicks = null. NON calcolare 100.
+Se non visibili, usa null. Non inventare. Non arrotondare decimali: se il conteggio non è intero, usa null.
+Non calcolare CTR/CPC/CPM: Affianco li deriva a runtime dai conteggi.`;
 
 function estraiMediaType(base64: string): "image/jpeg" | "image/png" | "image/webp" {
   if (base64.startsWith("/9j/")) return "image/jpeg";
@@ -99,6 +110,8 @@ function normalizzaAnalisi(
     frequenza: Number(raw.frequenza) || fallback.frequenza,
     cpm: Number(raw.cpm) || fallback.cpm,
     cpc: cpcVisibile(raw.cpc),
+    clicks: parseScreenshotCount(raw.clicks),
+    impressions: parseScreenshotCount(raw.impressions),
     roas:
       raw.roas === null || raw.roas === undefined
         ? fallback.roas
