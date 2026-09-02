@@ -18,6 +18,8 @@ import {
   etichettaMetricaPrimaria,
   etichettaSogliaEconomica,
   etichettaTrend,
+  formatFrequenzaInput,
+  parseNum,
   getPrimaryOutcome,
   HEALTH_GREEN_MAX_RATIO,
   primaryMetricTypeDaObjective,
@@ -45,6 +47,7 @@ import {
 import type { CampaignCheck } from "@/lib/campaign-checks-db";
 import {
   canonicalHistoricalMetrics,
+  etichettaContestoStorico,
   evaluateTrend,
   direzionePrimaryTraDue,
   etichettaDirezioneRiga,
@@ -2737,6 +2740,78 @@ Risultati di 1 gruppo di inserzioni,200,10`;
       "M0.4C azioniConsigliate still present",
     );
 
+  const tLiveVsOne = trendPerLiveCheck([up2], liveA, false, "LEADS");
+  const trendDueSalvati = evaluateTrend([up1, up2], "LEADS");
+  const caseA04c1Ok = assert(
+    etichettaContestoStorico({
+      savedCount: 1,
+      liveConfrontoDisponibile: tLiveVsOne.level === "ONE_PERIOD_CHANGE",
+      trendStorico: evaluateTrend([up2], "LEADS"),
+    }) === "1 controllo salvato · confronto live disponibile",
+    "M0.4C.1 CASE A live comparison label",
+  );
+  const caseB04c1Ok = assert(
+    etichettaContestoStorico({
+      savedCount: 1,
+      liveConfrontoDisponibile: false,
+      trendStorico: evaluateTrend([up2], "LEADS"),
+    }) === "Storico ancora insufficiente",
+    "M0.4C.1 CASE B insufficient without live",
+  );
+  const caseC04c1Ok = assert(
+    etichettaContestoStorico({
+      savedCount: 2,
+      liveConfrontoDisponibile: false,
+      trendStorico: trendDueSalvati,
+    }) === testoAndamentoDiagnosi(trendDueSalvati, undefined),
+    "M0.4C.1 CASE C normal historical",
+  );
+  const caseD04c1Ok =
+    assert(
+      formatFrequenzaInput("2.488795") === "2.49",
+      "M0.4C.1 CASE D frequency display 2.488795",
+    ) &&
+    assert(formatFrequenzaInput(2.488795) === "2.49", "M0.4C.1 CASE D number");
+  const caseE04c1Ok =
+    assert(parseNum("2.488795") === 2.488795, "M0.4C.1 CASE E parseNum") &&
+    assert(
+      formRealFreq?.frequency === "2.488795",
+      "M0.4C.1 CASE E form precision",
+    ) &&
+    assert(
+      parseNum(formRealFreq?.frequency) === 2.488795,
+      "M0.4C.1 CASE E trend-usable numeric",
+    );
+
+  const m04c1Ok =
+    caseA04c1Ok &&
+    caseB04c1Ok &&
+    caseC04c1Ok &&
+    caseD04c1Ok &&
+    caseE04c1Ok &&
+    assert(
+      risultatiUi.includes("etichettaContestoStorico"),
+      "M0.4C.1 storico uses contextual label",
+    ) &&
+    assert(
+      risultatiUi.includes("checks={storicoChecks}"),
+      "M0.4C.1 no fake live history row",
+    ) &&
+    assert(
+      !legge("src/lib/meta-csv.ts").includes("formatFrequenzaInput"),
+      "M0.4C.1 CSV parser unrounded",
+    ) &&
+    assert(
+      !legge("src/lib/mock-screenshot-analysis.ts").includes(
+        "formatFrequenzaInput",
+      ),
+      "M0.4C.1 screenshot parser unrounded",
+    ) &&
+    assert(
+      tLiveVsOne.level === "ONE_PERIOD_CHANGE",
+      "M0.4C.1 trend still ONE_PERIOD with live+1 saved",
+    );
+
   sezione("UNIFIED SEMAPHORE", unifiedOk && bandeOk);
   sezione("CAMPAIGN CHECKS", campaignChecksOk);
   sezione("RLS", rlsOk);
@@ -2760,6 +2835,12 @@ Risultati di 1 gruppo di inserzioni,200,10`;
   sezione("M0.4A TREND ENGINE", m04aOk);
   sezione("M0.4B TREND DIAGNOSIS", m04bOk);
   sezione("M0.4C TREND UI", m04cOk);
+  sezione("M0.4C.1 UX CLEANUP", m04c1Ok);
+  console.log(`M0.4C.1 CASE A: ${caseA04c1Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4C.1 CASE B: ${caseB04c1Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4C.1 CASE C: ${caseC04c1Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4C.1 CASE D: ${caseD04c1Ok ? "PASS" : "FAIL"}`);
+  console.log(`M0.4C.1 CASE E: ${caseE04c1Ok ? "PASS" : "FAIL"}`);
   console.log(`M0.4C CASE A: ${caseA04cOk ? "PASS" : "FAIL"}`);
   console.log(`M0.4C CASE B: ${caseB04cOk ? "PASS" : "FAIL"}`);
   console.log(`M0.4C CASE C: ${caseC04cOk ? "PASS" : "FAIL"}`);

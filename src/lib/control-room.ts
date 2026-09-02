@@ -150,6 +150,26 @@ export function parseNum(raw: string | number | null | undefined): number | null
   return Number.isFinite(n) ? n : null;
 }
 
+/** Visual/input hydration only. Does not change parsed CSV/screenshot values. */
+export function formatFrequenzaInput(
+  raw: string | number | null | undefined,
+): string {
+  if (raw === null || raw === undefined || raw === "") return "";
+  if (typeof raw === "string" && raw.trim() === "") return raw;
+  if (typeof raw === "string" && /[.,]$/.test(raw.trim())) return raw;
+  const n = parseNum(raw);
+  if (n == null || n < 0) {
+    return typeof raw === "string" ? raw : "";
+  }
+  const source =
+    typeof raw === "number" ? String(raw) : raw.trim().replace(",", ".");
+  const frac = source.includes(".") ? (source.split(".")[1] ?? "") : "";
+  if (frac.length <= 2) {
+    return typeof raw === "string" ? raw : String(n);
+  }
+  return n.toFixed(2);
+}
+
 /** Input manuale KPI: già percentuale (0.5 → 0.5%, 1.2 → 1.2%). Nessuna ×100. */
 export function parseCtrInput(raw: string): number | null {
   const n = parseNum(raw);

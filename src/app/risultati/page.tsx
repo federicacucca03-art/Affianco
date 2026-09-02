@@ -23,6 +23,7 @@ import {
   normalizzaCtrDaApi,
   parseCtrInput,
   parseNum,
+  formatFrequenzaInput,
   priorityBadgeClasses,
   priorityLabel,
   resolveThresholdFromCampaign,
@@ -59,7 +60,7 @@ import { StoricoControlli } from "@/components/risultati/StoricoControlli";
 import { BloccoDiagnosiTrend } from "@/components/risultati/BloccoDiagnosiTrend";
 import {
   snapshotCheckLive,
-  testoAndamentoDiagnosi,
+  etichettaContestoStorico,
   trendPerLiveCheck,
 } from "@/lib/campaign-trend";
 import {
@@ -925,6 +926,12 @@ function RisultatiPage() {
         : null,
     [storicoChecks, economic.objective],
   );
+  const contestoStorico = etichettaContestoStorico({
+    savedCount: storicoChecks.length,
+    liveConfrontoDisponibile:
+      !giaSalvatoOggi && trendLive.level === "ONE_PERIOD_CHANGE",
+    trendStorico: trendStoricoSalvato,
+  });
 
   const righeOverview = useMemo(
     () =>
@@ -1378,7 +1385,11 @@ function RisultatiPage() {
                           key={key}
                           label={label}
                           derived={testoKpiDerivato(key, funnelMetrics)}
-                          value={kpiForm[key]}
+                          value={
+                            key === "frequency"
+                              ? formatFrequenzaInput(kpiForm.frequency)
+                              : kpiForm[key]
+                          }
                           onChange={(value) =>
                             setKpiForm((prev) => ({ ...prev, [key]: value }))
                           }
@@ -1805,13 +1816,13 @@ function RisultatiPage() {
       <section
         className={`rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)] ${haSelezione ? "mt-10" : "mt-6"}`}
       >
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2">
           <h2 className="text-lg font-medium text-[var(--ink)]">
             Storico controlli
           </h2>
-          {trendStoricoSalvato ? (
-            <p className="max-w-xl text-sm text-[var(--ink-muted)]">
-              {testoAndamentoDiagnosi(trendStoricoSalvato, undefined)}
+          {contestoStorico ? (
+            <p className="min-w-0 max-w-full break-words text-sm leading-relaxed text-[var(--ink-muted)] sm:max-w-xl sm:text-right">
+              {contestoStorico}
             </p>
           ) : null}
         </div>

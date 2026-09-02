@@ -667,3 +667,18 @@ export function testoAndamentoDiagnosi(
   if (!trend) return "Storico ancora insufficiente";
   return etichettaLivelloTrend(trend.level);
 }
+
+/** Label above saved history. Does not insert a live row into the table. */
+export function etichettaContestoStorico(input: {
+  savedCount: number;
+  liveConfrontoDisponibile: boolean;
+  trendStorico: TrendEvaluation | null;
+}): string | null {
+  if (input.savedCount <= 0) return null;
+  if (input.savedCount === 1) {
+    return input.liveConfrontoDisponibile
+      ? "1 controllo salvato · confronto live disponibile"
+      : "Storico ancora insufficiente";
+  }
+  return testoAndamentoDiagnosi(input.trendStorico, undefined);
+}
