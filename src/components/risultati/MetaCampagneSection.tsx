@@ -1,58 +1,27 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { supabase } from "@/lib/supabase";
 import {
-  etichettaHealthAvailability,
   etichettaMonitoringMode,
   metaHealthStatusLabel,
   kpiLabel,
   HISTORICAL_CTA_SUBSTITUTE,
-  isLiveInterventionCta,
-  type MetaMonitoringMode,
-  type MetaHealthAvailability,
 } from "@/lib/meta/insights-control-room";
-import { healthBadgeClasses, formatEuro, calcolaHealthStatus } from "@/lib/control-room";
-import type { HealthStatus } from "@/lib/control-room";
+import { healthBadgeClasses, formatEuro } from "@/lib/control-room";
 import {
-  fetchMetaCampaignTarget,
   saveMetaCampaignTarget,
   deleteMetaCampaignTarget,
   type MetaMonitoringKpi,
 } from "@/lib/meta/campaign-target-client";
-
-// ------------------------------------------------------------------
-// Types
-// ------------------------------------------------------------------
-
-type MetaCampaignRow = {
-  id: string;
-  clientId: string;
-  clientName: string;
-  metaCampaignId: string;
-  name: string;
-  effectiveStatus: string | null;
-  rawObjective: string | null;
-  lastSyncedAt: string | null;
-  insightsPeriodSince: string | null;
-  insightsPeriodUntil: string | null;
-  // aggregated at read time
-  spend: number | null;
-  impressions: number | null;
-  linkClicks: number | null;
-  ctr: number | null;
-  cpc: number | null;
-  cpm: number | null;
-  frequency: number | null;
-  // target (from meta_campaigns columns)
-  primaryKpi: MetaMonitoringKpi | null;
-  targetValue: number | null;
-  // computed
-  mode: MetaMonitoringMode;
-  healthAvailability: MetaHealthAvailability;
-  healthStatus: HealthStatus | null;
-};
+import {
+  mapMetaCampaignToMonitoringRow,
+  refreshAfterMetaTargetMutation,
+  type MetaCampaignApiRow,
+  type MetaCampaignMonitoringRow,
+} from "@/lib/meta/meta-campaign-monitoring-row";
 
 // ------------------------------------------------------------------
 // Sub-component: target setter
@@ -73,14 +42,14 @@ function TargetSetter({
   currentKpi,
   currentTarget,
   rawObjective,
-  onSaved,
+  onMutated,
 }: {
   clientId: string;
   campaignId: string;
   currentKpi: MetaMonitoringKpi | null;
   currentTarget: number | null;
   rawObjective: string | null;
-  onSaved: (kpi: MetaMonitoringKpi | null, value: number | null) => void;
+  onMutated: () => Promise<void>;
 }) {
   const isLead =
     rawObjective?.toUpperCase() === "OUTCOME_LEADS" ||
@@ -114,11 +83,10 @@ function TargetSetter({
     try {
       if (kpi === "NONE") {
         await deleteMetaCampaignTarget(clientId, campaignId);
-        onSaved(null, null);
       } else {
         await saveMetaCampaignTarget(clientId, campaignId, kpi, numValue);
-        onSaved(kpi, numValue);
       }
+      await onMutated();
       setOk(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Errore salvataggio target.");
@@ -201,10 +169,10 @@ function TargetSetter({
 
 function MetaCampaignCard({
   row,
-  onTargetUpdated,
+  onTargetMutated,
 }: {
-  row: MetaCampaignRow;
-  onTargetUpdated: (kpi: MetaMonitoringKpi | null, value: number | null) => void;
+  row: MetaCampaignMonitoringRow;
+  onTargetMutated: () => Promise<void>;
 }) {
   const [showTarget, setShowTarget] = useState(false);
 
@@ -242,7 +210,6 @@ function MetaCampaignCard({
 
   return (
     <div className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">
-      {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -255,7 +222,7 @@ function MetaCampaignCard({
               </span>
             )}
             {healthBadge}
-            {!row.healthStatus && targetState}
+            {targetState}
           </div>
           <p className="mt-1.5 font-medium text-[var(--ink)] leading-snug">
             {row.name}
@@ -293,7 +260,6 @@ function MetaCampaignCard({
         </div>
       </div>
 
-      {/* Metrics */}
       {(row.spend != null ||
         row.impressions != null ||
         row.linkClicks != null) && (
@@ -349,25 +315,26 @@ function MetaCampaignCard({
         </dl>
       )}
 
-      {/* Health availability message */}
       {noTargetMessage && (
         <p className="mt-3 text-xs text-[var(--ink-muted)]">{noTargetMessage}</p>
       )}
 
-      {/* Historical framing */}
       {isPaused && row.healthStatus && (
         <p className="mt-3 text-xs text-[var(--ink-muted)]">
           {HISTORICAL_CTA_SUBSTITUTE}
         </p>
       )}
 
-      {/* Target setter */}
       <button
         type="button"
         onClick={() => setShowTarget((v) => !v)}
         className="mt-4 text-xs font-medium text-[var(--accent)]"
       >
-        {showTarget ? "Chiudi" : row.primaryKpi && row.primaryKpi !== "NONE" ? "Modifica target" : "Imposta target"}
+        {showTarget
+          ? "Chiudi"
+          : row.primaryKpi && row.primaryKpi !== "NONE"
+            ? "Modifica target"
+            : "Imposta target"}
       </button>
 
       {showTarget && (
@@ -377,9 +344,9 @@ function MetaCampaignCard({
           currentKpi={row.primaryKpi}
           currentTarget={row.targetValue}
           rawObjective={row.rawObjective}
-          onSaved={(kpi, value) => {
+          onMutated={async () => {
             setShowTarget(false);
-            onTargetUpdated(kpi, value);
+            await onTargetMutated();
           }}
         />
       )}
@@ -388,235 +355,107 @@ function MetaCampaignCard({
 }
 
 // ------------------------------------------------------------------
-// Health derivation helper (pure — used both at load time and on mutation)
+// Section
 // ------------------------------------------------------------------
 
-function deriveHealth(
-  primaryKpi: MetaMonitoringKpi | null,
-  targetValue: number | null,
-  row: Pick<MetaCampaignRow, "cpc" | "cpm" | "spend" | "impressions">,
-): { healthAvailability: MetaHealthAvailability; healthStatus: HealthStatus | null } {
-  if (primaryKpi === "ROAS") {
-    return { healthAvailability: "ROAS_DEFERRED", healthStatus: null };
-  }
-  if (!primaryKpi || primaryKpi === "NONE" || targetValue == null || targetValue <= 0) {
-    return { healthAvailability: "TARGET_REQUIRED", healthStatus: null };
-  }
-  if (primaryKpi === "CPL" || primaryKpi === "CPA") {
-    // Result confidence not available in list view — mark INSUFFICIENT_DATA
-    return { healthAvailability: "INSUFFICIENT_DATA", healthStatus: null };
-  }
-  if (primaryKpi === "CPC") {
-    if (row.cpc != null) {
-      const h = calcolaHealthStatus(row.cpc, targetValue, "economic");
-      return { healthAvailability: "AVAILABLE", healthStatus: h.status };
-    }
-    return { healthAvailability: "INSUFFICIENT_DATA", healthStatus: null };
-  }
-  if (primaryKpi === "CPM") {
-    const cpm =
-      row.cpm != null
-        ? row.cpm
-        : row.spend != null && row.impressions != null && row.impressions > 0
-          ? Math.round((row.spend / row.impressions) * 1000 * 100) / 100
-          : null;
-    if (cpm != null) {
-      const h = calcolaHealthStatus(cpm, targetValue, "efficiency");
-      return { healthAvailability: "AVAILABLE", healthStatus: h.status };
-    }
-    return { healthAvailability: "INSUFFICIENT_DATA", healthStatus: null };
-  }
-  return { healthAvailability: "TARGET_REQUIRED", healthStatus: null };
-}
-
-// ------------------------------------------------------------------
-// Section: loads meta campaigns for a given client
-// ------------------------------------------------------------------
-
-type MetaCampaignApiRow = {
-  id: string;
-  client_id: string;
-  meta_campaign_id: string;
-  name: string;
-  effective_status: string | null;
-  raw_objective: string | null;
-  last_synced_at: string | null;
-  insights_period_since: string | null;
-  insights_period_until: string | null;
-  insights_period_frequency: number | null;
-  primary_kpi: string | null;
-  target_value: number | null;
-};
-
-type InsightSumRow = {
-  meta_campaign_id: string;
-  spend_sum: number | null;
-  impressions_sum: number | null;
-  link_clicks_sum: number | null;
-};
-
-export function MetaCampagneSection({ clientId, clientName }: { clientId: string; clientName: string }) {
+export function MetaCampagneSection({
+  clientId,
+  clientName,
+}: {
+  clientId: string;
+  clientName: string;
+}) {
+  const router = useRouter();
   const { user } = useAuth();
-  const [rows, setRows] = useState<MetaCampaignRow[]>([]);
+  const [rows, setRows] = useState<MetaCampaignMonitoringRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const { data: camps, error: campErr } = await supabase
-        .from("meta_campaigns")
-        .select(
-          "id, client_id, meta_campaign_id, name, effective_status, raw_objective, last_synced_at, insights_period_since, insights_period_until, insights_period_frequency, primary_kpi, target_value",
-        )
-        .eq("user_id", user.id)
-        .eq("client_id", clientId)
-        .order("last_synced_at", { ascending: false });
-
-      if (campErr) throw campErr;
-      const campRows = (camps ?? []) as MetaCampaignApiRow[];
-      if (campRows.length === 0) {
-        setRows([]);
-        setLoading(false);
-        return;
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!user) return;
+      if (!opts?.silent) {
+        setLoading(true);
       }
-
-      // Load aggregated insight sums for each campaign
-      const campaignIds = campRows.map((c) => c.meta_campaign_id);
-      const { data: insightData } = await supabase
-        .from("meta_campaign_insights_daily")
-        .select("meta_campaign_id, spend, impressions, link_clicks")
-        .eq("user_id", user.id)
-        .eq("client_id", clientId)
-        .in("meta_campaign_id", campaignIds);
-
-      // Aggregate per campaign
-      const aggMap = new Map<
-        string,
-        { spend: number; impressions: number; linkClicks: number; rows: number }
-      >();
-      for (const ins of (insightData ?? []) as {
-        meta_campaign_id: string;
-        spend: number | null;
-        impressions: number | null;
-        link_clicks: number | null;
-      }[]) {
-        const prev = aggMap.get(ins.meta_campaign_id) ?? {
-          spend: 0,
-          impressions: 0,
-          linkClicks: 0,
-          rows: 0,
-        };
-        aggMap.set(ins.meta_campaign_id, {
-          spend: prev.spend + (ins.spend ?? 0),
-          impressions: prev.impressions + (ins.impressions ?? 0),
-          linkClicks: prev.linkClicks + (ins.link_clicks ?? 0),
-          rows: prev.rows + 1,
-        });
-      }
-
-      const mapped: MetaCampaignRow[] = campRows.map((c) => {
-        const agg = aggMap.get(c.meta_campaign_id);
-        const spend = agg ? agg.spend : null;
-        const impressions = agg ? agg.impressions : null;
-        const linkClicks = agg ? agg.linkClicks : null;
-        const ctr =
-          linkClicks != null && impressions != null && impressions > 0
-            ? Math.round((linkClicks / impressions) * 10000) / 100
-            : null;
-        const cpc =
-          spend != null && linkClicks != null && linkClicks > 0
-            ? Math.round((spend / linkClicks) * 100) / 100
-            : null;
-        const frequency = c.insights_period_frequency ?? null;
-
-        // Resolve mode
-        const effectiveUpper = (c.effective_status ?? "").toUpperCase();
-        const mode: MetaMonitoringMode =
-          ["PAUSED", "CAMPAIGN_PAUSED", "ARCHIVED", "DELETED", "ADSET_PAUSED"].includes(
-            effectiveUpper,
+      setError(null);
+      try {
+        const { data: camps, error: campErr } = await supabase
+          .from("meta_campaigns")
+          .select(
+            "id, client_id, meta_campaign_id, name, effective_status, raw_objective, last_synced_at, insights_period_since, insights_period_until, insights_period_frequency, primary_kpi, target_value",
           )
-            ? "HISTORICAL_REVIEW"
-            : "ACTIVE_MONITORING";
+          .eq("user_id", user.id)
+          .eq("client_id", clientId)
+          .order("last_synced_at", { ascending: false });
 
-        // Resolve health availability (simplified for list view — no result confidence available here)
-        const primaryKpi = c.primary_kpi as MetaMonitoringKpi | null;
-        const targetValue = c.target_value;
-        const cpmComputed =
-          spend != null && impressions != null && impressions > 0
-            ? Math.round((spend / impressions) * 1000 * 100) / 100
-            : null;
+        if (campErr) throw campErr;
+        const campRows = (camps ?? []) as MetaCampaignApiRow[];
+        if (campRows.length === 0) {
+          setRows([]);
+          return;
+        }
 
-        const { healthAvailability, healthStatus } = deriveHealth(
-          primaryKpi,
-          targetValue,
-          { cpc, cpm: cpmComputed, spend, impressions },
+        const campaignIds = campRows.map((c) => c.meta_campaign_id);
+        const { data: insightData } = await supabase
+          .from("meta_campaign_insights_daily")
+          .select("meta_campaign_id, spend, impressions, link_clicks")
+          .eq("user_id", user.id)
+          .eq("client_id", clientId)
+          .in("meta_campaign_id", campaignIds);
+
+        const aggMap = new Map<
+          string,
+          { spend: number; impressions: number; linkClicks: number }
+        >();
+        for (const ins of (insightData ?? []) as {
+          meta_campaign_id: string;
+          spend: number | null;
+          impressions: number | null;
+          link_clicks: number | null;
+        }[]) {
+          const prev = aggMap.get(ins.meta_campaign_id) ?? {
+            spend: 0,
+            impressions: 0,
+            linkClicks: 0,
+          };
+          aggMap.set(ins.meta_campaign_id, {
+            spend: prev.spend + (ins.spend ?? 0),
+            impressions: prev.impressions + (ins.impressions ?? 0),
+            linkClicks: prev.linkClicks + (ins.link_clicks ?? 0),
+          });
+        }
+
+        const mapped = campRows.map((c) =>
+          mapMetaCampaignToMonitoringRow(
+            c,
+            aggMap.get(c.meta_campaign_id) ?? null,
+            clientName,
+          ),
         );
 
-        return {
-          id: c.id,
-          clientId: c.client_id,
-          clientName,
-          metaCampaignId: c.meta_campaign_id,
-          name: c.name,
-          effectiveStatus: c.effective_status,
-          rawObjective: c.raw_objective,
-          lastSyncedAt: c.last_synced_at,
-          insightsPeriodSince: c.insights_period_since,
-          insightsPeriodUntil: c.insights_period_until,
-          spend,
-          impressions,
-          linkClicks,
-          ctr,
-          cpc,
-          cpm: cpmComputed,
-          frequency,
-          primaryKpi,
-          targetValue,
-          mode,
-          healthAvailability,
-          healthStatus,
-        };
-      });
-
-      setRows(mapped);
-    } catch (e) {
-      setError("Impossibile caricare le campagne Meta.");
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  }, [user, clientId, clientName]);
+        setRows(mapped);
+      } catch (e) {
+        setError("Impossibile caricare le campagne Meta.");
+        console.error(e);
+      } finally {
+        if (!opts?.silent) {
+          setLoading(false);
+        }
+      }
+    },
+    [user, clientId, clientName],
+  );
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  function handleTargetUpdated(
-    rowId: string,
-    kpi: MetaMonitoringKpi | null,
-    value: number | null,
-  ) {
-    setRows((prev) =>
-      prev.map((r) => {
-        if (r.id !== rowId) return r;
-        const { healthAvailability, healthStatus } = deriveHealth(
-          kpi,
-          value,
-          { cpc: r.cpc, cpm: r.cpm, spend: r.spend, impressions: r.impressions },
-        );
-        return {
-          ...r,
-          primaryKpi: kpi,
-          targetValue: value,
-          healthAvailability,
-          healthStatus,
-        };
-      }),
+  const handleTargetMutated = useCallback(async () => {
+    await refreshAfterMetaTargetMutation(
+      () => load({ silent: true }),
+      () => router.refresh(),
     );
-  }
+  }, [load, router]);
 
   if (loading) {
     return (
@@ -669,9 +508,7 @@ export function MetaCampagneSection({ clientId, clientName }: { clientId: string
           <MetaCampaignCard
             key={row.id}
             row={row}
-            onTargetUpdated={(kpi, value) =>
-              handleTargetUpdated(row.id, kpi, value)
-            }
+            onTargetMutated={handleTargetMutated}
           />
         ))}
       </div>

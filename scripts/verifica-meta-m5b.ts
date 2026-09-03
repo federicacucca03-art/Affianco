@@ -35,6 +35,10 @@
 import { metaInsightsToControlRoomInput, resolveMonitoringMode, isLiveInterventionCta, HISTORICAL_CTA_SUBSTITUTE } from "../src/lib/meta/insights-control-room";
 import { computeMetaTrend } from "../src/lib/meta/meta-trend";
 import { ALLOWED_KPI, type MetaMonitoringKpi } from "../src/lib/meta/campaign-target";
+import {
+  mapMetaCampaignToMonitoringRow,
+  refreshAfterMetaTargetMutation,
+} from "../src/lib/meta/meta-campaign-monitoring-row";
 import type { AggregatedMetaInsights } from "../src/lib/meta/insight-aggregate";
 import type { NormalizedDailyInsight } from "../src/lib/meta/insight-normalize";
 
@@ -55,6 +59,19 @@ function test(name: string, fn: () => void) {
     console.error(`  ✗ ${name}: ${msg}`);
     failed++;
   }
+}
+
+function testAsync(name: string, fn: () => Promise<void>) {
+  return fn()
+    .then(() => {
+      console.log(`  ✓ ${name}`);
+      passed++;
+    })
+    .catch((e) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`  ✗ ${name}: ${msg}`);
+      failed++;
+    });
 }
 
 function assert(condition: boolean, message: string) {
@@ -544,6 +561,75 @@ test("Technon: PAUSED + no target → TARGET_REQUIRED + HISTORICAL_REVIEW + no h
   assert(Math.abs((out.metrics.frequency ?? 0) - 1.55) < 0.01, `frequency: ${out.metrics.frequency}`);
 });
 
+// M5B.2: authoritative row mapping after target save shape
+test("M5B.2: mapMetaCampaignToMonitoringRow reflects CPC target + health", () => {
+  const row = mapMetaCampaignToMonitoringRow(
+    {
+      id: "camp-uuid",
+      client_id: "client-uuid",
+      meta_campaign_id: "meta-123",
+      name: "[B2B Lead Gen] Technon",
+      effective_status: "PAUSED",
+      raw_objective: "OUTCOME_LEADS",
+      last_synced_at: "2026-08-31T12:00:00Z",
+      insights_period_since: "2026-08-01",
+      insights_period_until: "2026-08-31",
+      insights_period_frequency: 1.55,
+      primary_kpi: "CPC",
+      target_value: 0.3,
+    },
+    { spend: 99.97, impressions: 14647, linkClicks: 420 },
+    "Technon",
+  );
+  assert(row.primaryKpi === "CPC", `kpi: ${row.primaryKpi}`);
+  assert(row.targetValue === 0.3, `target: ${row.targetValue}`);
+  assert(row.healthAvailability === "AVAILABLE", `availability: ${row.healthAvailability}`);
+  assert(row.healthStatus === "GREEN", `health: ${row.healthStatus}`);
+  assert(row.mode === "HISTORICAL_REVIEW", `mode: ${row.mode}`);
+});
+
+test("M5B.2: mapMetaCampaignToMonitoringRow clears health when target removed", () => {
+  const row = mapMetaCampaignToMonitoringRow(
+    {
+      id: "camp-uuid",
+      client_id: "client-uuid",
+      meta_campaign_id: "meta-123",
+      name: "Technon",
+      effective_status: "PAUSED",
+      raw_objective: "OUTCOME_LEADS",
+      last_synced_at: null,
+      insights_period_since: "2026-08-01",
+      insights_period_until: "2026-08-31",
+      insights_period_frequency: 1.55,
+      primary_kpi: null,
+      target_value: null,
+    },
+    { spend: 99.97, impressions: 14647, linkClicks: 420 },
+    "Technon",
+  );
+  assert(row.healthAvailability === "TARGET_REQUIRED", `availability: ${row.healthAvailability}`);
+  assert(row.healthStatus === null, "health must be null after clear");
+});
+
+const asyncTests: Promise<void>[] = [];
+
+asyncTests.push(
+  testAsync("M5B.2: refreshAfterMetaTargetMutation reloads then refreshes route", async () => {
+    let reloaded = false;
+    let refreshed = false;
+    await refreshAfterMetaTargetMutation(
+      async () => {
+        reloaded = true;
+      },
+      () => {
+        refreshed = true;
+      },
+    );
+    assert(reloaded, "reload must run before route refresh");
+    assert(refreshed, "router.refresh must run after reload");
+  }),
+);
+
 // ROAS deferred
 test("ROAS: ROAS_DEFERRED when KPI=ROAS", () => {
   const out = metaInsightsToControlRoomInput({
@@ -560,12 +646,14 @@ test("ROAS: ROAS_DEFERRED when KPI=ROAS", () => {
 // Summary
 // ------------------------------------------------------------------
 
-console.log("\n" + "━".repeat(56));
-console.log(`  Risultati: ${passed} passati, ${failed} falliti`);
-if (failed > 0) {
-  console.error("\n  ✗ Alcuni test sono falliti.\n");
-  process.exit(1);
-} else {
-  console.log("\n  ✓ Tutti i test M5B sono passati.\n");
-  process.exit(0);
-}
+Promise.all(asyncTests).then(() => {
+  console.log("\n" + "━".repeat(56));
+  console.log(`  Risultati: ${passed} passati, ${failed} falliti`);
+  if (failed > 0) {
+    console.error("\n  ✗ Alcuni test sono falliti.\n");
+    process.exit(1);
+  } else {
+    console.log("\n  ✓ Tutti i test M5B sono passati.\n");
+    process.exit(0);
+  }
+});
