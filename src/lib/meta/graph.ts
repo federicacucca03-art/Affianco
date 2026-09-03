@@ -10,7 +10,10 @@ export function graphApiBase(version: string, path: string): string {
   return `https://graph.facebook.com/${v}/${p}`;
 }
 
-export function mapGraphErrorToMetaError(json: unknown): MetaError {
+export function mapGraphErrorToMetaError(
+  json: unknown,
+  fallback: MetaErrorCode = "META_ACCOUNT_DISCOVERY_FAILED",
+): MetaError {
   const code =
     json &&
     typeof json === "object" &&
@@ -34,6 +37,12 @@ export function mapGraphErrorToMetaError(json: unknown): MetaError {
   if (code != null && TEMP_CODES.has(code)) {
     return new MetaError("META_TEMPORARY_ERROR", "Meta non disponibile.");
   }
+  if (fallback === "META_CAMPAIGN_DISCOVERY_FAILED") {
+    return new MetaError(
+      "META_CAMPAIGN_DISCOVERY_FAILED",
+      "Lettura campagne Meta non riuscita.",
+    );
+  }
   return new MetaError(
     "META_ACCOUNT_DISCOVERY_FAILED",
     "Lettura account Meta non riuscita.",
@@ -47,7 +56,10 @@ export function metaHttpStatus(code: MetaErrorCode): number {
     case "META_PERMISSION_MISSING":
       return 403;
     case "META_CONNECTION_NOT_FOUND":
+    case "META_AD_ACCOUNT_NOT_SELECTED":
       return 404;
+    case "META_AD_ACCOUNT_ACCESS_LOST":
+      return 403;
     case "META_RATE_LIMIT":
       return 429;
     case "META_TEMPORARY_ERROR":

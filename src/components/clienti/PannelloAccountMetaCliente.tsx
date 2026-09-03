@@ -22,6 +22,19 @@ type Mapping = {
   timezoneName: string | null;
 };
 
+type ImportedCampaign = {
+  metaCampaignId: string;
+  name: string;
+  rawObjective: string | null;
+  effectiveStatus: string | null;
+  status: string | null;
+  startAt: string | null;
+  stopAt: string | null;
+  lastSyncedAt: string;
+  dailyBudget: number | null;
+  lifetimeBudget: number | null;
+};
+
 type ConnectionPayload = {
   connected: boolean;
   status: "ACTIVE" | "EXPIRED" | "REVOKED" | "REAUTH_REQUIRED" | null;
@@ -29,6 +42,18 @@ type ConnectionPayload = {
   scopes: string[];
   metaUserId: string | null;
 };
+
+function etichettaStatoMeta(effectiveStatus: string | null, status: string | null): string {
+  const raw = (effectiveStatus || status || "").trim();
+  return raw || "Stato Meta non disponibile";
+}
+
+function formatDataMeta(iso: string | null): string | null {
+  if (!iso) return null;
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toLocaleDateString("it-IT");
+}
 
 function messaggioQuery(meta: string | null): string | null {
   if (meta === "connected") return "Account Meta collegato.";
@@ -58,6 +83,8 @@ export function PannelloAccountMetaCliente({
   const [busy, setBusy] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [campagne, setCampagne] = useState<ImportedCampaign[]>([]);
+  const [truncated, setTruncated] = useState(false);
 
   const carica = useCallback(async () => {
     if (!clientId) {
@@ -71,7 +98,7 @@ export function PannelloAccountMetaCliente({
       return;
     }
     try {
-      const [connRes, mapRes] = await Promise.all([
+      const [connRes, mapRes, campRes] = await Promise.all([
         fetch(`/api/meta/connection?clientId=${encodeURIComponent(clientId)}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
@@ -79,6 +106,9 @@ export function PannelloAccountMetaCliente({
           `/api/meta/client-account?clientId=${encodeURIComponent(clientId)}`,
           { headers: { Authorization: `Bearer ${token}` } },
         ),
+        fetch(`/api/meta/campaigns?clientId=${encodeURIComponent(clientId)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
       ]);
       const connData = (await connRes.json()) as ConnectionPayload & {
         error?: string;
@@ -97,6 +127,14 @@ export function PannelloAccountMetaCliente({
         setMapping(mapData.mapping ?? null);
       } else {
         setMapping(null);
+      }
+      if (campRes.ok) {
+        const campData = (await campRes.json()) as {
+          campaigns?: ImportedCampaign[];
+        };
+        setCampagne(campData.campaigns ?? []);
+      } else {
+        setCampagne([]);
       }
     } catch {
       setErrore("Impossibile leggere la connessione Meta.");
@@ -244,10 +282,57 @@ export function PannelloAccountMetaCliente({
       }
       setConnected(false);
       setMapping(null);
+      setCampagne([]);
       setAperto(false);
       setFeedback("Account Meta disconnesso per questo cliente.");
     } catch {
       setErrore("Disconnessione non riuscita.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importaCampagne() {
+    if (!clientId || busy) return;
+    const token = await bearerToken();
+    if (!token) return;
+    setBusy(true);
+    setErrore(null);
+    setFeedback(null);
+    try {
+      const res = await fetch("/api/meta/campaigns/import", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ clientId }),
+      });
+      const data = (await res.json()) as {
+        imported?: number;
+        updated?: number;
+        truncated?: boolean;
+        campaigns?: ImportedCampaign[];
+        code?: string;
+        error?: string;
+      };
+      if (res.status === 404 && data.code === "META_AD_ACCOUNT_NOT_SELECTED") {
+        setErrore("Seleziona prima un account pubblicitario Meta.");
+        return;
+      }
+      if (!res.ok) {
+        setErrore("Importazione campagne Meta non riuscita.");
+        return;
+      }
+      setCampagne(data.campaigns ?? []);
+      setTruncated(Boolean(data.truncated));
+      const imported = data.imported ?? 0;
+      const updated = data.updated ?? 0;
+      setFeedback(
+        `${imported} campagne importate · ${updated} aggiornate · 0 errori`,
+      );
+    } catch {
+      setErrore("Importazione campagne Meta non riuscita.");
     } finally {
       setBusy(false);
     }
@@ -353,6 +438,16 @@ export function PannelloAccountMetaCliente({
               {mapped ? "Cambia account" : "Seleziona account"}
             </button>
           ) : null}
+          {mapped ? (
+            <button
+              type="button"
+              onClick={() => void importaCampagne()}
+              disabled={busy}
+              className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+            >
+              Importa campagne Meta
+            </button>
+          ) : null}
           {connected ? (
             <button
               type="button"
@@ -421,6 +516,54 @@ export function PannelloAccountMetaCliente({
               Annulla
             </button>
           </div>
+        </div>
+      ) : null}
+
+      {mapped && campagne.length > 0 ? (
+        <div className="mt-5">
+          <p className="text-sm font-medium text-[var(--ink)]">
+            Campagne Meta importate
+          </p>
+          {truncated ? (
+            <p className="mt-1 text-sm text-[var(--ink-muted)]">
+              Elenco parziale: raggiunto il limite di lettura Meta.
+            </p>
+          ) : null}
+          <ul className="mt-3 flex flex-col gap-2">
+            {campagne.map((campagna) => {
+              const inizio = formatDataMeta(campagna.startAt);
+              const fine = formatDataMeta(campagna.stopAt);
+              return (
+                <li
+                  key={campagna.metaCampaignId}
+                  className="rounded-xl border border-[var(--ink)]/10 bg-[var(--surface)] px-3 py-2"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium text-[var(--ink)]">
+                      {campagna.name}
+                    </span>
+                    <span className="rounded-full bg-[var(--primary-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--primary)]">
+                      Meta
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-[var(--ink-muted)]">
+                    {etichettaStatoMeta(campagna.effectiveStatus, campagna.status)}
+                    {campagna.rawObjective ? ` · ${campagna.rawObjective}` : ""}
+                  </p>
+                  {inizio || fine ? (
+                    <p className="text-sm text-[var(--ink-muted)]">
+                      {[inizio, fine].filter(Boolean).join(" – ")}
+                    </p>
+                  ) : null}
+                  {campagna.lastSyncedAt ? (
+                    <p className="text-xs text-[var(--ink-muted)]">
+                      Sync {formatDataMeta(campagna.lastSyncedAt)}
+                    </p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       ) : null}
     </section>

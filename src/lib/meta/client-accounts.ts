@@ -10,6 +10,7 @@ import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 export type ClientMetaAccountMapping = {
   clientId: string;
+  metaConnectionId: string;
   metaAdAccountId: string;
   metaAdAccountName: string | null;
   metaAccountId: string | null;
@@ -19,6 +20,7 @@ export type ClientMetaAccountMapping = {
 
 type MappingRow = {
   client_id: string;
+  meta_connection_id: string;
   meta_ad_account_id: string;
   meta_ad_account_name: string | null;
   meta_account_id: string | null;
@@ -42,6 +44,7 @@ function adminClient() {
 function toMapping(row: MappingRow): ClientMetaAccountMapping {
   return {
     clientId: row.client_id,
+    metaConnectionId: row.meta_connection_id,
     metaAdAccountId: row.meta_ad_account_id,
     metaAdAccountName: row.meta_ad_account_name,
     metaAccountId: row.meta_account_id,
@@ -91,7 +94,7 @@ export async function getClientMetaAccount(
   const { data, error } = await adminClient()
     .from("client_ad_accounts")
     .select(
-      "client_id, meta_ad_account_id, meta_ad_account_name, meta_account_id, currency, timezone_name",
+      "client_id, meta_connection_id, meta_ad_account_id, meta_ad_account_name, meta_account_id, currency, timezone_name",
     )
     .eq("user_id", userId)
     .eq("client_id", clientId)
@@ -137,7 +140,7 @@ export async function setClientMetaAccount(
     .from("client_ad_accounts")
     .upsert(payload, { onConflict: "user_id,client_id" })
     .select(
-      "client_id, meta_ad_account_id, meta_ad_account_name, meta_account_id, currency, timezone_name",
+      "client_id, meta_connection_id, meta_ad_account_id, meta_ad_account_name, meta_account_id, currency, timezone_name",
     )
     .single();
 
