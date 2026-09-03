@@ -446,9 +446,19 @@ test("Home uses Monday section", () => {
 test("Empty urgent state copy", () => {
   const ui = read("./src/components/dashboard/MondayControlRoomSection.tsx");
   assert(
-    ui.includes("Nessuna campagna richiede interventi urgenti."),
+    ui.includes("Nessuna campagna richiede attenzione urgente."),
     "empty state",
   );
+  assert(ui.includes("Oggi"), "today summary");
+});
+
+test("Home focus: no duplicate status boards", () => {
+  const home = read("./src/components/dashboard/DashboardHome.tsx");
+  assert(!home.includes("Campagne in gestione"), "gestione removed");
+  assert(!home.includes("LavoriAperti"), "lavori aperti removed from home");
+  assert(!home.includes("MiniChartAttivita"), "large activity chart removed");
+  assert(home.includes("Revisioni cliente"), "revisions kept");
+  assert(home.includes("Attività recente"), "activity compact");
 });
 
 console.log("\n" + "━".repeat(56));

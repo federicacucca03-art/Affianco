@@ -55,8 +55,8 @@ function AttentionRow({ item }: { item: ControlRoomAttentionItem }) {
   const band = etichettaPriorityBand(item.attentionState);
   const metric = formatAttentionMetric(item);
   return (
-    <li className="flex flex-col gap-2 border-b border-[rgba(80,70,130,0.06)] py-3 last:border-0 sm:flex-row sm:items-start sm:gap-5">
-      <div className="flex flex-wrap items-center gap-1.5 sm:w-[9.5rem] sm:flex-col sm:items-start">
+    <li className="flex flex-col gap-2 border-b border-[rgba(80,70,130,0.06)] py-3 last:border-0 sm:flex-row sm:items-start sm:gap-4">
+      <div className="flex flex-wrap items-center gap-1.5 sm:w-[9rem] sm:flex-col sm:items-start">
         <Badge kind={kind} label={etichettaAttentionState(item.attentionState)} />
         {band ? (
           <span className="text-[10px] font-medium text-[var(--ink-muted)]">
@@ -92,6 +92,100 @@ function AttentionRow({ item }: { item: ControlRoomAttentionItem }) {
   );
 }
 
+function plural(n: number, uno: string, molti: string): string {
+  return `${n} ${n === 1 ? uno : molti}`;
+}
+
+function TodaySummary({ summary }: { summary: MondayControlRoomSummary }) {
+  const daControllare =
+    summary.counts.CRITICAL + summary.counts.NEEDS_ATTENTION;
+  const chips: { key: string; label: string; strong?: boolean }[] = [];
+  if (daControllare > 0) {
+    chips.push({
+      key: "check",
+      label: plural(daControllare, "da controllare", "da controllare"),
+      strong: true,
+    });
+  }
+  if (summary.counts.CONFIGURATION_REQUIRED > 0) {
+    chips.push({
+      key: "cfg",
+      label: plural(
+        summary.counts.CONFIGURATION_REQUIRED,
+        "da configurare",
+        "da configurare",
+      ),
+    });
+  }
+  if (summary.counts.MONITOR > 0) {
+    chips.push({
+      key: "mon",
+      label: plural(
+        summary.counts.MONITOR,
+        "da monitorare",
+        "da monitorare",
+      ),
+    });
+  }
+  if (summary.counts.INSUFFICIENT_DATA > 0) {
+    chips.push({
+      key: "ins",
+      label: plural(
+        summary.counts.INSUFFICIENT_DATA,
+        "con dati insufficienti",
+        "con dati insufficienti",
+      ),
+    });
+  }
+  if (summary.counts.STABLE > 0) {
+    chips.push({
+      key: "ok",
+      label: plural(summary.counts.STABLE, "stabile", "stabili"),
+    });
+  }
+  if (summary.counts.HISTORICAL > 0) {
+    chips.push({
+      key: "hist",
+      label: plural(
+        summary.counts.HISTORICAL,
+        "in revisione storica",
+        "in revisione storica",
+      ),
+    });
+  }
+
+  if (chips.length === 0) {
+    return (
+      <div className="mb-4">
+        <p className="text-[13px] font-medium text-[var(--primary)]">Oggi</p>
+        <p className="mt-1 text-sm text-[var(--ink-muted)]">
+          Nessun carico operativo al momento.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-4">
+      <p className="text-[13px] font-medium text-[var(--primary)]">Oggi</p>
+      <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1.5">
+        {chips.map((chip) => (
+          <li
+            key={chip.key}
+            className={`text-[13px] leading-snug ${
+              chip.strong
+                ? "font-medium text-[var(--ink)]"
+                : "text-[var(--ink-muted)]"
+            }`}
+          >
+            {chip.label}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function MondayControlRoomSection({
   summary,
 }: {
@@ -101,45 +195,56 @@ export function MondayControlRoomSection({
   const stablePreview = summary.stable.slice(0, MAX_STABLE);
   const hasUrgent = urgent.length > 0;
   const historicalCount = summary.counts.HISTORICAL;
-  const insufficientCount = summary.counts.INSUFFICIENT_DATA;
 
   return (
-    <section className="aff-panel-white mt-3 min-w-0 p-4 sm:p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
+    <section className="aff-panel-white mt-4 min-w-0 p-4 sm:p-5">
+      <TodaySummary summary={summary} />
+
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-[rgba(80,70,130,0.06)] pt-3">
         <div>
-          <p className="text-[13px] font-medium text-[var(--primary)]">
+          <p className="text-[15px] font-medium text-[var(--ink)]">
             Da controllare
           </p>
           <p className="mt-0.5 text-[12px] leading-relaxed text-[var(--ink-muted)]">
             Le campagne che meritano la tua attenzione adesso.
           </p>
         </div>
-        <Link
-          href="/risultati"
-          className="text-xs font-medium text-[var(--primary)] hover:opacity-80"
-        >
-          Apri Control Room
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            href="/campagne"
+            className="text-xs font-medium text-[var(--ink-muted)] hover:text-[var(--primary)]"
+          >
+            Vedi tutte le campagne
+          </Link>
+          <Link
+            href="/risultati"
+            className="text-xs font-medium text-[var(--primary)] hover:opacity-80"
+          >
+            Apri Control Room
+          </Link>
+        </div>
       </div>
 
       {!hasUrgent ? (
         <div className="mt-3 rounded-[14px] bg-[var(--green-soft)]/50 px-3 py-3">
           <p className="text-sm font-medium text-[var(--ink)]">
-            Nessuna campagna richiede interventi urgenti.
+            Nessuna campagna richiede attenzione urgente.
           </p>
           <p className="mt-1 text-[13px] leading-relaxed text-[var(--ink-muted)]">
             {summary.counts.STABLE > 0
-              ? `${summary.counts.STABLE} ${summary.counts.STABLE === 1 ? "stabile" : "stabili"}`
+              ? plural(summary.counts.STABLE, "stabile", "stabili")
               : "Nessuna stabile"}
-            {" · "}
-            {summary.counts.MONITOR > 0
-              ? `${summary.counts.MONITOR} in monitoraggio`
-              : "0 in monitoraggio"}
             {summary.counts.CONFIGURATION_REQUIRED > 0
-              ? ` · ${summary.counts.CONFIGURATION_REQUIRED} da configurare`
+              ? ` · ${plural(summary.counts.CONFIGURATION_REQUIRED, "da configurare", "da configurare")}`
               : ""}
-            {insufficientCount > 0
-              ? ` · ${insufficientCount} con dati insufficienti`
+            {summary.counts.MONITOR > 0
+              ? ` · ${plural(summary.counts.MONITOR, "da monitorare", "da monitorare")}`
+              : ""}
+            {summary.counts.INSUFFICIENT_DATA > 0
+              ? ` · ${plural(summary.counts.INSUFFICIENT_DATA, "con dati insufficienti", "con dati insufficienti")}`
+              : ""}
+            {historicalCount > 0
+              ? ` · ${plural(historicalCount, "in revisione storica", "in revisione storica")}`
               : ""}
           </p>
         </div>
@@ -154,15 +259,15 @@ export function MondayControlRoomSection({
         </ul>
       )}
 
-      {stablePreview.length > 0 ? (
-        <div className="mt-4 border-t border-[rgba(80,70,130,0.06)] pt-3">
-          <p className="text-[13px] font-medium text-[var(--ink-muted)]">
+      {stablePreview.length > 0 && hasUrgent ? (
+        <div className="mt-3 border-t border-[rgba(80,70,130,0.06)] pt-3">
+          <p className="text-[12px] font-medium text-[var(--ink-muted)]">
             Stabili
             {summary.counts.STABLE > MAX_STABLE
               ? ` · ${summary.counts.STABLE}`
               : ""}
           </p>
-          <ul className="mt-1">
+          <ul className="mt-0.5">
             {stablePreview.map((item) => (
               <AttentionRow
                 key={`stable-${item.source}-${item.campaignId}`}
@@ -174,7 +279,7 @@ export function MondayControlRoomSection({
       ) : null}
 
       {historicalCount > 0 ? (
-        <div className="mt-3 flex items-center justify-between gap-2">
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-[rgba(80,70,130,0.06)] pt-3">
           <p className="text-[12px] text-[var(--ink-muted)]">
             {historicalCount === 1
               ? "1 campagna in revisione storica"
