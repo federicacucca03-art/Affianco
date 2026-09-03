@@ -3,8 +3,9 @@ import {
   getAccessibleMetaAdAccounts,
   type MetaAdAccountSummary,
 } from "@/lib/meta/accounts";
-import { getMetaConnectionForUser } from "@/lib/meta/connections";
+import { getMetaConnectionForClient } from "@/lib/meta/connections";
 import { MetaError } from "@/lib/meta/errors";
+import { isUuid } from "@/lib/meta/ids";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 export type ClientMetaAccountMapping = {
@@ -25,12 +26,7 @@ type MappingRow = {
   timezone_name: string | null;
 };
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-export function isUuid(value: string): boolean {
-  return UUID_RE.test(value.trim());
-}
+export { isUuid };
 
 function adminClient() {
   try {
@@ -113,11 +109,11 @@ export async function setClientMetaAccount(
   metaAdAccountId: string,
 ): Promise<ClientMetaAccountMapping> {
   await assertClientOwnedByUser(userId, clientId);
-  const connection = await getMetaConnectionForUser(userId);
-  if (!connection) {
+  const connection = await getMetaConnectionForClient(userId, clientId);
+  if (!connection || connection.clientId !== clientId) {
     throw new MetaError("META_CONNECTION_NOT_FOUND", "Nessuna connessione Meta.");
   }
-  const accounts = await getAccessibleMetaAdAccounts(userId);
+  const accounts = await getAccessibleMetaAdAccounts(userId, clientId);
   const account = findAccessibleAccount(accounts, metaAdAccountId);
   if (!account) {
     throw new MetaError(

@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import { PannelloIntegrazioneMeta } from "@/components/impostazioni/PannelloIntegrazioneMeta";
 
 export default function IntegrazioniPage() {
@@ -8,13 +7,7 @@ export default function IntegrazioniPage() {
       <p className="mt-1 text-sm text-[var(--ink-muted)]">
         Collegamenti esterni per Affianco.
       </p>
-      <Suspense
-        fallback={
-          <p className="mt-8 text-sm text-[var(--ink-muted)]">Caricamento…</p>
-        }
-      >
-        <PannelloIntegrazioneMeta />
-      </Suspense>
+      <PannelloIntegrazioneMeta />
     </main>
   );
 }

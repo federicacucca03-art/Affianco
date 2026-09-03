@@ -2,7 +2,7 @@ import "server-only";
 import { getMetaServerConfig } from "@/lib/meta/config";
 import {
   getDecryptedMetaAccessToken,
-  getMetaConnectionForUser,
+  getMetaConnectionForClient,
   type MetaConnectionRecord,
 } from "@/lib/meta/connections";
 import { MetaError } from "@/lib/meta/errors";
@@ -161,11 +161,12 @@ export async function fetchAdAccountPages(
 
 export async function getAccessibleMetaAdAccounts(
   userId: string,
+  clientId: string,
   options?: { fetchImpl?: FetchLike },
 ): Promise<MetaAdAccountSummary[]> {
-  const connection = await getMetaConnectionForUser(userId);
+  const connection = await getMetaConnectionForClient(userId, clientId);
   assertMetaConnectionReadyForAdsRead(connection);
-  const token = await getDecryptedMetaAccessToken(userId);
+  const token = await getDecryptedMetaAccessToken(userId, clientId);
   const config = getMetaServerConfig();
   const fetchImpl = options?.fetchImpl ?? fetch;
   return fetchAdAccountPages(token, config.graphApiVersion, fetchImpl);

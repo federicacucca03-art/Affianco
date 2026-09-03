@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type MetaAdAccountSummary = {
@@ -22,6 +22,21 @@ type Mapping = {
   timezoneName: string | null;
 };
 
+type ConnectionPayload = {
+  connected: boolean;
+  status: "ACTIVE" | "EXPIRED" | "REVOKED" | "REAUTH_REQUIRED" | null;
+  tokenExpiresAt: string | null;
+  scopes: string[];
+  metaUserId: string | null;
+};
+
+function messaggioQuery(meta: string | null): string | null {
+  if (meta === "connected") return "Account Meta collegato.";
+  if (meta === "cancelled") return "Connessione annullata.";
+  if (meta === "error") return "Collegamento Meta non riuscito.";
+  return null;
+}
+
 async function bearerToken(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;
@@ -32,16 +47,19 @@ export function PannelloAccountMetaCliente({
 }: {
   clientId: string | null;
 }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [mapping, setMapping] = useState<Mapping | null>(null);
+  const [connected, setConnected] = useState(false);
   const [accounts, setAccounts] = useState<MetaAdAccountSummary[] | null>(null);
   const [selezionato, setSelezionato] = useState<string | null>(null);
   const [aperto, setAperto] = useState(false);
   const [caricamento, setCaricamento] = useState(true);
   const [busy, setBusy] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
-  const [reauth, setReauth] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
-  const caricaMapping = useCallback(async () => {
+  const carica = useCallback(async () => {
     if (!clientId) {
       setCaricamento(false);
       return;
@@ -53,41 +71,91 @@ export function PannelloAccountMetaCliente({
       return;
     }
     try {
-      const res = await fetch(
-        `/api/meta/client-account?clientId=${encodeURIComponent(clientId)}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      const data = (await res.json()) as {
-        mapping?: Mapping | null;
-        code?: string;
+      const [connRes, mapRes] = await Promise.all([
+        fetch(`/api/meta/connection?clientId=${encodeURIComponent(clientId)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(
+          `/api/meta/client-account?clientId=${encodeURIComponent(clientId)}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        ),
+      ]);
+      const connData = (await connRes.json()) as ConnectionPayload & {
         error?: string;
       };
-      if (res.status === 403 && (data.code === "META_REAUTH_REQUIRED" || data.code === "META_TOKEN_EXPIRED")) {
-        setReauth(true);
+      const mapData = (await mapRes.json()) as {
+        mapping?: Mapping | null;
+        error?: string;
+      };
+      if (!connRes.ok) {
+        setErrore("Impossibile leggere la connessione Meta.");
         setCaricamento(false);
         return;
       }
-      if (!res.ok) {
-        setErrore("Impossibile leggere il collegamento Meta.");
-        setCaricamento(false);
-        return;
+      setConnected(Boolean(connData.connected && connData.status === "ACTIVE"));
+      if (mapRes.ok) {
+        setMapping(mapData.mapping ?? null);
+      } else {
+        setMapping(null);
       }
-      setMapping(data.mapping ?? null);
     } catch {
-      setErrore("Impossibile leggere il collegamento Meta.");
+      setErrore("Impossibile leggere la connessione Meta.");
     } finally {
       setCaricamento(false);
     }
   }, [clientId]);
 
   useEffect(() => {
-    void caricaMapping();
-  }, [caricaMapping]);
+    void carica();
+  }, [carica]);
+
+  useEffect(() => {
+    const meta = searchParams.get("meta");
+    const msg = messaggioQuery(meta);
+    if (msg) setFeedback(msg);
+    if (meta && clientId) {
+      router.replace(`/clienti/${clientId}`);
+    }
+  }, [clientId, router, searchParams]);
+
+  async function collegaMeta() {
+    if (!clientId || busy) return;
+    setBusy(true);
+    setErrore(null);
+    setFeedback(null);
+    try {
+      const token = await bearerToken();
+      if (!token) {
+        setErrore("Sessione assente.");
+        return;
+      }
+      const res = await fetch("/api/meta/oauth/start", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ clientId }),
+      });
+      const data = (await res.json()) as {
+        authorizationUrl?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.authorizationUrl) {
+        setErrore("Collegamento Meta non riuscito.");
+        return;
+      }
+      window.location.assign(data.authorizationUrl);
+    } catch {
+      setErrore("Collegamento Meta non riuscito.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function apriSelettore() {
-    if (busy) return;
+    if (!clientId || busy) return;
     setErrore(null);
-    setReauth(false);
     setAperto(true);
     setAccounts(null);
     setSelezionato(null);
@@ -98,40 +166,35 @@ export function PannelloAccountMetaCliente({
     }
     setBusy(true);
     try {
-      const res = await fetch("/api/meta/ad-accounts", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(
+        `/api/meta/ad-accounts?clientId=${encodeURIComponent(clientId)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
       const data = (await res.json()) as {
         accounts?: MetaAdAccountSummary[];
         code?: string;
         error?: string;
       };
-      if (
-        res.status === 403 &&
-        (data.code === "META_REAUTH_REQUIRED" || data.code === "META_TOKEN_EXPIRED")
-      ) {
-        setReauth(true);
-        setAperto(false);
-        return;
-      }
       if (res.status === 404 && data.code === "META_CONNECTION_NOT_FOUND") {
-        setReauth(true);
+        setConnected(false);
         setAperto(false);
         return;
       }
       if (!res.ok) {
         setErrore("Impossibile caricare gli account Meta.");
+        setAperto(false);
         return;
       }
       setAccounts(data.accounts ?? []);
     } catch {
       setErrore("Impossibile caricare gli account Meta.");
+      setAperto(false);
     } finally {
       setBusy(false);
     }
   }
 
-  async function collega() {
+  async function collegaAccount() {
     if (!clientId || !selezionato || busy) return;
     const token = await bearerToken();
     if (!token) return;
@@ -160,15 +223,15 @@ export function PannelloAccountMetaCliente({
     }
   }
 
-  async function rimuovi() {
+  async function disconnettiMeta() {
     if (!clientId || busy) return;
     const token = await bearerToken();
     if (!token) return;
     setBusy(true);
     setErrore(null);
     try {
-      const res = await fetch("/api/meta/client-account", {
-        method: "DELETE",
+      const res = await fetch("/api/meta/disconnect", {
+        method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -176,12 +239,15 @@ export function PannelloAccountMetaCliente({
         body: JSON.stringify({ clientId }),
       });
       if (!res.ok) {
-        setErrore("Rimozione non riuscita.");
+        setErrore("Disconnessione non riuscita.");
         return;
       }
+      setConnected(false);
       setMapping(null);
+      setAperto(false);
+      setFeedback("Account Meta disconnesso per questo cliente.");
     } catch {
-      setErrore("Rimozione non riuscita.");
+      setErrore("Disconnessione non riuscita.");
     } finally {
       setBusy(false);
     }
@@ -199,47 +265,52 @@ export function PannelloAccountMetaCliente({
     );
   }
 
+  const mapped = Boolean(mapping);
+  const notConnected = !caricamento && !connected;
+  const connectedNoAccount = !caricamento && connected && !mapped;
+
   return (
     <section className="mt-8 rounded-[var(--radius)] border border-[var(--ink)]/10 bg-white p-5 shadow-[var(--shadow-soft)]">
-      <h2 className="text-base font-medium text-[var(--ink)]">Meta Ads</h2>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h2 className="text-base font-medium text-[var(--ink)]">Meta Ads</h2>
+        {connected ? (
+          <span className="rounded-full bg-[var(--primary-soft)] px-3 py-1 text-xs font-medium text-[var(--primary)]">
+            Meta collegato
+          </span>
+        ) : null}
+      </div>
 
       {caricamento ? (
         <p className="mt-3 text-sm text-[var(--ink-muted)]">Caricamento…</p>
       ) : null}
 
-      {reauth ? (
+      {notConnected ? (
         <p className="mt-3 text-sm text-[var(--ink-muted)]">
-          Ricollega Meta.{" "}
-          <Link
-            href="/impostazioni/integrazioni"
-            className="text-[var(--accent)] hover:underline"
-          >
-            Apri integrazioni
-          </Link>
+          Nessuna connessione Meta per questo cliente.
         </p>
       ) : null}
 
-      {!caricamento && !reauth && !mapping ? (
+      {connectedNoAccount ? (
         <p className="mt-3 text-sm text-[var(--ink-muted)]">
-          Nessun account pubblicitario collegato
+          Meta collegato. Seleziona l&apos;account pubblicitario.
         </p>
       ) : null}
 
-      {mapping ? (
+      {mapped ? (
         <dl className="mt-3 space-y-1 text-sm text-[var(--ink-muted)]">
           <div>
             <dt className="inline text-[var(--ink)]">Account: </dt>
             <dd className="inline">
-              {mapping.metaAdAccountName || mapping.metaAdAccountId}
+              {mapping?.metaAdAccountName || mapping?.metaAdAccountId}
             </dd>
           </div>
           <div>
             <dt className="inline text-[var(--ink)]">ID: </dt>
             <dd className="inline">
-              {mapping.metaAccountId || mapping.metaAdAccountId}
+              {mapping?.metaAccountId || mapping?.metaAdAccountId}
             </dd>
           </div>
-          {mapping.currency ? (
+          {mapping?.currency ? (
             <div>
               <dt className="inline text-[var(--ink)]">Valuta: </dt>
               <dd className="inline">{mapping.currency}</dd>
@@ -248,30 +319,48 @@ export function PannelloAccountMetaCliente({
         </dl>
       ) : null}
 
+      {feedback ? (
+        <p className="mt-3 text-sm text-[var(--ink)]" role="status">
+          {feedback}
+        </p>
+      ) : null}
+
       {errore ? (
         <p className="mt-3 text-sm text-[#7a3d58]" role="status">
           {errore}
         </p>
       ) : null}
 
-      {!reauth ? (
+      {!caricamento ? (
         <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => void apriSelettore()}
-            disabled={busy}
-            className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
-          >
-            {mapping ? "Cambia account" : "Seleziona account"}
-          </button>
-          {mapping ? (
+          {notConnected ? (
             <button
               type="button"
-              onClick={() => void rimuovi()}
+              onClick={() => void collegaMeta()}
+              disabled={busy}
+              className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+            >
+              Collega Meta
+            </button>
+          ) : null}
+          {connected ? (
+            <button
+              type="button"
+              onClick={() => void apriSelettore()}
+              disabled={busy}
+              className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+            >
+              {mapped ? "Cambia account" : "Seleziona account"}
+            </button>
+          ) : null}
+          {connected ? (
+            <button
+              type="button"
+              onClick={() => void disconnettiMeta()}
               disabled={busy}
               className="rounded-full border border-[var(--ink)]/15 bg-white px-4 py-2 text-sm font-medium text-[var(--ink)] hover:bg-[var(--surface-hover)] disabled:opacity-60"
             >
-              Rimuovi
+              Disconnetti Meta
             </button>
           ) : null}
         </div>
@@ -318,7 +407,7 @@ export function PannelloAccountMetaCliente({
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => void collega()}
+              onClick={() => void collegaAccount()}
               disabled={!selezionato || busy}
               className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
             >

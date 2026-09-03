@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { Suspense } from "react";
 import { PannelloAccountMetaCliente } from "@/components/clienti/PannelloAccountMetaCliente";
 import { supabase } from "@/lib/supabase";
-import { getClientById } from "@/utils/clientStorage";
 import type { Cliente } from "@/types/clienti";
+import { getClientById } from "@/utils/clientStorage";
 
 function normalizzaNome(nome: string): string {
   return nome.trim().toLowerCase().replace(/\s+/g, " ");
@@ -19,17 +20,41 @@ export default function DettaglioClientePage() {
 
   useEffect(() => {
     const id = params.id;
-    const trovato = id ? getClientById(id) : null;
-    setLocale(trovato);
-    if (!trovato) return;
-
     void (async () => {
-      const { data } = await supabase.from("clients").select("id, name");
-      const lista = (data ?? []) as { id: string; name: string }[];
-      const match = lista.find(
-        (c) => normalizzaNome(c.name) === normalizzaNome(trovato.nome),
-      );
-      setDbClientId(match?.id ?? null);
+      const trovato = id ? getClientById(id) : null;
+      if (trovato) {
+        setLocale(trovato);
+        const { data } = await supabase.from("clients").select("id, name");
+        const lista = (data ?? []) as { id: string; name: string }[];
+        const match = lista.find(
+          (c) => normalizzaNome(c.name) === normalizzaNome(trovato.nome),
+        );
+        setDbClientId(match?.id ?? null);
+        return;
+      }
+
+      if (!id) {
+        setLocale(null);
+        return;
+      }
+
+      const { data } = await supabase
+        .from("clients")
+        .select("id, name")
+        .eq("id", id)
+        .maybeSingle();
+      const row = data as { id: string; name: string } | null;
+      if (!row) {
+        setLocale(null);
+        return;
+      }
+      setLocale({
+        id: row.id,
+        nome: row.name,
+        settore: "",
+        citta: "",
+      });
+      setDbClientId(row.id);
     })();
   }, [params.id]);
 
@@ -67,7 +92,13 @@ export default function DettaglioClientePage() {
       <p className="mt-1 text-sm text-[var(--ink-muted)]">
         {[locale.settore, locale.citta].filter(Boolean).join(" · ")}
       </p>
-      <PannelloAccountMetaCliente clientId={dbClientId} />
+      <Suspense
+        fallback={
+          <p className="mt-8 text-sm text-[var(--ink-muted)]">Caricamento…</p>
+        }
+      >
+        <PannelloAccountMetaCliente clientId={dbClientId} />
+      </Suspense>
     </main>
   );
 }

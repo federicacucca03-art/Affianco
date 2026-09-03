@@ -1,5 +1,6 @@
 import "server-only";
 import { MetaError } from "@/lib/meta/errors";
+import { isUuid } from "@/lib/meta/ids";
 import {
   getMetaAppSecret,
   getMetaServerConfig,
@@ -12,7 +13,7 @@ import {
 import { assertMetaConnectionHasScope } from "@/lib/meta/scopes";
 
 export const META_REQUIRED_SCOPE = "ads_read";
-export const META_INTEGRATIONS_PATH = "/impostazioni/integrazioni";
+export const META_CLIENTI_PATH = "/clienti";
 
 export type MetaOAuthResultQuery = "connected" | "cancelled" | "error";
 
@@ -65,12 +66,16 @@ export function oauthResultFromMetaErrorParams(
   return "error";
 }
 
-export function integrazioniRedirectUrl(
+export function metaOAuthReturnUrl(
   requestUrl: string,
   result: MetaOAuthResultQuery,
+  clientId?: string | null,
 ): string {
   const origin = new URL(requestUrl).origin;
-  const dest = new URL(META_INTEGRATIONS_PATH, origin);
+  const cid = clientId?.trim() ?? "";
+  const dest = cid && isUuid(cid)
+    ? new URL(`${META_CLIENTI_PATH}/${cid}`, origin)
+    : new URL(META_CLIENTI_PATH, origin);
   dest.searchParams.set("meta", result);
   return dest.toString();
 }
@@ -204,6 +209,7 @@ export async function inspectMetaUserToken(
 
 export async function persistExchangedMetaConnection(
   userId: string,
+  clientId: string,
   token: ParsedMetaTokenResponse,
   debug: ParsedMetaDebugToken,
 ): Promise<MetaConnectionRecord> {
@@ -216,6 +222,7 @@ export async function persistExchangedMetaConnection(
   assertMetaConnectionHasScope({ scopes: debug.scopes }, META_REQUIRED_SCOPE);
   return saveMetaConnection({
     userId,
+    clientId,
     accessToken: token.accessToken,
     metaUserId: debug.userId,
     tokenExpiresAt: expiryIsoFromTokenResponses(token, debug),

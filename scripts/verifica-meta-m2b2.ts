@@ -14,7 +14,7 @@ import {
 import {
   buildMetaAuthorizationUrl,
   expiryIsoFromTokenResponses,
-  integrazioniRedirectUrl,
+  metaOAuthReturnUrl,
   oauthResultFromMetaErrorParams,
   parseDebugTokenResponse,
   parseOAuthTokenResponse,
@@ -62,8 +62,9 @@ const config = {
 };
 
 console.log("\n=== M2B.2 A–D authorization URL + state ===");
-const s1 = createMetaOAuthState("user-a");
-const s2 = createMetaOAuthState("user-a");
+const CLIENT_A = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+const s1 = createMetaOAuthState("user-a", CLIENT_A);
+const s2 = createMetaOAuthState("user-a", CLIENT_A);
 const url1 = buildMetaAuthorizationUrl(config, s1.nonce);
 const url2 = buildMetaAuthorizationUrl(config, s2.nonce);
 const parsed = new URL(url1);
@@ -77,7 +78,7 @@ assert(!parsed.searchParams.has("scope"), "A niente scope ridondante");
 assert(!url1.includes("ads_management"), "B ads_management assente");
 assert(!url1.includes("business_management"), "C business_management assente");
 assert(s1.nonce !== s2.nonce && url1 !== url2, "D state casuale");
-assert(s1.cookieValue.startsWith("v1."), "cookie versionata");
+assert(s1.cookieValue.startsWith("v2."), "cookie versionata");
 assert(!s1.nonce.includes("user-a"), "state URL senza user_id");
 
 console.log("\n=== M2B.2 E–G CSRF / code ===");
@@ -90,7 +91,7 @@ try {
 assert(eCode === "META_OAUTH_STATE_INVALID", "E state mismatch");
 
 const expiredBody = Buffer.from(
-  JSON.stringify({ u: "user-a", n: s1.nonce, e: Date.now() - 1000 }),
+  JSON.stringify({ u: "user-a", c: CLIENT_A, n: s1.nonce, e: Date.now() - 1000 }),
   "utf8",
 ).toString("base64url");
 const expiredSig = createHmac("sha256", metaTokenEncryptionKeyBytes("META_OAUTH_STATE_INVALID"))
@@ -99,7 +100,7 @@ const expiredSig = createHmac("sha256", metaTokenEncryptionKeyBytes("META_OAUTH_
   .toString("base64url");
 let fCode = "";
 try {
-  consumeMetaOAuthState(`v1.${expiredBody}.${expiredSig}`, s1.nonce);
+  consumeMetaOAuthState(`v2.${expiredBody}.${expiredSig}`, s1.nonce);
 } catch (error) {
   fCode = error instanceof MetaError ? error.code : "OTHER";
 }
@@ -113,7 +114,8 @@ try {
 }
 assert(gCode === "META_TOKEN_RESPONSE_INVALID", "G token/code assente rifiutato");
 assert(
-  consumeMetaOAuthState(s1.cookieValue, s1.nonce) === "user-a",
+  consumeMetaOAuthState(s1.cookieValue, s1.nonce).userId === "user-a" &&
+    consumeMetaOAuthState(s2.cookieValue, s2.nonce).clientId === CLIENT_A,
   "state valido recupera userId",
 );
 
@@ -124,11 +126,12 @@ assert(
 );
 assert(oauthResultFromMetaErrorParams("server_error", null) === "error", "H errore generico");
 
-const evil = integrazioniRedirectUrl(
+const evil = metaOAuthReturnUrl(
   "https://affianco.vercel.app/api/meta/oauth/callback?next=https://evil.example&code=abc",
   "connected",
+  CLIENT_A,
 );
-assert(evil.startsWith("https://affianco.vercel.app/impostazioni/integrazioni"), "O path interno");
+assert(evil.startsWith(`https://affianco.vercel.app/clienti/${CLIENT_A}`), "O path interno");
 assert(!evil.includes("evil.example"), "O niente host esterno");
 assert(new URL(evil).searchParams.get("meta") === "connected", "O solo meta=connected");
 assert(!evil.includes(FAKE_CODE) && !evil.includes(FAKE_TOKEN), "O niente code/token");
@@ -154,7 +157,7 @@ const encrypted = encryptMetaToken(parsedToken.accessToken);
 assert(encrypted !== FAKE_TOKEN && !encrypted.includes(FAKE_TOKEN), "J ciphertext");
 assert(decryptMetaToken(encrypted) === FAKE_TOKEN, "J roundtrip");
 const saveSrc = read("src/lib/meta/connections.ts");
-assert(saveSrc.includes('onConflict: "user_id"'), "L upsert stessa riga utente");
+assert(saveSrc.includes('onConflict: "user_id,client_id"'), "L upsert stessa riga utente+cliente");
 assert(saveSrc.includes("access_token_encrypted: encrypted"), "K DB payload cifrato");
 assert(!saveSrc.includes("access_token:"), "K niente plaintext field");
 assert(expiryIsoFromTokenResponses(parsedToken, debug), "expiry da expires_in se debug=0");
@@ -174,18 +177,20 @@ const startSrc = read("src/app/api/meta/oauth/start/route.ts");
 const cbSrc = read("src/app/api/meta/oauth/callback/route.ts");
 const stSrc = read("src/app/api/meta/connection/route.ts");
 const dsSrc = read("src/app/api/meta/disconnect/route.ts");
-const uiSrc = read("src/components/impostazioni/PannelloIntegrazioneMeta.tsx");
+const uiSrc = read("src/components/clienti/PannelloAccountMetaCliente.tsx");
 assert(startSrc.includes("requireRouteUserId"), "start auth");
 assert(startSrc.includes("{ authorizationUrl }"), "I solo URL al client");
+assert(startSrc.includes("assertClientOwnedByUser"), "start ownership cliente");
 assert(!startSrc.includes("access_token"), "I start senza token");
-assert(cbSrc.includes('integrazioniRedirectUrl'), "callback redirect helper");
-assert(!cbSrc.includes("searchParams.get(\"next\")"), "O niente next=");
+assert(cbSrc.includes("metaOAuthReturnUrl"), "callback redirect helper");
+assert(!cbSrc.includes('searchParams.get("next")'), "O niente next=");
 assert(stSrc.includes("requireRouteUserId"), "status auth");
+assert(stSrc.includes("clientId"), "status richiede clientId");
 assert(!stSrc.includes("access_token_encrypted"), "M status senza ciphertext");
 assert(!stSrc.includes("encryptMetaToken") && !stSrc.includes("decryptMetaToken"), "M no token fn");
 assert(dsSrc.includes("requireRouteUserId"), "N disconnect auth");
-assert(!dsSrc.includes("await request.json"), "N ignora body (no target user)");
-assert(dsSrc.includes("getMetaConnectionForUser(userId)"), "N solo caller");
+assert(dsSrc.includes("body.clientId"), "N richiede clientId");
+assert(dsSrc.includes("getMetaConnectionForClient(userId, clientId)"), "N solo caller+cliente");
 assert(uiSrc.includes("window.location.assign(data.authorizationUrl)"), "client redirect Meta");
 assert(!uiSrc.includes("META_APP_SECRET"), "UI senza secret");
 assert(!uiSrc.includes("dialog/oauth"), "UI non costruisce OAuth URL");

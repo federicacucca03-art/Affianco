@@ -38,6 +38,7 @@ process.env.META_GRAPH_API_VERSION = "v21.0";
 const conn = (over: Partial<MetaConnectionRecord>): MetaConnectionRecord => ({
   id: "11111111-1111-4111-8111-111111111111",
   userId: "22222222-2222-4222-8222-222222222222",
+  clientId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
   metaUserId: "99",
   tokenExpiresAt: null,
   scopes: ["ads_read", "public_profile"],
@@ -174,8 +175,9 @@ assert(mapRoute.includes("requireRouteUserId"), "P mapping auth");
 assert(!mapRoute.includes("body.userId"), "Q no userId dal body");
 assert(mapSrc.includes('onConflict: "user_id,client_id"'), "O upsert one-per-client");
 assert(mapSrc.includes("assertClientOwnedByUser"), "L ownership cliente");
-assert(mapSrc.includes("getMetaConnectionForUser(userId)"), "M connection caller");
+assert(mapSrc.includes("getMetaConnectionForClient(userId, clientId)"), "M connection caller");
 assert(mapSrc.includes("getAccessibleMetaAdAccounts"), "N revalidate accessibili");
+assert(adRoute.includes("clientId"), "discovery richiede clientId");
 assert(sql.includes("unique (user_id, client_id)"), "O UNIQUE SQL");
 assert(sql.includes("enable row level security"), "RLS");
 assert(sql.includes("revoke all on table public.client_ad_accounts from anon"), "P anon");

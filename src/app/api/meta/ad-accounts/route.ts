@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireRouteUserId } from "@/lib/api-auth";
 import { getAccessibleMetaAdAccounts } from "@/lib/meta/accounts";
+import { assertClientOwnedByUser } from "@/lib/meta/client-accounts";
 import { isMetaError } from "@/lib/meta/errors";
 import { metaHttpStatus } from "@/lib/meta/graph";
+import { isUuid } from "@/lib/meta/ids";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,8 +15,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Non autenticato." }, { status: 401 });
   }
 
+  const clientId = new URL(request.url).searchParams.get("clientId")?.trim() ?? "";
+  if (!isUuid(clientId)) {
+    return NextResponse.json({ error: "Cliente mancante." }, { status: 400 });
+  }
+
   try {
-    const accounts = await getAccessibleMetaAdAccounts(userId);
+    await assertClientOwnedByUser(userId, clientId);
+    const accounts = await getAccessibleMetaAdAccounts(userId, clientId);
     return NextResponse.json({
       accounts,
       ...(accounts.length === 0 ? { code: "META_NO_AD_ACCOUNTS" } : {}),
