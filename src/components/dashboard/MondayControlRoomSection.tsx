@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
   etichettaAttentionSource,
@@ -11,6 +12,14 @@ import {
   type MondayControlRoomSummary,
   type UrgencyLevel,
 } from "@/lib/monday-control-room";
+import {
+  etichettaConfidence,
+  etichettaLikelyArea,
+  isDiagnosisUiEligible,
+  resolveDiagnosisEligibility,
+} from "@/lib/campaign-diagnosis/eligibility";
+import { fetchCampaignDiagnosis } from "@/lib/campaign-diagnosis-client";
+import type { CampaignDiagnosisResponse } from "@/lib/campaign-diagnosis/types";
 import type { StatoChipKind } from "@/components/nuova-contatti/StatoChip";
 
 const MAX_URGENT = 8;
@@ -71,10 +80,127 @@ function Badge({ kind, label }: { kind: StatoChipKind; label: string }) {
   );
 }
 
+function rowDiagnosisEligible(item: ControlRoomAttentionItem): boolean {
+  const eligibility = resolveDiagnosisEligibility({
+    attentionState: item.attentionState,
+    health: item.healthStatus,
+    campaignStatus: item.campaignStatus,
+  });
+  return isDiagnosisUiEligible(eligibility);
+}
+
+function DiagnosisPanel({
+  result,
+  loading,
+  error,
+  onRetry,
+}: {
+  result: CampaignDiagnosisResponse | null;
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
+  if (loading) {
+    return (
+      <p className="mt-2 text-[12px] text-[var(--ink-muted)]">Analisi in corso…</p>
+    );
+  }
+  if (error) {
+    return (
+      <div className="mt-2">
+        <p className="text-[12px] text-[var(--ink-muted)]">{error}</p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-1 text-[12px] font-medium text-[var(--primary)] hover:opacity-80"
+        >
+          Riprova
+        </button>
+      </div>
+    );
+  }
+  if (!result) return null;
+  if (!result.diagnosis) {
+    return (
+      <div className="mt-2">
+        <p className="text-[12px] text-[var(--ink-muted)]">
+          {result.message ?? "Analisi non disponibile al momento."}
+        </p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-1 text-[12px] font-medium text-[var(--primary)] hover:opacity-80"
+        >
+          Riprova
+        </button>
+      </div>
+    );
+  }
+  const d = result.diagnosis;
+  return (
+    <div className="mt-2 rounded-[10px] bg-[rgba(80,70,130,0.04)] px-3 py-2.5">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+        Perché Ally lo segnala
+      </p>
+      <p className="mt-1 text-[13px] leading-snug text-[var(--ink)]">{d.summary}</p>
+      <p className="mt-2 text-[12px] text-[var(--ink-muted)]">
+        Area probabile:{" "}
+        <span className="text-[var(--ink)]">{etichettaLikelyArea(d.likely_area)}</span>
+        {" · "}
+        Confidenza:{" "}
+        <span className="text-[var(--ink)]">{etichettaConfidence(d.confidence)}</span>
+      </p>
+      {d.evidence.length > 0 ? (
+        <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[12px] text-[var(--ink-muted)]">
+          {d.evidence.map((e) => (
+            <li key={e}>{e}</li>
+          ))}
+        </ul>
+      ) : null}
+      {d.uncertainty || d.what_not_to_conclude ? (
+        <p className="mt-1.5 text-[12px] leading-snug text-[var(--ink-muted)]">
+          Limite: {d.what_not_to_conclude ?? d.uncertainty}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function AttentionRow({ item }: { item: ControlRoomAttentionItem }) {
   const kind = chipKind(item.attentionState);
   const urgencyText = urgencySupportingText(item.urgencyLevel);
   const metric = formatAttentionMetric(item);
+  const canDiagnose = rowDiagnosisEligible(item);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<CampaignDiagnosisResponse | null>(null);
+
+  async function runDiagnosis() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchCampaignDiagnosis(item.campaignId, item.source);
+      setResult(res);
+      if (!res.diagnosis && res.message) {
+        // Keep panel open with message + retry
+      }
+    } catch {
+      setError("Analisi non disponibile al momento.");
+      setResult(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function onPerche() {
+    const next = !open;
+    setOpen(next);
+    if (next && !result && !loading) {
+      void runDiagnosis();
+    }
+  }
+
   return (
     <li className="flex flex-col gap-2 border-b border-[rgba(80,70,130,0.06)] py-3 last:border-0 sm:flex-row sm:items-start sm:gap-4">
       <div className="flex flex-wrap items-center gap-1.5 sm:w-[9rem] sm:flex-col sm:items-start">
@@ -104,6 +230,23 @@ function AttentionRow({ item }: { item: ControlRoomAttentionItem }) {
           >
             {urgencyText}
           </p>
+        ) : null}
+        {canDiagnose ? (
+          <button
+            type="button"
+            onClick={onPerche}
+            className="mt-1.5 text-[12px] font-medium text-[var(--primary)] hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+          >
+            {open ? "Nascondi" : "Perché?"}
+          </button>
+        ) : null}
+        {open && canDiagnose ? (
+          <DiagnosisPanel
+            result={result}
+            loading={loading}
+            error={error}
+            onRetry={() => void runDiagnosis()}
+          />
         ) : null}
       </div>
       <Link

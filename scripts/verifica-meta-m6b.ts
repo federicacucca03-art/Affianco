@@ -476,7 +476,12 @@ test("UI shows urgency secondary to attention", () => {
   assert(ui.includes("urgencySupportingText"), "supporting urgency text");
   assert(!ui.includes("urgencyCounts"), "oggi is attention-based");
   assert(ui.includes("da controllare"), "oggi attention chips");
-  assert(!ui.includes("uppercase tracking-wide"), "no uppercase urgency labels");
+  // Urgency must not be the old dominant uppercase MEDIA/ALTA first-line label.
+  assert(
+    !ui.includes("uppercase tracking-wide ${urgencyTone"),
+    "no uppercase urgency labels",
+  );
+  assert(ui.includes("Priorità ${short.toLowerCase()}"), "lowercase priorità");
   assert(!ui.includes("etichettaPriorityBand"), "old band removed");
 });
 
