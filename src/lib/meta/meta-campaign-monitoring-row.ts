@@ -11,6 +11,13 @@ import {
 } from "@/lib/meta/insights-control-room";
 import type { MetaMonitoringKpi } from "@/lib/meta/campaign-target";
 import type { HealthStatus } from "@/lib/control-room";
+import {
+  resolveLinkedMonitoringTarget,
+  type LinkedAffiancoCampaignSnapshot,
+  type MetaCampaignLinkState,
+  type MetaTargetSource,
+} from "@/lib/meta/campaign-link-compatibility";
+import type { ResultMappingConfidence } from "@/lib/meta/insight-actions";
 
 export type MetaCampaignMonitoringRow = {
   id: string;
@@ -32,6 +39,12 @@ export type MetaCampaignMonitoringRow = {
   frequency: number | null;
   primaryKpi: MetaMonitoringKpi | null;
   targetValue: number | null;
+  storedPrimaryKpi: MetaMonitoringKpi | null;
+  storedTargetValue: number | null;
+  targetSource: MetaTargetSource;
+  linkState: MetaCampaignLinkState;
+  linkedCampaignId: string | null;
+  linkedCampaignName: string | null;
   mode: MetaMonitoringMode;
   healthAvailability: MetaHealthAvailability;
   healthStatus: HealthStatus | null;
@@ -50,18 +63,36 @@ export type MetaCampaignApiRow = {
   insights_period_frequency: number | null;
   primary_kpi: string | null;
   target_value: number | string | null;
+  affianco_campaign_id?: string | null;
 };
 
 export type MetaCampaignInsightAgg = {
   spend: number;
   impressions: number;
   linkClicks: number;
+  primaryResults?: number | null;
+  primaryResultType?: string | null;
+  resultMappingConfidence?: ResultMappingConfidence;
 };
 
 function parseTargetValue(raw: number | string | null): number | null {
   if (raw == null || raw === "") return null;
   const n = typeof raw === "number" ? raw : Number(String(raw).replace(",", "."));
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function parseStoredKpi(raw: string | null): MetaMonitoringKpi | null {
+  if (
+    raw === "CPL" ||
+    raw === "CPA" ||
+    raw === "CPM" ||
+    raw === "CPC" ||
+    raw === "ROAS" ||
+    raw === "NONE"
+  ) {
+    return raw;
+  }
+  return null;
 }
 
 function buildAggregate(
@@ -83,6 +114,18 @@ function buildAggregate(
     spend != null && impressions != null && impressions > 0
       ? Math.round((spend / impressions) * 1000 * 100) / 100
       : null;
+  const confidence = agg?.resultMappingConfidence ?? "UNKNOWN";
+  const primaryResults =
+    confidence === "CONFIDENT" ? (agg?.primaryResults ?? null) : null;
+  const primaryResultType =
+    confidence === "CONFIDENT" ? (agg?.primaryResultType ?? null) : null;
+  const cpl =
+    confidence === "CONFIDENT" &&
+    spend != null &&
+    primaryResults != null &&
+    primaryResults > 0
+      ? Math.round((spend / primaryResults) * 100) / 100
+      : null;
 
   return {
     spend,
@@ -94,11 +137,11 @@ function buildAggregate(
     ctr,
     cpc,
     cpm,
-    primaryResultType: null,
-    primaryResults: null,
+    primaryResultType,
+    primaryResults,
     primaryResultValue: null,
-    resultMappingConfidence: "UNKNOWN",
-    cpl: null,
+    resultMappingConfidence: confidence,
+    cpl,
     roas: null,
     dayCount: 0,
   };
@@ -108,26 +151,41 @@ export function mapMetaCampaignToMonitoringRow(
   c: MetaCampaignApiRow,
   agg: MetaCampaignInsightAgg | null,
   clientName: string,
+  linkedCampaign?: LinkedAffiancoCampaignSnapshot | null,
 ): MetaCampaignMonitoringRow {
   const frequency = c.insights_period_frequency ?? null;
   const aggregate = buildAggregate(agg, frequency);
-  const primaryKpi = (c.primary_kpi as MetaMonitoringKpi | null) ?? null;
-  const targetValue = parseTargetValue(c.target_value);
+  const storedPrimaryKpi = parseStoredKpi(c.primary_kpi);
+  const storedTargetValue = parseTargetValue(c.target_value);
   const since = c.insights_period_since ?? "";
   const until = c.insights_period_until ?? "";
+
+  const resolved = resolveLinkedMonitoringTarget({
+    affiancoCampaignId: c.affianco_campaign_id ?? null,
+    linkedCampaign: linkedCampaign ?? null,
+    metaRawObjective: c.raw_objective,
+    storedPrimaryKpi,
+    storedTargetValue,
+    resultMappingConfidence: aggregate.resultMappingConfidence,
+    primaryResultType: aggregate.primaryResultType,
+  });
 
   const controlRoom = metaInsightsToControlRoomInput({
     aggregate,
     since,
     until,
     target:
-      primaryKpi && primaryKpi !== "NONE" && targetValue != null
-        ? { primaryKpi, targetValue }
-        : primaryKpi === "NONE"
+      resolved.primaryKpi &&
+      resolved.primaryKpi !== "NONE" &&
+      resolved.targetValue != null
+        ? { primaryKpi: resolved.primaryKpi, targetValue: resolved.targetValue }
+        : resolved.primaryKpi === "NONE"
           ? { primaryKpi: "NONE", targetValue: null }
           : null,
     effectiveStatus: c.effective_status,
   });
+
+  const incompatible = resolved.linkState === "LINKED_BUT_KPI_INCOMPATIBLE";
 
   return {
     id: c.id,
@@ -147,11 +205,19 @@ export function mapMetaCampaignToMonitoringRow(
     cpc: controlRoom.metrics.cpc,
     cpm: controlRoom.metrics.cpm,
     frequency: controlRoom.metrics.frequency,
-    primaryKpi: controlRoom.target.primaryKpi,
-    targetValue: controlRoom.target.targetValue,
+    primaryKpi: incompatible ? null : controlRoom.target.primaryKpi,
+    targetValue: incompatible ? null : controlRoom.target.targetValue,
+    storedPrimaryKpi: resolved.storedPrimaryKpi,
+    storedTargetValue: resolved.storedTargetValue,
+    targetSource: resolved.targetSource,
+    linkState: resolved.linkState,
+    linkedCampaignId: resolved.linkedCampaignId,
+    linkedCampaignName: resolved.linkedCampaignName,
     mode: controlRoom.mode,
-    healthAvailability: controlRoom.healthAvailability,
-    healthStatus: controlRoom.health?.status ?? null,
+    healthAvailability: incompatible
+      ? "LINKED_BUT_KPI_INCOMPATIBLE"
+      : controlRoom.healthAvailability,
+    healthStatus: incompatible ? null : (controlRoom.health?.status ?? null),
   };
 }
 

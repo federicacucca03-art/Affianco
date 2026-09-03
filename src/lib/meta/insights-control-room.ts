@@ -31,7 +31,8 @@ export type MetaHealthAvailability =
   | "TARGET_REQUIRED"
   | "RESULT_MAPPING_REQUIRED"
   | "INSUFFICIENT_DATA"
-  | "ROAS_DEFERRED";
+  | "ROAS_DEFERRED"
+  | "LINKED_BUT_KPI_INCOMPATIBLE";
 
 export type MetaControlRoomMetrics = {
   spend: number | null;
@@ -258,6 +259,8 @@ export function etichettaHealthAvailability(
       return "Dati insufficienti";
     case "ROAS_DEFERRED":
       return "ROAS non ancora supportato";
+    case "LINKED_BUT_KPI_INCOMPATIBLE":
+      return "KPI pianificato non compatibile";
   }
 }
 
