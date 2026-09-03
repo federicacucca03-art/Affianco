@@ -4,11 +4,12 @@ import Link from "next/link";
 import {
   etichettaAttentionSource,
   etichettaAttentionState,
-  etichettaPriorityBand,
+  etichettaUrgencyLevel,
   formatAttentionMetric,
   type AttentionState,
   type ControlRoomAttentionItem,
   type MondayControlRoomSummary,
+  type UrgencyLevel,
 } from "@/lib/monday-control-room";
 import type { StatoChipKind } from "@/components/nuova-contatti/StatoChip";
 
@@ -40,6 +41,19 @@ function chipKind(state: AttentionState): StatoChipKind {
   }
 }
 
+function urgencyTone(level: UrgencyLevel): string {
+  switch (level) {
+    case "NOW":
+      return "font-semibold text-[#7a3d58]";
+    case "SOON":
+      return "font-medium text-[#6b5420]";
+    case "LATER":
+      return "font-medium text-[var(--ink-muted)]";
+    case "NONE":
+      return "font-medium text-[var(--ink-muted)]";
+  }
+}
+
 function Badge({ kind, label }: { kind: StatoChipKind; label: string }) {
   return (
     <span
@@ -52,17 +66,20 @@ function Badge({ kind, label }: { kind: StatoChipKind; label: string }) {
 
 function AttentionRow({ item }: { item: ControlRoomAttentionItem }) {
   const kind = chipKind(item.attentionState);
-  const band = etichettaPriorityBand(item.attentionState);
+  const urgencyLabel = etichettaUrgencyLevel(item.urgencyLevel);
   const metric = formatAttentionMetric(item);
   return (
     <li className="flex flex-col gap-2 border-b border-[rgba(80,70,130,0.06)] py-3 last:border-0 sm:flex-row sm:items-start sm:gap-4">
       <div className="flex flex-wrap items-center gap-1.5 sm:w-[9rem] sm:flex-col sm:items-start">
-        <Badge kind={kind} label={etichettaAttentionState(item.attentionState)} />
-        {band ? (
-          <span className="text-[10px] font-medium text-[var(--ink-muted)]">
-            {band}
+        {urgencyLabel ? (
+          <span
+            className={`text-[10px] uppercase tracking-wide ${urgencyTone(item.urgencyLevel)}`}
+            title={item.urgencyReason}
+          >
+            {urgencyLabel}
           </span>
         ) : null}
+        <Badge kind={kind} label={etichettaAttentionState(item.attentionState)} />
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium leading-snug text-[var(--ink)]">
@@ -96,58 +113,69 @@ function plural(n: number, uno: string, molti: string): string {
   return `${n} ${n === 1 ? uno : molti}`;
 }
 
+/**
+ * Urgency-aware Oggi summary: leads with how soon to look,
+ * then keeps configuration / monitoring / historical categories clear.
+ */
 function TodaySummary({ summary }: { summary: MondayControlRoomSummary }) {
-  const daControllare =
-    summary.counts.CRITICAL + summary.counts.NEEDS_ATTENTION;
+  const { urgencyCounts, counts } = summary;
   const chips: { key: string; label: string; strong?: boolean }[] = [];
-  if (daControllare > 0) {
+
+  if (urgencyCounts.NOW > 0) {
     chips.push({
-      key: "check",
-      label: plural(daControllare, "da controllare", "da controllare"),
+      key: "now",
+      label: plural(urgencyCounts.NOW, "urgente", "urgenti"),
       strong: true,
     });
   }
-  if (summary.counts.CONFIGURATION_REQUIRED > 0) {
+  if (urgencyCounts.SOON > 0) {
+    chips.push({
+      key: "soon",
+      label: plural(
+        urgencyCounts.SOON,
+        "da vedere presto",
+        "da vedere presto",
+      ),
+      strong: true,
+    });
+  }
+  if (counts.CONFIGURATION_REQUIRED > 0) {
     chips.push({
       key: "cfg",
       label: plural(
-        summary.counts.CONFIGURATION_REQUIRED,
+        counts.CONFIGURATION_REQUIRED,
         "da configurare",
         "da configurare",
       ),
     });
   }
-  if (summary.counts.MONITOR > 0) {
+  if (counts.MONITOR > 0) {
     chips.push({
       key: "mon",
-      label: plural(
-        summary.counts.MONITOR,
-        "da monitorare",
-        "da monitorare",
-      ),
+      label: plural(counts.MONITOR, "da monitorare", "da monitorare"),
     });
   }
-  if (summary.counts.INSUFFICIENT_DATA > 0) {
+  if (counts.INSUFFICIENT_DATA > 0) {
     chips.push({
       key: "ins",
       label: plural(
-        summary.counts.INSUFFICIENT_DATA,
+        counts.INSUFFICIENT_DATA,
         "con dati insufficienti",
         "con dati insufficienti",
       ),
     });
   }
-  if (summary.counts.STABLE > 0) {
+  if (counts.STABLE > 0) {
     chips.push({
       key: "ok",
-      label: plural(summary.counts.STABLE, "stabile", "stabili"),
+      label: plural(counts.STABLE, "stabile", "stabili"),
     });
   }
-  if (summary.counts.HISTORICAL > 0) {
+  if (counts.HISTORICAL > 0) {
     chips.push({
       key: "hist",
       label: plural(
-        summary.counts.HISTORICAL,
+        counts.HISTORICAL,
         "in revisione storica",
         "in revisione storica",
       ),
@@ -206,7 +234,7 @@ export function MondayControlRoomSection({
             Da controllare
           </p>
           <p className="mt-0.5 text-[12px] leading-relaxed text-[var(--ink-muted)]">
-            Le campagne che meritano la tua attenzione adesso.
+            Ordinate per urgenza — prima ciò che non può aspettare.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

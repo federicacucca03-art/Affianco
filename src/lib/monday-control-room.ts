@@ -1,10 +1,12 @@
 /**
- * M6A — Monday Control Room attention model (deterministic, no LLM).
+ * M6A/M6B — Monday Control Room attention + urgency (deterministic, no LLM).
  *
- * Answers: "Where should I look first?"
+ * Attention answers: "Where should I look?" / what type of situation.
+ * Urgency answers: "How soon should I look?"
+ * Health answers: how performance compares to target.
+ *
  * Does not answer: "What should I do?"
- *
- * Health ≠ priority. No campaign_checks writes. No Meta writes.
+ * Health ≠ attention ≠ urgency. No campaign_checks writes. No Meta writes.
  */
 
 import type { Campagna } from "@/types/campagne";
@@ -54,6 +56,9 @@ export type AttentionTrend =
   | "UNKNOWN"
   | "INSUFFICIENT";
 
+/** How soon the user should look — distinct from health and attention. */
+export type UrgencyLevel = "NOW" | "SOON" | "LATER" | "NONE";
+
 export type ControlRoomAttentionItem = {
   campaignId: string;
   clientId: string | null;
@@ -63,6 +68,8 @@ export type ControlRoomAttentionItem = {
   campaignStatus: string | null;
   attentionState: AttentionState;
   reason: string;
+  urgencyLevel: UrgencyLevel;
+  urgencyReason: string;
   primaryMetric: string | null;
   primaryMetricValue: number | null;
   targetValue: number | null;
@@ -81,9 +88,10 @@ export type MondayControlRoomSummary = {
   stable: ControlRoomAttentionItem[];
   historical: ControlRoomAttentionItem[];
   counts: Record<AttentionState, number>;
+  urgencyCounts: Record<UrgencyLevel, number>;
 };
 
-/** Deterministic display order for "Da controllare" (lower = first). */
+/** Deterministic display order for attention type (lower = first). */
 export const ATTENTION_ORDER: Record<AttentionState, number> = {
   CRITICAL: 0,
   NEEDS_ATTENTION: 1,
@@ -92,6 +100,14 @@ export const ATTENTION_ORDER: Record<AttentionState, number> = {
   INSUFFICIENT_DATA: 4,
   STABLE: 5,
   HISTORICAL: 6,
+};
+
+/** Urgency sort order (lower = first). */
+export const URGENCY_ORDER: Record<UrgencyLevel, number> = {
+  NOW: 0,
+  SOON: 1,
+  LATER: 2,
+  NONE: 3,
 };
 
 export const URGENT_STATES: ReadonlySet<AttentionState> = new Set([
@@ -125,16 +141,30 @@ export function etichettaAttentionSource(source: AttentionSource): string {
   return source === "META" ? "Meta" : "Affianco";
 }
 
+export function etichettaUrgencyLevel(level: UrgencyLevel): string | null {
+  switch (level) {
+    case "NOW":
+      return "Alta";
+    case "SOON":
+      return "Media";
+    case "LATER":
+      return "Bassa";
+    case "NONE":
+      return null;
+  }
+}
+
+/** @deprecated Prefer etichettaUrgencyLevel — kept for compatibility. */
 export function etichettaPriorityBand(state: AttentionState): string | null {
   switch (state) {
     case "CRITICAL":
-      return "Alta priorità";
+      return "Alta";
     case "NEEDS_ATTENTION":
-      return "Priorità";
+      return "Media";
     case "CONFIGURATION_REQUIRED":
-      return "Configurazione";
+      return "Bassa";
     case "MONITOR":
-      return "Monitoraggio";
+      return "Bassa";
     default:
       return null;
   }
@@ -167,7 +197,125 @@ function normalizeMetaTrend(
 }
 
 /**
- * Core priority matrix. Health alone never implies CRITICAL without
+ * Urgency from trustworthy signals only.
+ * Fundamentals (historical / missing target) beat trend.
+ */
+export function resolveUrgencyFromSignals(input: {
+  attentionState: AttentionState;
+  health: HealthStatus | null;
+  trend: AttentionTrend;
+  campaignStatus: string | null | undefined;
+  configurationKind?:
+    | "DRAFT"
+    | "ACTIVE_MISSING_TARGET"
+    | "ACTIVE_MISSING_RESULTS"
+    | "RESULT_MAPPING"
+    | "OTHER"
+    | null;
+}): { level: UrgencyLevel; reason: string } {
+  const status = statusUpper(input.campaignStatus);
+  const { attentionState, health, trend } = input;
+
+  if (attentionState === "HISTORICAL") {
+    return { level: "NONE", reason: "Revisione storica — nessuna urgenza operativa." };
+  }
+  if (attentionState === "STABLE") {
+    return { level: "NONE", reason: "Performance stabile — nessuna urgenza." };
+  }
+
+  // Configuration / fundamentals first — trend never escalates these to NOW.
+  if (attentionState === "CONFIGURATION_REQUIRED") {
+    if (input.configurationKind === "DRAFT" || status === "DRAFT" || !status) {
+      return {
+        level: "LATER",
+        reason: "Configurazione in bozza — non urgente finché non è in lancio.",
+      };
+    }
+    if (input.configurationKind === "RESULT_MAPPING") {
+      return {
+        level: "SOON",
+        reason:
+          "Il risultato Meta non è abbastanza affidabile per valutare il CPL.",
+      };
+    }
+    if (
+      input.configurationKind === "ACTIVE_MISSING_TARGET" ||
+      input.configurationKind === "ACTIVE_MISSING_RESULTS"
+    ) {
+      return {
+        level: "SOON",
+        reason: "Serve un target o risultati per valutare una campagna attiva.",
+      };
+    }
+    return {
+      level: "LATER",
+      reason: "Configurazione da completare, senza urgenza immediata.",
+    };
+  }
+
+  if (attentionState === "CRITICAL") {
+    return {
+      level: "NOW",
+      reason: "Fuori soglia e in peggioramento.",
+    };
+  }
+
+  if (attentionState === "NEEDS_ATTENTION") {
+    if (status === "REVISION_REQUESTED") {
+      return {
+        level: "SOON",
+        reason: "Il cliente ha chiesto una revisione — da gestire a breve.",
+      };
+    }
+    if (health === "RED") {
+      return {
+        level: "SOON",
+        reason: "Fuori soglia, ma stabile.",
+      };
+    }
+    if (health === "YELLOW" && trend === "WORSENING") {
+      return {
+        level: "SOON",
+        reason: "Il costo si sta avvicinando alla soglia.",
+      };
+    }
+    return {
+      level: "SOON",
+      reason: "Richiede attenzione a breve.",
+    };
+  }
+
+  if (attentionState === "INSUFFICIENT_DATA") {
+    return {
+      level: "LATER",
+      reason: "Dati ancora insufficienti — da ricontrollare.",
+    };
+  }
+
+  if (attentionState === "MONITOR") {
+    if (health === "GREEN" && trend === "WORSENING") {
+      return {
+        level: "LATER",
+        reason: "Ancora sotto soglia, ma l'andamento sta peggiorando.",
+      };
+    }
+    if (health === "YELLOW") {
+      return {
+        level: "LATER",
+        reason: "Vicino alla soglia — da tenere sotto controllo.",
+      };
+    }
+    return {
+      level: "LATER",
+      reason: "Da monitorare senza urgenza immediata.",
+    };
+  }
+
+  return { level: "NONE", reason: "Nessuna urgenza." };
+}
+
+/**
+ * Core attention matrix. Health alone never implies CRITICAL without
  * evaluable worsening trend + enough confidence.
  */
 export function resolveAttentionFromSignals(input: {
@@ -279,6 +427,13 @@ export function buildNativeAttentionItem(input: {
 
   let configurationRequired = false;
   let configurationReason: string | undefined;
+  let configurationKind:
+    | "DRAFT"
+    | "ACTIVE_MISSING_TARGET"
+    | "ACTIVE_MISSING_RESULTS"
+    | "RESULT_MAPPING"
+    | "OTHER"
+    | null = null;
   let insufficientData = false;
   let insufficientReason: string | undefined;
   let historical = false;
@@ -287,9 +442,16 @@ export function buildNativeAttentionItem(input: {
   if (status === "DRAFT" || !status) {
     configurationRequired = true;
     configurationReason = "La campagna è ancora in bozza.";
+    configurationKind = "DRAFT";
     health = null;
   } else if (status === "REVISION_REQUESTED") {
-    // Client revision is operational work, not a health failure.
+    const urgency = resolveUrgencyFromSignals({
+      attentionState: "NEEDS_ATTENTION",
+      health,
+      trend,
+      campaignStatus: campagna.status,
+      configurationKind: null,
+    });
     return {
       campaignId: campagna.id,
       clientId: null,
@@ -299,6 +461,8 @@ export function buildNativeAttentionItem(input: {
       campaignStatus: campagna.status ?? null,
       attentionState: "NEEDS_ATTENTION",
       reason: "Il cliente ha richiesto una revisione.",
+      urgencyLevel: urgency.level,
+      urgencyReason: urgency.reason,
       primaryMetric: check?.primaryCost != null ? "Costo" : null,
       primaryMetricValue: check?.primaryCost ?? null,
       targetValue: check?.threshold ?? null,
@@ -312,6 +476,11 @@ export function buildNativeAttentionItem(input: {
     configurationRequired = true;
     configurationReason =
       "Mancano i risultati per valutare la performance.";
+    // APPROVED / ACTIVE without checks → sooner than a draft.
+    configurationKind =
+      status === "APPROVED" || status === "ACTIVE" || status === "RUNNING"
+        ? "ACTIVE_MISSING_RESULTS"
+        : "OTHER";
   } else if (check.healthStatus === "INSUFFICIENT") {
     insufficientData = true;
     insufficientReason = "I dati sono ancora insufficienti.";
@@ -327,6 +496,14 @@ export function buildNativeAttentionItem(input: {
     trend,
   });
 
+  const urgency = resolveUrgencyFromSignals({
+    attentionState: resolved.state,
+    health: configurationRequired ? null : health,
+    trend,
+    campaignStatus: campagna.status,
+    configurationKind,
+  });
+
   return {
     campaignId: campagna.id,
     clientId: null,
@@ -336,6 +513,8 @@ export function buildNativeAttentionItem(input: {
     campaignStatus: campagna.status ?? null,
     attentionState: resolved.state,
     reason: resolved.reason,
+    urgencyLevel: urgency.level,
+    urgencyReason: urgency.reason,
     primaryMetric:
       check?.primaryCost != null
         ? objective === "AWARENESS"
@@ -363,6 +542,13 @@ export function buildMetaAttentionItem(input: {
 
   // Paused/archived Meta campaigns are historical review only — never urgent.
   if (historical) {
+    const urgency = resolveUrgencyFromSignals({
+      attentionState: "HISTORICAL",
+      health: null,
+      trend,
+      campaignStatus: row.effectiveStatus,
+      configurationKind: null,
+    });
     return {
       campaignId: row.id,
       clientId: row.clientId,
@@ -372,6 +558,8 @@ export function buildMetaAttentionItem(input: {
       campaignStatus: row.effectiveStatus,
       attentionState: "HISTORICAL",
       reason: "Campagna in pausa — revisione storica.",
+      urgencyLevel: urgency.level,
+      urgencyReason: urgency.reason,
       primaryMetric: row.primaryKpi ? kpiLabel(row.primaryKpi) : null,
       primaryMetricValue:
         row.primaryKpi === "CPC"
@@ -390,6 +578,13 @@ export function buildMetaAttentionItem(input: {
 
   let configurationRequired = false;
   let configurationReason: string | undefined;
+  let configurationKind:
+    | "DRAFT"
+    | "ACTIVE_MISSING_TARGET"
+    | "ACTIVE_MISSING_RESULTS"
+    | "RESULT_MAPPING"
+    | "OTHER"
+    | null = null;
   let insufficientData = false;
   let insufficientReason: string | undefined;
   let health: HealthStatus | null = row.healthStatus;
@@ -399,23 +594,27 @@ export function buildMetaAttentionItem(input: {
       configurationRequired = true;
       configurationReason =
         "Manca un target per valutare la performance.";
+      configurationKind = "ACTIVE_MISSING_TARGET";
       health = null;
       break;
     case "LINKED_BUT_KPI_INCOMPATIBLE":
       configurationRequired = true;
       configurationReason =
         "Il KPI pianificato non è compatibile con i risultati Meta disponibili.";
+      configurationKind = "OTHER";
       health = null;
       break;
     case "RESULT_MAPPING_REQUIRED":
       configurationRequired = true;
       configurationReason =
         "Il risultato principale Meta non è identificato con sufficiente certezza.";
+      configurationKind = "RESULT_MAPPING";
       health = null;
       break;
     case "ROAS_DEFERRED":
       configurationRequired = true;
       configurationReason = "Il ROAS non è ancora valutabile in Control Room.";
+      configurationKind = "OTHER";
       health = null;
       break;
     case "INSUFFICIENT_DATA":
@@ -438,6 +637,14 @@ export function buildMetaAttentionItem(input: {
     trend,
   });
 
+  const urgency = resolveUrgencyFromSignals({
+    attentionState: resolved.state,
+    health: configurationRequired || insufficientData ? null : health,
+    trend,
+    campaignStatus: row.effectiveStatus,
+    configurationKind,
+  });
+
   const metricValue =
     row.primaryKpi === "CPC"
       ? row.cpc
@@ -454,6 +661,8 @@ export function buildMetaAttentionItem(input: {
     campaignStatus: row.effectiveStatus,
     attentionState: resolved.state,
     reason: resolved.reason,
+    urgencyLevel: urgency.level,
+    urgencyReason: urgency.reason,
     primaryMetric: row.primaryKpi ? kpiLabel(row.primaryKpi) : null,
     primaryMetricValue: metricValue,
     targetValue: row.targetValue,
@@ -466,11 +675,6 @@ export function buildMetaAttentionItem(input: {
   };
 }
 
-/**
- * Linked Meta + native: keep separate underlying items, but suppress the
- * native row from Monday urgent/stable lists when Meta is the active
- * monitoring surface. Never merge metrics/health.
- */
 /**
  * Caller passes native Affianco ids that have ≥1 ACTIVE linked Meta row.
  * Those native rows stay in the dataset but are hidden from Monday lists
@@ -510,6 +714,9 @@ export function sortAttentionItems(
   items: ControlRoomAttentionItem[],
 ): ControlRoomAttentionItem[] {
   return [...items].sort((a, b) => {
+    const ua = URGENCY_ORDER[a.urgencyLevel];
+    const ub = URGENCY_ORDER[b.urgencyLevel];
+    if (ua !== ub) return ua - ub;
     const oa = ATTENTION_ORDER[a.attentionState];
     const ob = ATTENTION_ORDER[b.attentionState];
     if (oa !== ob) return oa - ob;
@@ -537,8 +744,15 @@ export function buildMondayControlRoom(
     INSUFFICIENT_DATA: 0,
     HISTORICAL: 0,
   };
+  const urgencyCounts: Record<UrgencyLevel, number> = {
+    NOW: 0,
+    SOON: 0,
+    LATER: 0,
+    NONE: 0,
+  };
   for (const item of visible) {
     counts[item.attentionState] += 1;
+    urgencyCounts[item.urgencyLevel] += 1;
   }
   return {
     items: visible,
@@ -546,6 +760,7 @@ export function buildMondayControlRoom(
     stable: visible.filter((i) => i.attentionState === "STABLE"),
     historical: visible.filter((i) => i.attentionState === "HISTORICAL"),
     counts,
+    urgencyCounts,
   };
 }
 
