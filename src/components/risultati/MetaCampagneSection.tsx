@@ -13,7 +13,7 @@ import {
   type MetaMonitoringMode,
   type MetaHealthAvailability,
 } from "@/lib/meta/insights-control-room";
-import { healthBadgeClasses, formatEuro } from "@/lib/control-room";
+import { healthBadgeClasses, formatEuro, calcolaHealthStatus } from "@/lib/control-room";
 import type { HealthStatus } from "@/lib/control-room";
 import {
   fetchMetaCampaignTarget,
@@ -388,6 +388,48 @@ function MetaCampaignCard({
 }
 
 // ------------------------------------------------------------------
+// Health derivation helper (pure — used both at load time and on mutation)
+// ------------------------------------------------------------------
+
+function deriveHealth(
+  primaryKpi: MetaMonitoringKpi | null,
+  targetValue: number | null,
+  row: Pick<MetaCampaignRow, "cpc" | "cpm" | "spend" | "impressions">,
+): { healthAvailability: MetaHealthAvailability; healthStatus: HealthStatus | null } {
+  if (primaryKpi === "ROAS") {
+    return { healthAvailability: "ROAS_DEFERRED", healthStatus: null };
+  }
+  if (!primaryKpi || primaryKpi === "NONE" || targetValue == null || targetValue <= 0) {
+    return { healthAvailability: "TARGET_REQUIRED", healthStatus: null };
+  }
+  if (primaryKpi === "CPL" || primaryKpi === "CPA") {
+    // Result confidence not available in list view — mark INSUFFICIENT_DATA
+    return { healthAvailability: "INSUFFICIENT_DATA", healthStatus: null };
+  }
+  if (primaryKpi === "CPC") {
+    if (row.cpc != null) {
+      const h = calcolaHealthStatus(row.cpc, targetValue, "economic");
+      return { healthAvailability: "AVAILABLE", healthStatus: h.status };
+    }
+    return { healthAvailability: "INSUFFICIENT_DATA", healthStatus: null };
+  }
+  if (primaryKpi === "CPM") {
+    const cpm =
+      row.cpm != null
+        ? row.cpm
+        : row.spend != null && row.impressions != null && row.impressions > 0
+          ? Math.round((row.spend / row.impressions) * 1000 * 100) / 100
+          : null;
+    if (cpm != null) {
+      const h = calcolaHealthStatus(cpm, targetValue, "efficiency");
+      return { healthAvailability: "AVAILABLE", healthStatus: h.status };
+    }
+    return { healthAvailability: "INSUFFICIENT_DATA", healthStatus: null };
+  }
+  return { healthAvailability: "TARGET_REQUIRED", healthStatus: null };
+}
+
+// ------------------------------------------------------------------
 // Section: loads meta campaigns for a given client
 // ------------------------------------------------------------------
 
@@ -502,42 +544,16 @@ export function MetaCampagneSection({ clientId, clientName }: { clientId: string
         // Resolve health availability (simplified for list view — no result confidence available here)
         const primaryKpi = c.primary_kpi as MetaMonitoringKpi | null;
         const targetValue = c.target_value;
+        const cpmComputed =
+          spend != null && impressions != null && impressions > 0
+            ? Math.round((spend / impressions) * 1000 * 100) / 100
+            : null;
 
-        let healthAvailability: MetaHealthAvailability = "TARGET_REQUIRED";
-        let healthStatus: HealthStatus | null = null;
-
-        if (primaryKpi === "ROAS") {
-          healthAvailability = "ROAS_DEFERRED";
-        } else if (!primaryKpi || primaryKpi === "NONE" || targetValue == null) {
-          healthAvailability = "TARGET_REQUIRED";
-        } else if (primaryKpi === "CPL" || primaryKpi === "CPA") {
-          // Without daily confidence info in list view, mark as available only if we have spend+clicks
-          // Full health requires re-running adapter with insight detail — shown in detail view
-          healthAvailability = "AVAILABLE";
-          if (spend != null && targetValue > 0) {
-            // We don't have result count in list agg — mark INSUFFICIENT for list
-            healthAvailability = "INSUFFICIENT_DATA";
-          }
-        } else if (primaryKpi === "CPC" && cpc != null && targetValue > 0) {
-          healthAvailability = "AVAILABLE";
-          // CPC lower-is-better
-          const { calcolaHealthStatus } = require("@/lib/control-room") as typeof import("@/lib/control-room");
-          const h = calcolaHealthStatus(cpc, targetValue, "economic");
-          healthStatus = h.status;
-        } else if (primaryKpi === "CPM") {
-          const cpm =
-            spend != null && impressions != null && impressions > 0
-              ? Math.round((spend / impressions) * 1000 * 100) / 100
-              : null;
-          if (cpm != null && targetValue > 0) {
-            healthAvailability = "AVAILABLE";
-            const { calcolaHealthStatus } = require("@/lib/control-room") as typeof import("@/lib/control-room");
-            const h = calcolaHealthStatus(cpm, targetValue, "efficiency");
-            healthStatus = h.status;
-          } else {
-            healthAvailability = "INSUFFICIENT_DATA";
-          }
-        }
+        const { healthAvailability, healthStatus } = deriveHealth(
+          primaryKpi,
+          targetValue,
+          { cpc, cpm: cpmComputed, spend, impressions },
+        );
 
         return {
           id: c.id,
@@ -555,10 +571,7 @@ export function MetaCampagneSection({ clientId, clientName }: { clientId: string
           linkClicks,
           ctr,
           cpc,
-          cpm:
-            spend != null && impressions != null && impressions > 0
-              ? Math.round((spend / impressions) * 1000 * 100) / 100
-              : null,
+          cpm: cpmComputed,
           frequency,
           primaryKpi,
           targetValue,
@@ -587,18 +600,21 @@ export function MetaCampagneSection({ clientId, clientName }: { clientId: string
     value: number | null,
   ) {
     setRows((prev) =>
-      prev.map((r) =>
-        r.id === rowId
-          ? {
-              ...r,
-              primaryKpi: kpi,
-              targetValue: value,
-              healthAvailability:
-                !kpi || kpi === "NONE" ? "TARGET_REQUIRED" : r.healthAvailability,
-              healthStatus: !kpi || kpi === "NONE" ? null : r.healthStatus,
-            }
-          : r,
-      ),
+      prev.map((r) => {
+        if (r.id !== rowId) return r;
+        const { healthAvailability, healthStatus } = deriveHealth(
+          kpi,
+          value,
+          { cpc: r.cpc, cpm: r.cpm, spend: r.spend, impressions: r.impressions },
+        );
+        return {
+          ...r,
+          primaryKpi: kpi,
+          targetValue: value,
+          healthAvailability,
+          healthStatus,
+        };
+      }),
     );
   }
 
