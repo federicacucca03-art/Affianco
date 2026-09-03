@@ -79,6 +79,8 @@ import {
   validaFileCsvMeta,
   type MetaCsvMappedRow,
 } from "@/lib/meta-csv";
+import { MetaCampagneSection } from "@/components/risultati/MetaCampagneSection";
+import { supabase as supabaseClient } from "@/lib/supabase";
 
 const inputClass =
   "w-full rounded-xl border border-[var(--border)] bg-white px-3.5 py-2.5 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--ink-muted)] focus:border-[var(--accent)]";
@@ -259,6 +261,55 @@ function campiBloccoDiagnostica(
       ? ([["roas", "ROAS (x)"]] as const)
       : []),
   ];
+}
+
+// ------------------------------------------------------------------
+// MetaClientsLoader: loads clients with Meta data and renders sections
+// ------------------------------------------------------------------
+function MetaClientsLoader() {
+  const { user } = useAuth();
+  const [metaClients, setMetaClients] = useState<
+    { id: string; name: string }[]
+  >([]);
+
+  useEffect(() => {
+    if (!user) return;
+    void (async () => {
+      try {
+        // Load clients that have at least one meta_campaign for this user
+        const { data } = await supabaseClient
+          .from("meta_campaigns")
+          .select("client_id")
+          .eq("user_id", user.id)
+          .limit(50);
+        if (!data || data.length === 0) return;
+        const ids = [
+          ...new Set(
+            (data as { client_id: string }[]).map((r) => r.client_id),
+          ),
+        ];
+        const { data: clients } = await supabaseClient
+          .from("clients")
+          .select("id, name")
+          .in("id", ids);
+        setMetaClients(
+          (clients ?? []) as { id: string; name: string }[],
+        );
+      } catch {
+        // non-blocking
+      }
+    })();
+  }, [user]);
+
+  if (metaClients.length === 0) return null;
+
+  return (
+    <>
+      {metaClients.map((c) => (
+        <MetaCampagneSection key={c.id} clientId={c.id} clientName={c.name} />
+      ))}
+    </>
+  );
 }
 
 function RisultatiPage() {
@@ -971,12 +1022,15 @@ function RisultatiPage() {
       </header>
 
       {mostraOverview ? (
-        <ControlRoomOverview
-          righe={righeOverview}
-          caricamento={caricamentoCampagne}
-          errore={erroreCampagne}
-          onRiprova={() => void caricaLista()}
-        />
+        <>
+          <ControlRoomOverview
+            righe={righeOverview}
+            caricamento={caricamentoCampagne}
+            errore={erroreCampagne}
+            onRiprova={() => void caricaLista()}
+          />
+          <MetaClientsLoader />
+        </>
       ) : null}
 
       {/* TOP: campagna */}

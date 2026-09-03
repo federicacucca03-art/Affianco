@@ -202,7 +202,7 @@ const adapter = metaInsightsToControlRoomInput({
   until: "2026-06-28",
 });
 assert(adapter.source === "META_API", "adapter source META_API");
-assert(adapter.frequency === 1.4, "adapter uses period frequency");
+assert(adapter.metrics.frequency === 1.4, "adapter uses period frequency");
 
 console.log("\n=== M4.1 graph fake Insights ===");
 assert(graphCampaignInsightsEdge("12345") === "12345/insights", "campaign insights edge");
