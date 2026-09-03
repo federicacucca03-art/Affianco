@@ -35,6 +35,33 @@ type ImportedCampaign = {
   lifetimeBudget: number | null;
 };
 
+type InsightSummary = {
+  metaCampaignId: string;
+  syncedAt: string | null;
+  emptyValid: boolean;
+  lookbackTruncated: boolean;
+  since: string | null;
+  until: string | null;
+  currency: string | null;
+  inserted?: number;
+  updated?: number;
+  aggregate: {
+    spend: number | null;
+    impressions: number | null;
+    clicks: number | null;
+    linkClicks: number | null;
+    periodReach: number | null;
+    periodFrequency: number | null;
+    ctr: number | null;
+    cpc: number | null;
+    cpm: number | null;
+    primaryResultType: string | null;
+    primaryResults: number | null;
+    resultMappingConfidence: string;
+    cpl: number | null;
+  } | null;
+};
+
 type ConnectionPayload = {
   connected: boolean;
   status: "ACTIVE" | "EXPIRED" | "REVOKED" | "REAUTH_REQUIRED" | null;
@@ -62,6 +89,25 @@ function messaggioQuery(meta: string | null): string | null {
   return null;
 }
 
+function formatNumero(n: number, max = 2): string {
+  return new Intl.NumberFormat("it-IT", {
+    maximumFractionDigits: max,
+    minimumFractionDigits: 0,
+  }).format(n);
+}
+
+function formatValuta(n: number, currency: string | null): string {
+  const code = currency?.trim() || "EUR";
+  try {
+    return new Intl.NumberFormat("it-IT", {
+      style: "currency",
+      currency: code,
+    }).format(n);
+  } catch {
+    return `${formatNumero(n)} ${code}`;
+  }
+}
+
 async function bearerToken(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;
@@ -84,6 +130,10 @@ export function PannelloAccountMetaCliente({
   const [errore, setErrore] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [campagne, setCampagne] = useState<ImportedCampaign[]>([]);
+  const [insightsByCampaign, setInsightsByCampaign] = useState<
+    Record<string, InsightSummary>
+  >({});
+  const [syncingCampaign, setSyncingCampaign] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
 
   const carica = useCallback(async () => {
@@ -98,7 +148,7 @@ export function PannelloAccountMetaCliente({
       return;
     }
     try {
-      const [connRes, mapRes, campRes] = await Promise.all([
+      const [connRes, mapRes, campRes, insightRes] = await Promise.all([
         fetch(`/api/meta/connection?clientId=${encodeURIComponent(clientId)}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
@@ -109,6 +159,10 @@ export function PannelloAccountMetaCliente({
         fetch(`/api/meta/campaigns?clientId=${encodeURIComponent(clientId)}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
+        fetch(
+          `/api/meta/campaign-insights?clientId=${encodeURIComponent(clientId)}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        ),
       ]);
       const connData = (await connRes.json()) as ConnectionPayload & {
         error?: string;
@@ -135,6 +189,18 @@ export function PannelloAccountMetaCliente({
         setCampagne(campData.campaigns ?? []);
       } else {
         setCampagne([]);
+      }
+      if (insightRes.ok) {
+        const insightData = (await insightRes.json()) as {
+          insights?: InsightSummary[];
+        };
+        const map: Record<string, InsightSummary> = {};
+        for (const item of insightData.insights ?? []) {
+          map[item.metaCampaignId] = item;
+        }
+        setInsightsByCampaign(map);
+      } else {
+        setInsightsByCampaign({});
       }
     } catch {
       setErrore("Impossibile leggere la connessione Meta.");
@@ -338,6 +404,51 @@ export function PannelloAccountMetaCliente({
     }
   }
 
+  async function sincronizzaInsights(metaCampaignId: string) {
+    if (!clientId || busy || syncingCampaign) return;
+    const token = await bearerToken();
+    if (!token) return;
+    setSyncingCampaign(metaCampaignId);
+    setErrore(null);
+    setFeedback(null);
+    try {
+      const res = await fetch("/api/meta/campaign-insights/import", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ clientId, campaignId: metaCampaignId }),
+      });
+      const data = (await res.json()) as {
+        insight?: InsightSummary;
+        code?: string;
+        error?: string;
+      };
+      if (!res.ok) {
+        setErrore("Sincronizzazione Insights Meta non riuscita.");
+        return;
+      }
+      if (data.insight) {
+        setInsightsByCampaign((prev) => ({
+          ...prev,
+          [data.insight!.metaCampaignId]: data.insight!,
+        }));
+        if (data.insight.emptyValid) {
+          setFeedback("Nessun dato di delivery disponibile per il periodo.");
+        } else {
+          setFeedback(
+            `${data.insight.inserted ?? 0} giorni importati · ${data.insight.updated ?? 0} aggiornati`,
+          );
+        }
+      }
+    } catch {
+      setErrore("Sincronizzazione Insights Meta non riuscita.");
+    } finally {
+      setSyncingCampaign(null);
+    }
+  }
+
   if (!clientId) {
     return (
       <section className="mt-8 rounded-[var(--radius)] border border-[var(--ink)]/10 bg-white p-5 shadow-[var(--shadow-soft)]">
@@ -533,6 +644,13 @@ export function PannelloAccountMetaCliente({
             {campagne.map((campagna) => {
               const inizio = formatDataMeta(campagna.startAt);
               const fine = formatDataMeta(campagna.stopAt);
+              const insight = insightsByCampaign[campagna.metaCampaignId];
+              const agg = insight?.aggregate ?? null;
+              const currency = insight?.currency ?? mapping?.currency ?? null;
+              const hasData = Boolean(agg);
+              const mostraCpl =
+                agg?.resultMappingConfidence === "CONFIDENT" &&
+                agg.cpl != null;
               return (
                 <li
                   key={campagna.metaCampaignId}
@@ -558,6 +676,110 @@ export function PannelloAccountMetaCliente({
                   {campagna.lastSyncedAt ? (
                     <p className="text-xs text-[var(--ink-muted)]">
                       Sync {formatDataMeta(campagna.lastSyncedAt)}
+                    </p>
+                  ) : null}
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void sincronizzaInsights(campagna.metaCampaignId)
+                      }
+                      disabled={busy || syncingCampaign != null}
+                      className="rounded-full border border-[var(--ink)]/15 bg-white px-3 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--surface-hover)] disabled:opacity-60"
+                    >
+                      {syncingCampaign === campagna.metaCampaignId
+                        ? "Sincronizzazione…"
+                        : insight?.syncedAt
+                          ? "Sincronizza dati"
+                          : "Importa dati Meta"}
+                    </button>
+                  </div>
+                  {insight?.lookbackTruncated ? (
+                    <p className="mt-2 text-xs text-[var(--ink-muted)]">
+                      Intervallo Insights limitato agli ultimi 90 giorni.
+                    </p>
+                  ) : null}
+                  {insight?.emptyValid && !hasData ? (
+                    <p className="mt-2 text-sm text-[var(--ink-muted)]">
+                      Nessun dato di delivery disponibile per il periodo.
+                    </p>
+                  ) : null}
+                  {hasData && agg ? (
+                    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-[var(--ink-muted)]">
+                      {agg.spend != null ? (
+                        <>
+                          <dt>Spesa</dt>
+                          <dd className="text-[var(--ink)]">
+                            {formatValuta(agg.spend, currency)}
+                          </dd>
+                        </>
+                      ) : null}
+                      {agg.impressions != null ? (
+                        <>
+                          <dt>Impression</dt>
+                          <dd className="text-[var(--ink)]">
+                            {formatNumero(agg.impressions, 0)}
+                          </dd>
+                        </>
+                      ) : null}
+                      {agg.linkClicks != null ? (
+                        <>
+                          <dt>Clic sul link</dt>
+                          <dd className="text-[var(--ink)]">
+                            {formatNumero(agg.linkClicks, 0)}
+                          </dd>
+                        </>
+                      ) : null}
+                      {agg.ctr != null ? (
+                        <>
+                          <dt>CTR</dt>
+                          <dd className="text-[var(--ink)]">
+                            {formatNumero(agg.ctr)}%
+                          </dd>
+                        </>
+                      ) : null}
+                      {agg.cpc != null ? (
+                        <>
+                          <dt>CPC</dt>
+                          <dd className="text-[var(--ink)]">
+                            {formatValuta(agg.cpc, currency)}
+                          </dd>
+                        </>
+                      ) : null}
+                      {agg.periodFrequency != null ? (
+                        <>
+                          <dt>Frequenza</dt>
+                          <dd className="text-[var(--ink)]">
+                            {formatNumero(agg.periodFrequency)}
+                          </dd>
+                        </>
+                      ) : null}
+                      {agg.resultMappingConfidence === "CONFIDENT" &&
+                      agg.primaryResults != null ? (
+                        <>
+                          <dt>Risultati Meta</dt>
+                          <dd className="text-[var(--ink)]">
+                            {formatNumero(agg.primaryResults)}
+                          </dd>
+                        </>
+                      ) : null}
+                      {mostraCpl ? (
+                        <>
+                          <dt>
+                            {agg.primaryResultType === "lead"
+                              ? "CPL Meta"
+                              : "Costo per risultato Meta"}
+                          </dt>
+                          <dd className="text-[var(--ink)]">
+                            {formatValuta(agg.cpl as number, currency)}
+                          </dd>
+                        </>
+                      ) : null}
+                    </dl>
+                  ) : null}
+                  {hasData ? (
+                    <p className="mt-2 text-[10px] text-[var(--ink-muted)]">
+                      Metriche riportate da Meta. Non sono conversioni definitive.
                     </p>
                   ) : null}
                 </li>

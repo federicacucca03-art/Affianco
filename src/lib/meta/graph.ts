@@ -37,6 +37,12 @@ export function mapGraphErrorToMetaError(
   if (code != null && TEMP_CODES.has(code)) {
     return new MetaError("META_TEMPORARY_ERROR", "Meta non disponibile.");
   }
+  if (fallback === "META_INSIGHTS_DISCOVERY_FAILED") {
+    return new MetaError(
+      "META_INSIGHTS_DISCOVERY_FAILED",
+      "Lettura Insights Meta non riuscita.",
+    );
+  }
   if (fallback === "META_CAMPAIGN_DISCOVERY_FAILED") {
     return new MetaError(
       "META_CAMPAIGN_DISCOVERY_FAILED",
@@ -59,6 +65,7 @@ export function metaHttpStatus(code: MetaErrorCode): number {
     case "META_AD_ACCOUNT_NOT_SELECTED":
       return 404;
     case "META_AD_ACCOUNT_ACCESS_LOST":
+    case "META_CAMPAIGN_ACCESS_LOST":
       return 403;
     case "META_RATE_LIMIT":
       return 429;

@@ -3,6 +3,7 @@ import { discoverClientMetaCampaigns } from "@/lib/meta/campaigns";
 import { assertClientOwnedByUser } from "@/lib/meta/client-accounts";
 import type { MetaCampaignSummary } from "@/lib/meta/campaigns";
 import { MetaError } from "@/lib/meta/errors";
+import { isUuid } from "@/lib/meta/ids";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 export type ImportedMetaCampaign = MetaCampaignSummary & {
@@ -83,6 +84,62 @@ export async function listImportedMetaCampaigns(
     );
   }
   return ((data ?? []) as PersistRow[]).map(toImported);
+}
+
+export type OwnedImportedMetaCampaign = ImportedMetaCampaign & {
+  userId: string;
+  clientId: string;
+  metaConnectionId: string;
+};
+
+type OwnedRow = PersistRow & {
+  user_id: string;
+  client_id: string;
+  meta_connection_id: string;
+};
+
+export async function getOwnedImportedMetaCampaign(
+  userId: string,
+  clientId: string,
+  metaCampaignId: string,
+): Promise<OwnedImportedMetaCampaign> {
+  await assertClientOwnedByUser(userId, clientId);
+  const wanted = metaCampaignId.trim();
+  if (!wanted) {
+    throw new MetaError("META_CONNECTION_INVALID", "Campagna Meta non valida.");
+  }
+  let query = adminClient()
+    .from("meta_campaigns")
+    .select(`${SELECT_COLS}, user_id, client_id, meta_connection_id`)
+    .eq("user_id", userId)
+    .eq("client_id", clientId);
+  query = isUuid(wanted) ? query.eq("id", wanted) : query.eq("meta_campaign_id", wanted);
+  const { data, error } = await query.maybeSingle();
+  if (error) {
+    throw new MetaError(
+      "META_CAMPAIGN_DISCOVERY_FAILED",
+      "Lettura campagna importata non riuscita.",
+    );
+  }
+  if (!data) {
+    throw new MetaError(
+      "META_CAMPAIGN_ACCESS_LOST",
+      "Campagna Meta non trovata per questo cliente.",
+    );
+  }
+  const row = data as OwnedRow;
+  if (row.user_id !== userId || row.client_id !== clientId) {
+    throw new MetaError(
+      "META_CAMPAIGN_ACCESS_LOST",
+      "Campagna Meta non trovata per questo cliente.",
+    );
+  }
+  return {
+    ...toImported(row),
+    userId: row.user_id,
+    clientId: row.client_id,
+    metaConnectionId: row.meta_connection_id,
+  };
 }
 
 export async function importClientMetaCampaigns(
