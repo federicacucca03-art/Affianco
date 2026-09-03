@@ -469,11 +469,14 @@ test("Drafts do not outrank RED NOW", () => {
   assert(items.every((i) => i.campaignId !== "d1" || i.urgencyLevel === "LATER"), "draft later");
 });
 
-test("UI shows urgency + attention", () => {
+test("UI shows urgency secondary to attention", () => {
   const ui = read("./src/components/dashboard/MondayControlRoomSection.tsx");
-  assert(ui.includes("etichettaUrgencyLevel"), "urgency label");
-  assert(ui.includes("urgencyCounts"), "oggi urgency");
-  assert(ui.includes("urgente"), "oggi urgente copy");
+  assert(ui.includes("etichettaUrgencyLevel"), "urgency label helper");
+  assert(ui.includes("Priorità"), "priorità copy");
+  assert(ui.includes("urgencySupportingText"), "supporting urgency text");
+  assert(!ui.includes("urgencyCounts"), "oggi is attention-based");
+  assert(ui.includes("da controllare"), "oggi attention chips");
+  assert(!ui.includes("uppercase tracking-wide"), "no uppercase urgency labels");
   assert(!ui.includes("etichettaPriorityBand"), "old band removed");
 });
 
