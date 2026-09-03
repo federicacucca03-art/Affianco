@@ -15,19 +15,28 @@ import { formatDataCheck } from "@/lib/control-room";
 import {
   aggregaAttivitaSettimana,
   campagneInRevisione,
-  derivaAttenzione,
   derivaLavoriAperti,
   etichettaAriaBarraAttivita,
   isoInizioFinestraGiorni,
   pillGestione,
   quotaAltezzaBarraAttivita,
-  type AttentionItem,
   type GiornoAttivita,
 } from "@/lib/dashboard-home";
+import {
+  applyLinkedCampaignSuppression,
+  buildMetaAttentionItem,
+  buildMondayControlRoom,
+  buildNativeAttentionItem,
+  collectActiveLinkedNativeIds,
+  type ControlRoomAttentionItem,
+} from "@/lib/monday-control-room";
+import { loadMetaMondayBundle } from "@/lib/meta/monday-meta-loader";
 import { nomeCampagnaCard } from "@/components/risultati/ControlRoomOverview";
 import { LavoriAperti } from "@/components/dashboard/LavoriAperti";
+import { MondayControlRoomSection } from "@/components/dashboard/MondayControlRoomSection";
 import { StatoChip, type StatoChipKind } from "@/components/nuova-contatti/StatoChip";
 import { useOnboardingCampagna } from "@/components/OnboardingCampagnaContext";
+import { useAuth } from "@/components/auth/AuthProvider";
 import {
   logErroreSupabaseDev,
   messaggioErroreSupabase,
@@ -36,25 +45,7 @@ import { normalizzaObjective } from "@/types/campagne";
 
 const MAX_GESTIONE = 5;
 const MAX_REVISIONI = 2;
-const MAX_ATTENZIONE = 4;
-
-function chipAttenzione(item: AttentionItem): {
-  kind: StatoChipKind;
-  label: string;
-} {
-  switch (item.category) {
-    case "RED":
-      return { kind: "critico", label: item.statusLabel };
-    case "REVISION_REQUESTED":
-      return { kind: "critico", label: item.statusLabel };
-    case "YELLOW":
-      return { kind: "watch", label: item.statusLabel };
-    case "INSUFFICIENT":
-    case "NO_CHECK":
-    case "DRAFT":
-      return { kind: "pending", label: item.statusLabel };
-  }
-}
+const TREND_CHECK_DAYS = 30;
 
 const ALTEZZA_CHART_PX = 56;
 const ALTEZZA_BARRA_VUOTA_PX = 5;
@@ -149,9 +140,15 @@ function AvatarIniziali({ iniziali }: { iniziali: string }) {
 
 export function DashboardHome() {
   const { apriModaleCampagna } = useOnboardingCampagna();
+  const { user } = useAuth();
   const [campagne, setCampagne] = useState<Campagna[]>([]);
   const [ultimi, setUltimi] = useState<Map<string, CampaignCheck>>(new Map());
   const [checksSettimana, setChecksSettimana] = useState<CampaignCheck[]>([]);
+  const [checksTrend, setChecksTrend] = useState<CampaignCheck[]>([]);
+  const [metaItems, setMetaItems] = useState<ControlRoomAttentionItem[]>([]);
+  const [linkedNativeIds, setLinkedNativeIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [caricamento, setCaricamento] = useState(true);
   const [errore, setErrore] = useState<string | null>(null);
 
@@ -160,34 +157,87 @@ export function DashboardHome() {
     setErrore(null);
     try {
       const da = isoInizioFinestraGiorni(7);
-      const [lista, mappa, settimana] = await Promise.all([
+      const daTrend = isoInizioFinestraGiorni(TREND_CHECK_DAYS);
+      const [lista, mappa, settimana, trendChecks] = await Promise.all([
         leggiCampagneDaSupabase(),
         leggiUltimiChecksUtente(),
         leggiChecksUtenteDal(da),
+        leggiChecksUtenteDal(daTrend),
       ]);
       setCampagne(lista);
       setUltimi(mappa);
       setChecksSettimana(settimana);
+      setChecksTrend(trendChecks);
+
+      if (user?.id) {
+        try {
+          const bundle = await loadMetaMondayBundle(user.id);
+          const linked = collectActiveLinkedNativeIds(bundle.rows);
+          setLinkedNativeIds(linked);
+          setMetaItems(
+            bundle.rows.map((row) => {
+              const t = bundle.trends.get(row.id);
+              return buildMetaAttentionItem({
+                row,
+                trendDirection: t?.direction ?? null,
+                trendLevel: t?.level,
+              });
+            }),
+          );
+        } catch (metaErr) {
+          logErroreSupabaseDev("dashboard_home_meta", metaErr);
+          setMetaItems([]);
+          setLinkedNativeIds(new Set());
+        }
+      } else {
+        setMetaItems([]);
+        setLinkedNativeIds(new Set());
+      }
     } catch (e) {
       logErroreSupabaseDev("dashboard_home", e);
       setErrore(messaggioErroreSupabase(e, "lista"));
       setCampagne([]);
       setUltimi(new Map());
       setChecksSettimana([]);
+      setChecksTrend([]);
+      setMetaItems([]);
+      setLinkedNativeIds(new Set());
     } finally {
       setCaricamento(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     void carica();
   }, [carica]);
 
-  const attenzione = useMemo(
-    () => derivaAttenzione(campagne, ultimi),
-    [campagne, ultimi],
-  );
-  const attenzioneVisibili = attenzione.slice(0, MAX_ATTENZIONE);
+  const checksByCampaign = useMemo(() => {
+    const m = new Map<string, CampaignCheck[]>();
+    for (const c of checksTrend) {
+      const list = m.get(c.campaignId) ?? [];
+      list.push(c);
+      m.set(c.campaignId, list);
+    }
+    return m;
+  }, [checksTrend]);
+
+  const monday = useMemo(() => {
+    const nativeItems = campagne
+      .filter((c) => c.id)
+      .map((campagna) =>
+        buildNativeAttentionItem({
+          campagna,
+          check: ultimi.get(campagna.id) ?? null,
+          checksForTrend: checksByCampaign.get(campagna.id) ?? [],
+        }),
+      );
+    const merged = applyLinkedCampaignSuppression(
+      [...nativeItems, ...metaItems],
+      linkedNativeIds,
+    );
+    return buildMondayControlRoom(merged);
+  }, [campagne, ultimi, checksByCampaign, metaItems, linkedNativeIds]);
+
   const revisioni = useMemo(
     () => campagneInRevisione(campagne),
     [campagne],
@@ -201,6 +251,8 @@ export function DashboardHome() {
     () => derivaLavoriAperti(campagne, ultimi),
     [campagne, ultimi],
   );
+
+  const hasAnyWork = campagne.length > 0 || metaItems.length > 0;
 
   return (
     <main className="mx-auto w-full max-w-[1400px] pb-6">
@@ -217,7 +269,7 @@ export function DashboardHome() {
         <p className="mt-8 text-sm text-[var(--ink-muted)]">Caricamento…</p>
       ) : errore ? (
         <p className="mt-8 text-sm text-[#7a3d58]">{errore}</p>
-      ) : campagne.length === 0 ? (
+      ) : !hasAnyWork ? (
         <section className="aff-panel-white mt-6 px-5 py-8">
           <p className="text-base font-medium text-[var(--ink)]">
             Non hai ancora lavori aperti.
@@ -236,6 +288,9 @@ export function DashboardHome() {
         </section>
       ) : (
         <>
+          <MondayControlRoomSection summary={monday} />
+
+          {campagne.length > 0 ? (
           <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 xl:items-stretch">
             <section className="aff-panel-white flex min-h-[15.5rem] min-w-0 flex-col p-4 sm:p-5">
               <p className="text-[13px] font-medium text-[var(--primary)]">
@@ -371,73 +426,9 @@ export function DashboardHome() {
               )}
             </section>
           </div>
+          ) : null}
 
-          <section className="aff-panel-white mt-3 min-w-0 p-4 sm:p-5">
-            <div className="flex items-baseline justify-between gap-2">
-              <p className="text-[13px] font-medium text-[var(--primary)]">
-                Cosa richiede attenzione
-              </p>
-              {attenzione.length > MAX_ATTENZIONE ? (
-                <Link
-                  href="/risultati"
-                  className="text-xs font-medium text-[var(--primary)] hover:opacity-80"
-                >
-                  Vedi tutte ({attenzione.length})
-                </Link>
-              ) : null}
-            </div>
-            {attenzione.length === 0 ? (
-              <div className="mt-3">
-                <p className="text-sm font-medium text-[var(--ink)]">
-                  Nessuna urgenza oggi.
-                </p>
-                <p className="mt-0.5 text-[13px] leading-relaxed text-[var(--ink-muted)]">
-                  Le campagne monitorate non richiedono interventi immediati.
-                </p>
-              </div>
-            ) : (
-              <ul className="mt-1">
-                {attenzioneVisibili.map((item) => {
-                  const chip = chipAttenzione(item);
-                  const metaCheck = item.lastCheckAt
-                    ? formatDataCheck(item.lastCheckAt)
-                    : null;
-                  return (
-                    <li
-                      key={item.campaignId}
-                      className="flex flex-col gap-2 border-b border-[rgba(80,70,130,0.06)] py-3 last:border-0 sm:flex-row sm:items-start sm:gap-5"
-                    >
-                      <BadgeDashboard kind={chip.kind} label={chip.label} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium leading-snug text-[var(--ink)]">
-                          {item.clientName}
-                        </p>
-                        <p className="mt-0.5 text-[12px] leading-snug text-[var(--ink-muted)]">
-                          {item.campaignName}
-                          {" · "}
-                          {etichettaObiettivo(item.objective)}
-                        </p>
-                        <p className="mt-1 text-[13px] leading-snug text-[var(--ink-muted)]">
-                          {item.nextAction}
-                        </p>
-                      </div>
-                      <p className="text-[12px] leading-snug text-[var(--ink-muted)] sm:w-[8rem] sm:pt-0.5">
-                        {metaCheck ? `Ultimo check ${metaCheck}` : ""}
-                      </p>
-                      <Link
-                        href={item.href}
-                        className="inline-flex min-h-8 w-fit shrink-0 items-center text-[13px] font-medium text-[var(--primary)] hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
-                      >
-                        Apri →
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-
-          <LavoriAperti colonne={lavori} />
+          {campagne.length > 0 ? <LavoriAperti colonne={lavori} /> : null}
         </>
       )}
     </main>
