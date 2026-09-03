@@ -84,14 +84,22 @@ export default function ClientiPage() {
                       : ""}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => nuovaCampagna(cliente)}
-                  className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[var(--accent)] px-3.5 py-2 text-sm font-medium text-white hover:opacity-90"
-                >
-                  <Plus className="h-4 w-4" strokeWidth={1.75} />
-                  Nuova Campagna per questo cliente
-                </button>
+                <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+                  <Link
+                    href={`/clienti/${encodeURIComponent(cliente.id)}`}
+                    className="inline-flex items-center justify-center rounded-xl border border-[var(--ink)]/10 px-3.5 py-2 text-sm font-medium text-[var(--ink)] hover:bg-[var(--surface-hover)]"
+                  >
+                    Dettaglio
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => nuovaCampagna(cliente)}
+                    className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[var(--accent)] px-3.5 py-2 text-sm font-medium text-white hover:opacity-90"
+                  >
+                    <Plus className="h-4 w-4" strokeWidth={1.75} />
+                    Nuova Campagna per questo cliente
+                  </button>
+                </div>
               </li>
             );
           })}
