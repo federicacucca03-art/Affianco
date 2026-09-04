@@ -27,6 +27,11 @@ import type { Campagna } from "@/types/campagne";
 import { normalizzaObjective } from "@/types/campagne";
 import type { CampaignCheck, CampaignCheckRow } from "@/lib/campaign-checks-db";
 import type { HealthStatus } from "@/lib/control-room";
+import { evaluateTrend } from "@/lib/campaign-trend";
+import {
+  comparisonFromDirection,
+  type MetricComparisonDirection,
+} from "@/lib/campaign-diagnosis/evidence-guards";
 import {
   buildDiagnosisAiPayload,
   buildDiagnosisFacts,
@@ -39,6 +44,53 @@ import type {
   DiagnosisEligibility,
   DiagnosisSource,
 } from "@/lib/campaign-diagnosis/types";
+
+function emptyComparisons(): {
+  ctr: MetricComparisonDirection | null;
+  cpc: MetricComparisonDirection | null;
+  cpm: MetricComparisonDirection | null;
+  frequency: MetricComparisonDirection | null;
+} {
+  return { ctr: null, cpc: null, cpm: null, frequency: null };
+}
+
+function comparisonsFromNativeChecks(
+  checks: CampaignCheck[],
+  objective: Campagna["objective"],
+): ReturnType<typeof emptyComparisons> {
+  const out = emptyComparisons();
+  if (checks.length < 2) return out;
+  const evaluation = evaluateTrend(checks, normalizzaObjective(objective));
+  for (const d of evaluation.diagnostics) {
+    if (d.intervalsUsed < 1 || d.previous == null || d.current == null) continue;
+    const cmp = comparisonFromDirection(d.direction);
+    if (!cmp) continue;
+    if (d.metric === "ctr") out.ctr = cmp;
+    else if (d.metric === "cpc") out.cpc = cmp;
+    else if (d.metric === "cpm") out.cpm = cmp;
+    else if (d.metric === "frequency") out.frequency = cmp;
+  }
+  return out;
+}
+
+function comparisonsFromMetaTrend(diagnostics: {
+  metric: string;
+  current: number | null;
+  previous: number | null;
+  direction: string | null;
+}[]): ReturnType<typeof emptyComparisons> {
+  const out = emptyComparisons();
+  for (const d of diagnostics) {
+    if (d.current == null || d.previous == null) continue;
+    const cmp = comparisonFromDirection(d.direction);
+    if (!cmp) continue;
+    if (d.metric === "ctr") out.ctr = cmp;
+    else if (d.metric === "cpc") out.cpc = cmp;
+    else if (d.metric === "cpm") out.cpm = cmp;
+    else if (d.metric === "frequency") out.frequency = cmp;
+  }
+  return out;
+}
 
 export class DiagnosisLoadError extends Error {
   constructor(
@@ -297,6 +349,8 @@ export async function loadNativeDiagnosisBundle(
     frequency: latest?.frequency ?? null,
   });
 
+  const comparisons = comparisonsFromNativeChecks(checks, campagna.objective);
+
   const input: BuildDiagnosisContextInput = {
     source: "NATIVE",
     objective: campagna.objective ?? null,
@@ -327,6 +381,9 @@ export async function loadNativeDiagnosisBundle(
     audienceHint: audienceHintFromCampagna(campagna),
     hasCreativeAsset: hasCreativeFromCampagna(campagna),
     formatHint: formatHintFromCampagna(campagna),
+    comparisons,
+    hasDownstreamQualityEvidence: false,
+    hasCreativeAnalysisEvidence: false,
   };
 
   return {
@@ -561,6 +618,11 @@ export async function loadMetaDiagnosisBundle(
     frequency: monitoring.frequency,
   });
 
+  const comparisons =
+    trendResult.level === "TWO_WINDOW_COMPARISON"
+      ? comparisonsFromMetaTrend(trendResult.diagnostics)
+      : emptyComparisons();
+
   const input: BuildDiagnosisContextInput = {
     source: "META",
     objective: monitoring.rawObjective,
@@ -593,6 +655,9 @@ export async function loadMetaDiagnosisBundle(
     audienceHint: linkedPlan?.audienceHint ?? null,
     hasCreativeAsset: linkedPlan?.hasCreative ?? false,
     formatHint: linkedPlan?.formatHint ?? null,
+    comparisons,
+    hasDownstreamQualityEvidence: false,
+    hasCreativeAnalysisEvidence: false,
   };
 
   return {

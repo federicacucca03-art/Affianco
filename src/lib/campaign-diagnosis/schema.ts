@@ -1,6 +1,7 @@
 /**
  * Parse / validate / confidence-cap for M6C AI diagnosis JSON.
  * Pure — no network. Never trusts browser metrics.
+ * M6C.3: area normalization from evidence basis (no unsupported inference).
  */
 
 import type {
@@ -8,6 +9,12 @@ import type {
   DiagnosisAiConfidence,
   DiagnosisLikelyArea,
 } from "@/lib/campaign-diagnosis/types";
+import {
+  applySmallSampleConfidenceCap,
+  filterUnsupportedAbsoluteJudgments,
+  normalizeLikelyArea,
+  type DiagnosisEvidenceBasis,
+} from "@/lib/campaign-diagnosis/evidence-guards";
 
 const AREAS: ReadonlySet<string> = new Set([
   "CREATIVE",
@@ -89,9 +96,14 @@ export function buildConfidenceCapSignals(input: {
   evidence: string[];
   trend: string;
   health: string | null;
-  ctr: number | null;
-  cpc: number | null;
-  frequency: number | null;
+  /** Comparative only — absolute CTR/CPC/frequency never count. */
+  ctrComparison?: string | null;
+  cpcComparison?: string | null;
+  frequencyComparison?: string | null;
+  /** @deprecated absolute values ignored for independence (M6C.3) */
+  ctr?: number | null;
+  cpc?: number | null;
+  frequency?: number | null;
 }): ConfidenceCapSignals {
   const trendKnown =
     input.trend === "IMPROVING" ||
@@ -100,15 +112,43 @@ export function buildConfidenceCapSignals(input: {
   let independent = 0;
   if (input.health === "RED" || input.health === "YELLOW") independent += 1;
   if (trendKnown && input.trend === "WORSENING") independent += 1;
-  if (input.ctr != null && input.ctr < 0.8) independent += 1;
-  if (input.cpc != null && input.health === "RED") independent += 1;
-  if (input.frequency != null && input.frequency >= 3) independent += 1;
+  if (
+    input.ctrComparison === "WORSENING" ||
+    input.ctrComparison === "IMPROVING"
+  ) {
+    independent += 1;
+  }
+  if (
+    input.cpcComparison === "WORSENING" ||
+    input.cpcComparison === "IMPROVING"
+  ) {
+    independent += 1;
+  }
+  if (
+    input.frequencyComparison === "WORSENING" &&
+    input.ctrComparison === "WORSENING"
+  ) {
+    independent += 1;
+  }
   return {
     evidenceCount: input.evidence.length,
     trendKnown,
     independentSignalCount: independent,
   };
 }
+
+export const EMPTY_EVIDENCE_BASIS: DiagnosisEvidenceBasis = {
+  primaryAboveTarget: false,
+  primaryCostWorsening: false,
+  primaryCostTrendKnown: false,
+  ctrComparison: null,
+  cpcComparison: null,
+  cpmComparison: null,
+  frequencyComparison: null,
+  hasDownstreamQualityEvidence: false,
+  hasCreativeAnalysisEvidence: false,
+  results: null,
+};
 
 function extractJsonObject(raw: string): unknown {
   const trimmed = raw.trim();
@@ -124,11 +164,12 @@ function extractJsonObject(raw: string): unknown {
 
 /**
  * Parse model text → validated diagnosis.
- * Softens unsupported causal certainty by capping confidence + area UNKNOWN when needed.
+ * Softens unsupported causal certainty by capping confidence + normalizing area.
  */
 export function parseAndNormalizeDiagnosis(
   rawText: string,
   capSignals: ConfidenceCapSignals,
+  evidenceBasis: DiagnosisEvidenceBasis = EMPTY_EVIDENCE_BASIS,
 ): CampaignAiDiagnosis {
   let parsed: unknown;
   try {
@@ -152,8 +193,12 @@ export function parseAndNormalizeDiagnosis(
   if (!CONF.has(confRaw)) throw new Error("confidence non valido.");
 
   const evidenceRaw = Array.isArray(o.evidence) ? o.evidence : [];
-  const evidence = filterHumanEvidence(
+  const evidenceHuman = filterHumanEvidence(
     evidenceRaw.filter((e): e is string => typeof e === "string" && e.trim().length > 0),
+  );
+  const evidence = filterUnsupportedAbsoluteJudgments(
+    evidenceHuman,
+    evidenceBasis,
   );
   if (evidence.length === 0) {
     throw new Error("evidence vuoto o non utilizzabile.");
@@ -174,7 +219,10 @@ export function parseAndNormalizeDiagnosis(
   const whatNot =
     whatNotRaw && textContainsInternalJargon(whatNotRaw) ? null : whatNotRaw;
 
-  let area = areaRaw as DiagnosisLikelyArea;
+  let area = normalizeLikelyArea(
+    areaRaw as DiagnosisLikelyArea,
+    evidenceBasis,
+  );
   let confidence = confRaw as DiagnosisAiConfidence;
   let summaryDraft = summaryRaw;
   if (textContainsInternalJargon(summaryDraft)) {
@@ -185,10 +233,11 @@ export function parseAndNormalizeDiagnosis(
     confidence = "LOW";
   }
 
-  const capped = applyConfidenceCap(confidence, {
+  let capped = applyConfidenceCap(confidence, {
     ...capSignals,
     evidenceCount: evidence.length,
   });
+  capped = applySmallSampleConfidenceCap(capped, evidenceBasis);
 
   // Max 2 short sentences for summary.
   const sentences = summaryDraft

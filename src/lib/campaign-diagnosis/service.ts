@@ -16,6 +16,7 @@ import {
   buildConfidenceCapSignals,
   parseAndNormalizeDiagnosis,
 } from "@/lib/campaign-diagnosis/schema";
+import { buildEvidenceBasisFromPayload } from "@/lib/campaign-diagnosis/evidence-guards";
 import { assertPayloadMinimized } from "@/lib/campaign-diagnosis/build-context";
 import type {
   CampaignAiDiagnosis,
@@ -59,16 +60,21 @@ export async function runCampaignAiDiagnosis(input: {
       throw new Error("EMPTY_RESPONSE");
     }
 
+    const evidenceBasis = buildEvidenceBasisFromPayload(input.payload);
     const capSignals = buildConfidenceCapSignals({
       evidence: [],
       trend: input.facts.trend,
       health: input.facts.health,
-      ctr: input.facts.ctr,
-      cpc: input.facts.cpc,
-      frequency: input.facts.frequency,
+      ctrComparison: evidenceBasis.ctrComparison,
+      cpcComparison: evidenceBasis.cpcComparison,
+      frequencyComparison: evidenceBasis.frequencyComparison,
     });
 
-    const diagnosis = parseAndNormalizeDiagnosis(testo, capSignals);
+    const diagnosis = parseAndNormalizeDiagnosis(
+      testo,
+      capSignals,
+      evidenceBasis,
+    );
 
     assertDiagnosisHasNoInventedMetrics(diagnosis, {
       targetValue: input.facts.targetValue,

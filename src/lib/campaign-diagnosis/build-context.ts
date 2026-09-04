@@ -9,6 +9,7 @@ import type {
   UrgencyLevel,
 } from "@/lib/monday-control-room";
 import type { HealthStatus } from "@/lib/control-room";
+import type { MetricComparisonDirection } from "@/lib/campaign-diagnosis/evidence-guards";
 import type {
   CampaignDiagnosisAiPayload,
   CampaignDiagnosisFacts,
@@ -45,6 +46,14 @@ export type BuildDiagnosisContextInput = {
   audienceHint: string | null;
   hasCreativeAsset: boolean;
   formatHint: string | null;
+  comparisons?: {
+    ctr: MetricComparisonDirection | null;
+    cpc: MetricComparisonDirection | null;
+    cpm: MetricComparisonDirection | null;
+    frequency: MetricComparisonDirection | null;
+  };
+  hasDownstreamQualityEvidence?: boolean;
+  hasCreativeAnalysisEvidence?: boolean;
 };
 
 export function buildDiagnosisFacts(
@@ -95,6 +104,14 @@ export function buildDiagnosisAiPayload(
       frequency: input.frequency,
       results: input.results,
     },
+    comparisons: {
+      ctr: input.comparisons?.ctr ?? null,
+      cpc: input.comparisons?.cpc ?? null,
+      cpm: input.comparisons?.cpm ?? null,
+      frequency: input.comparisons?.frequency ?? null,
+    },
+    hasDownstreamQualityEvidence: input.hasDownstreamQualityEvidence === true,
+    hasCreativeAnalysisEvidence: input.hasCreativeAnalysisEvidence === true,
     trend: input.trend,
     resultMappingConfidence: input.resultMappingConfidence,
     economics: {

@@ -15,10 +15,21 @@ import {
   applyConfidenceCap,
   assertDiagnosisHasNoInventedMetrics,
   buildConfidenceCapSignals,
+  EMPTY_EVIDENCE_BASIS,
   filterHumanEvidence,
   parseAndNormalizeDiagnosis,
   textContainsInternalJargon,
 } from "../src/lib/campaign-diagnosis/schema";
+import {
+  buildEvidenceBasisFromPayload,
+  canSupportCreative,
+  canSupportPostClick,
+  canSupportResultQuality,
+  canSupportTrafficCost,
+  filterUnsupportedAbsoluteJudgments,
+  normalizeLikelyArea,
+  type DiagnosisEvidenceBasis,
+} from "../src/lib/campaign-diagnosis/evidence-guards";
 import {
   assertPayloadMinimized,
   buildDiagnosisAiPayload,
@@ -157,67 +168,108 @@ function mockAiJson(partial: Record<string, unknown>): string {
   });
 }
 
+function basis(
+  partial: Partial<DiagnosisEvidenceBasis> = {},
+): DiagnosisEvidenceBasis {
+  return { ...EMPTY_EVIDENCE_BASIS, ...partial };
+}
+
+function payloadBase(
+  overrides: Partial<Parameters<typeof buildDiagnosisAiPayload>[0]> = {},
+) {
+  return buildDiagnosisAiPayload({
+    source: "NATIVE",
+    objective: "LEADS",
+    status: "ACTIVE",
+    monitoringMode: "ACTIVE",
+    health: "RED",
+    attentionState: "NEEDS_ATTENTION",
+    urgencyLevel: "SOON",
+    attentionReason: "Il costo per risultato è sopra la soglia.",
+    primaryKpi: "CPL",
+    actualValue: 38,
+    targetValue: 30,
+    spend: 100,
+    impressions: 10000,
+    linkClicks: 200,
+    ctr: 1.2,
+    cpc: 0.5,
+    cpm: 10,
+    frequency: 1.8,
+    results: 5,
+    trend: "STABLE",
+    resultMappingConfidence: null,
+    maxSustainableCpa: 30,
+    dailyBudget: 20,
+    targetMargin: null,
+    offer: null,
+    settore: null,
+    audienceHint: null,
+    hasCreativeAsset: false,
+    formatHint: null,
+    ...overrides,
+  });
+}
+
 console.log("\nM6C — Contextual AI diagnosis\n");
 
-test("A: RED + stable CTR/CPC → cautious post-click hypothesis", () => {
+test("A: RED without comparative CTR/CPC → POST_CLICK blocked to UNKNOWN", () => {
   const parsed = parseAndNormalizeDiagnosis(
     mockAiJson({ likely_area: "POST_CLICK", confidence: "MEDIUM" }),
     buildConfidenceCapSignals({
       evidence: ["a", "b"],
       trend: "STABLE",
       health: "RED",
-      ctr: 1.2,
-      cpc: 0.5,
-      frequency: 1.8,
+    }),
+    basis({
+      primaryAboveTarget: true,
+      primaryCostTrendKnown: true,
+      results: 5,
     }),
   );
-  assert(parsed.likely_area === "POST_CLICK", parsed.likely_area);
-  assert(parsed.summary.toLowerCase().includes("clic") || parsed.summary.toLowerCase().includes("dopo"), parsed.summary);
-  assert(!/sicuramente/i.test(parsed.summary), "no certainty");
+  assert(parsed.likely_area === "UNKNOWN", parsed.likely_area);
 });
 
-test("B: high frequency + CTR worsening → creative hypothesis", () => {
+test("B: high frequency absolute + no CTR trend → CREATIVE blocked", () => {
   const parsed = parseAndNormalizeDiagnosis(
     mockAiJson({
       likely_area: "CREATIVE",
       summary:
-        "La frequenza è elevata e il CTR sta peggiorando. Potrebbe indicare affaticamento creativo.",
-      evidence: ["Frequenza alta", "CTR in peggioramento"],
+        "La frequenza è elevata. Potrebbe indicare affaticamento creativo.",
+      evidence: ["Frequenza 4", "Spesa in corso"],
       confidence: "MEDIUM",
     }),
     buildConfidenceCapSignals({
       evidence: ["a", "b"],
       trend: "WORSENING",
       health: "YELLOW",
-      ctr: 0.5,
-      cpc: 0.8,
-      frequency: 4,
+    }),
+    basis({
+      primaryAboveTarget: true,
+      primaryCostWorsening: true,
+      results: 8,
+      frequencyComparison: null,
+      ctrComparison: null,
     }),
   );
-  assert(parsed.likely_area === "CREATIVE", parsed.likely_area);
+  assert(parsed.likely_area === "UNKNOWN", parsed.likely_area);
 });
 
-test("C: high CPC + weak CTR → creative/traffic cost hypothesis", () => {
+test("C: absolute CPC/CTR only → TRAFFIC_COST blocked", () => {
   const parsed = parseAndNormalizeDiagnosis(
     mockAiJson({
       likely_area: "TRAFFIC_COST",
-      summary:
-        "CTR debole e CPC elevato. Il segnale più coerente è un problema di attrazione o costo traffico.",
-      evidence: ["CTR basso", "CPC alto"],
+      summary: "CTR e CPC suggeriscono un problema di costo traffico.",
+      evidence: ["Il CPL è sopra target.", "La spesa è 100 €."],
     }),
     buildConfidenceCapSignals({
       evidence: ["a", "b"],
       trend: "STABLE",
       health: "RED",
-      ctr: 0.4,
-      cpc: 2.5,
-      frequency: 1.2,
     }),
+    basis({ primaryAboveTarget: true, results: 10 }),
   );
-  assert(
-    parsed.likely_area === "TRAFFIC_COST" || parsed.likely_area === "CREATIVE",
-    parsed.likely_area,
-  );
+  assert(parsed.likely_area === "UNKNOWN", parsed.likely_area);
 });
 
 test("D: no target → AI blocked", () => {
@@ -816,37 +868,10 @@ test("K2: confidence labels Italian", () => {
   assert(etichettaConfidence("HIGH") === "Alta", "high");
 });
 
-test("L2: human facts brief supports POST_CLICK fixture", () => {
-  const payload = buildDiagnosisAiPayload({
-    source: "NATIVE",
-    objective: "LEADS",
-    status: "ACTIVE",
-    monitoringMode: "ACTIVE",
-    health: "RED",
-    attentionState: "NEEDS_ATTENTION",
-    urgencyLevel: "SOON",
-    attentionReason: "Il costo per risultato è sopra la soglia.",
-    primaryKpi: "CPL",
-    actualValue: 38,
-    targetValue: 30,
-    spend: 100,
-    impressions: 10000,
-    linkClicks: 200,
-    ctr: 1.2,
-    cpc: 0.5,
-    cpm: 10,
-    frequency: 1.8,
-    results: 5,
+test("L2: without comparative CTR/CPC, POST_CLICK normalizes to UNKNOWN", () => {
+  const payload = payloadBase({
     trend: "WORSENING",
-    resultMappingConfidence: null,
-    maxSustainableCpa: 30,
-    dailyBudget: 20,
-    targetMargin: null,
-    offer: null,
     settore: "dentistico",
-    audienceHint: null,
-    hasCreativeAsset: false,
-    formatHint: null,
   });
   const brief = buildDiagnosisHumanFactsBrief(payload);
   assert(brief.includes("38"), brief);
@@ -854,21 +879,22 @@ test("L2: human facts brief supports POST_CLICK fixture", () => {
   assert(brief.toLowerCase().includes("peggior"), brief);
   assert(!brief.includes("attentionReason"), "no field name");
   assert(!brief.includes("WORSENING"), "no enum");
+  assert(brief.includes("senza giudizio") || brief.includes("Valori assoluti"), brief);
   const parsed = parseAndNormalizeDiagnosis(
     mockAiJson({
       likely_area: "POST_CLICK",
       summary:
-        "Il costo per risultato è sopra soglia, ma CTR e CPC non mostrano un peggioramento evidente. Il segnale è più coerente con una criticità dopo il clic.",
+        "Il costo per risultato è sopra soglia. I dati non localizzano ancora la causa.",
       evidence: [
         "Il CPL è 38 € rispetto a un target di 30 €.",
-        "Il CTR è stabile.",
-        "Il CPC resta contenuto.",
+        "Il CTR è 1,2%.",
+        "Il CPC è 0,50 €.",
       ],
     }),
     { evidenceCount: 3, trendKnown: true, independentSignalCount: 2 },
+    buildEvidenceBasisFromPayload(payload),
   );
-  assert(parsed.likely_area === "POST_CLICK", parsed.likely_area);
-  assert(parsed.summary.toLowerCase().includes("clic"), parsed.summary);
+  assert(parsed.likely_area === "UNKNOWN", parsed.likely_area);
 });
 
 test("M2: prompt forbids internal jargon in response", () => {
@@ -894,6 +920,273 @@ test("N2: max 3 evidence still enforced", () => {
 test("Prompt forbids recommendations", () => {
   assert(DIAGNOSIS_SYSTEM_PROMPT.includes("non dare raccomandazioni"), "no actions");
   assert(DIAGNOSIS_SYSTEM_PROMPT.includes("JSON"), "json");
+});
+
+console.log("\nM6C.3 — Evidence validity guardrails\n");
+
+test("M6C.3 A: absolute CTR only → no good/bad judgment in evidence", () => {
+  const kept = filterUnsupportedAbsoluteJudgments(
+    ["Il CTR è 1,11%.", "Il CTR non mostra problemi di traffico."],
+    basis({ results: 5 }),
+  );
+  assert(kept.length === 1, String(kept.length));
+  assert(kept[0]!.includes("1,11"), kept[0]!);
+  assert(!/non mostra/i.test(kept.join(" ")), "no judgment");
+});
+
+test("M6C.3 B: absolute CPC only → no healthy/problematic judgment", () => {
+  const kept = filterUnsupportedAbsoluteJudgments(
+    ["Il CPC è 1,27 €.", "Il CPC è nella norma."],
+    basis({ results: 5 }),
+  );
+  assert(kept.length === 1 && kept[0]!.includes("1,27"), kept.join("|"));
+});
+
+test("M6C.3 C: no downstream quality → RESULT_QUALITY blocked", () => {
+  assert(!canSupportResultQuality(basis({ results: 20 })), "no support");
+  assert(
+    normalizeLikelyArea("RESULT_QUALITY", basis({ results: 20 })) === "UNKNOWN",
+    "blocked",
+  );
+});
+
+test("M6C.3 D: result count alone → RESULT_QUALITY blocked", () => {
+  const d = parseAndNormalizeDiagnosis(
+    mockAiJson({
+      likely_area: "RESULT_QUALITY",
+      summary: "I risultati potrebbero essere di bassa qualità.",
+      evidence: ["Risultati 12", "CPL 40 €"],
+    }),
+    { evidenceCount: 2, trendKnown: true, independentSignalCount: 2 },
+    basis({ results: 12, primaryAboveTarget: true }),
+  );
+  assert(d.likely_area === "UNKNOWN", d.likely_area);
+});
+
+test("M6C.3 E: cost per result alone → RESULT_QUALITY blocked", () => {
+  const d = parseAndNormalizeDiagnosis(
+    mockAiJson({
+      likely_area: "RESULT_QUALITY",
+      evidence: ["Costo per risultato 100 €", "Target 113 €"],
+    }),
+    { evidenceCount: 2, trendKnown: false, independentSignalCount: 1 },
+    basis({
+      results: 8,
+      primaryAboveTarget: false,
+      hasDownstreamQualityEvidence: false,
+    }),
+  );
+  assert(d.likely_area === "UNKNOWN", d.likely_area);
+});
+
+test("M6C.3 F: CPL above target + stable comparative CTR/CPC → POST_CLICK allowed", () => {
+  const b = basis({
+    primaryAboveTarget: true,
+    ctrComparison: "STABLE",
+    cpcComparison: "STABLE",
+    results: 12,
+  });
+  assert(canSupportPostClick(b), "allowed");
+  const d = parseAndNormalizeDiagnosis(
+    mockAiJson({
+      likely_area: "POST_CLICK",
+      evidence: [
+        "Il CPL è sopra target.",
+        "Il CTR è stabile rispetto al periodo precedente.",
+        "Il CPC è stabile rispetto al periodo precedente.",
+      ],
+    }),
+    buildConfidenceCapSignals({
+      evidence: ["a", "b", "c"],
+      trend: "STABLE",
+      health: "RED",
+      ctrComparison: "STABLE",
+      cpcComparison: "STABLE",
+    }),
+    b,
+  );
+  assert(d.likely_area === "POST_CLICK", d.likely_area);
+});
+
+test("M6C.3 G: CPL above target + no comparative CTR/CPC → POST_CLICK → UNKNOWN", () => {
+  const b = basis({
+    primaryAboveTarget: true,
+    ctrComparison: null,
+    cpcComparison: null,
+    results: 12,
+  });
+  assert(!canSupportPostClick(b), "blocked");
+  assert(normalizeLikelyArea("POST_CLICK", b) === "UNKNOWN", "unknown");
+});
+
+test("M6C.3 H: frequency rising + CTR declining → CREATIVE allowed", () => {
+  const b = basis({
+    frequencyComparison: "WORSENING",
+    ctrComparison: "WORSENING",
+    results: 15,
+  });
+  assert(canSupportCreative(b), "creative ok");
+  const d = parseAndNormalizeDiagnosis(
+    mockAiJson({
+      likely_area: "CREATIVE",
+      summary:
+        "La frequenza è in aumento e il CTR in calo rispetto al periodo precedente.",
+      evidence: [
+        "Frequenza in aumento rispetto al periodo precedente.",
+        "CTR in peggioramento rispetto al periodo precedente.",
+      ],
+    }),
+    buildConfidenceCapSignals({
+      evidence: ["a", "b"],
+      trend: "WORSENING",
+      health: "YELLOW",
+      ctrComparison: "WORSENING",
+      frequencyComparison: "WORSENING",
+    }),
+    b,
+  );
+  assert(d.likely_area === "CREATIVE", d.likely_area);
+});
+
+test("M6C.3 I: absolute frequency alone → no fatigue claim kept", () => {
+  const kept = filterUnsupportedAbsoluteJudgments(
+    ["La frequenza è 3,2.", "Frequenza alta indica affaticamento creativo."],
+    basis({ results: 10, frequencyComparison: null }),
+  );
+  assert(kept.length === 1, kept.join("|"));
+  assert(!/affaticament/i.test(kept.join(" ")), "no fatigue");
+});
+
+test("M6C.3 J: Aurora 2-result fixture → UNKNOWN + LOW", () => {
+  const payload = payloadBase({
+    health: "GREEN",
+    attentionState: "MONITOR",
+    urgencyLevel: "LATER",
+    attentionReason: "Il costo per risultato è sotto soglia.",
+    actualValue: 100,
+    targetValue: 113,
+    spend: 200,
+    ctr: 1.11,
+    cpc: 1.27,
+    cpm: null,
+    frequency: null,
+    results: 2,
+    trend: "INSUFFICIENT",
+    comparisons: {
+      ctr: null,
+      cpc: null,
+      cpm: null,
+      frequency: null,
+    },
+  });
+  const b = buildEvidenceBasisFromPayload(payload);
+  assert(b.results === 2, "2 results");
+  assert(!b.primaryAboveTarget, "under target");
+  const d = parseAndNormalizeDiagnosis(
+    mockAiJson({
+      likely_area: "RESULT_QUALITY",
+      confidence: "MEDIUM",
+      summary:
+        "CTR e CPC non indicano un problema di traffico. La criticità è nella qualità dei risultati.",
+      evidence: [
+        "Il costo per risultato è 100 € rispetto a un target di 113 €.",
+        "Risultati: 2.",
+        "Il CTR è 1,11%.",
+      ],
+    }),
+    buildConfidenceCapSignals({
+      evidence: ["a", "b", "c"],
+      trend: "INSUFFICIENT",
+      health: "GREEN",
+    }),
+    b,
+  );
+  assert(d.likely_area === "UNKNOWN", d.likely_area);
+  assert(d.confidence === "LOW", d.confidence);
+  assert(!/non indic/i.test(d.evidence.join(" ")), "no traffic judgment");
+});
+
+test("M6C.3 K: no industry benchmark introduced", () => {
+  assert(!DIAGNOSIS_SYSTEM_PROMPT.toLowerCase().includes("benchmark di settore") || DIAGNOSIS_SYSTEM_PROMPT.includes("non inventare benchmark di settore"), "forbid industry");
+  assert(DIAGNOSIS_SYSTEM_PROMPT.includes("non inventare benchmark"), "no invent");
+  const brief = buildDiagnosisHumanFactsBrief(payloadBase());
+  assert(!/\bsettore\s+media\b/i.test(brief), "no sector avg");
+  assert(!/benchmark/i.test(brief), "no benchmark in brief");
+});
+
+test("M6C.3 L: health unchanged", () => {
+  const before = resolveAttentionFromSignals({
+    historical: false,
+    configurationRequired: false,
+    insufficientData: false,
+    health: "RED",
+    trend: "STABLE",
+  });
+  normalizeLikelyArea("POST_CLICK", basis({ results: 2 }));
+  const after = resolveAttentionFromSignals({
+    historical: false,
+    configurationRequired: false,
+    insufficientData: false,
+    health: "RED",
+    trend: "STABLE",
+  });
+  assert(before.state === after.state, "health/attention unchanged");
+});
+
+test("M6C.3 M: urgency unchanged", () => {
+  const u1 = resolveUrgencyFromSignals({
+    attentionState: "NEEDS_ATTENTION",
+    health: "RED",
+    trend: "STABLE",
+    campaignStatus: "ACTIVE",
+  });
+  canSupportTrafficCost(basis({ cpcComparison: "WORSENING", results: 9 }));
+  const u2 = resolveUrgencyFromSignals({
+    attentionState: "NEEDS_ATTENTION",
+    health: "RED",
+    trend: "STABLE",
+    campaignStatus: "ACTIVE",
+  });
+  assert(u1.level === u2.level, u1.level);
+});
+
+test("M6C.3 N: no DB changes", () => {
+  const files = fs.readdirSync("./supabase/migrations");
+  assert(
+    !files.some((f) => /m6c\.3|evidence.?guard|diagnosi.?guard/i.test(f)),
+    "no new migration",
+  );
+  for (const f of [
+    "./src/lib/campaign-diagnosis/evidence-guards.ts",
+    "./src/lib/campaign-diagnosis/schema.ts",
+    "./src/lib/campaign-diagnosis/service.ts",
+  ]) {
+    const c = read(f);
+    assert(!c.includes(".insert("), f);
+    assert(!c.includes("inserisciCampaignCheck"), f);
+  }
+});
+
+test("M6C.3 O: no automatic AI calls", () => {
+  const ui = read("./src/components/dashboard/MondayControlRoomSection.tsx");
+  assert(ui.includes("fetchCampaignDiagnosis"), "on demand");
+  assert(!ui.includes("useEffect(() => {\n      void runDiagnosis"), "no auto");
+  const orch = read("./src/lib/campaign-diagnosis/orchestrate.ts");
+  assert(orch.includes("isDiagnosisUiEligible"), "gated");
+});
+
+test("M6C.3 prompt epistemic guards present", () => {
+  assert(DIAGNOSIS_SYSTEM_PROMPT.includes("mai classificare un valore assoluto"), "abs");
+  assert(DIAGNOSIS_SYSTEM_PROMPT.includes("RESULT_QUALITY"), "rq");
+  assert(DIAGNOSIS_SYSTEM_PROMPT.includes("UNKNOWN"), "unknown");
+});
+
+test("M6C.3 TRAFFIC_COST requires CPC/CPM comparison", () => {
+  assert(!canSupportTrafficCost(basis({ results: 10 })), "no abs");
+  assert(
+    canSupportTrafficCost(basis({ cpcComparison: "WORSENING", results: 10 })),
+    "cpc cmp",
+  );
 });
 
 console.log("\n" + "━".repeat(56));

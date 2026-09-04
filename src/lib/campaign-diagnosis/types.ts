@@ -4,6 +4,7 @@
 
 import type { AttentionState, AttentionTrend, UrgencyLevel } from "@/lib/monday-control-room";
 import type { HealthStatus } from "@/lib/control-room";
+import type { MetricComparisonDirection } from "@/lib/campaign-diagnosis/evidence-guards";
 
 export type DiagnosisSource = "NATIVE" | "META";
 
@@ -77,6 +78,20 @@ export type CampaignDiagnosisAiPayload = {
     frequency: number | null;
     results: number | null;
   };
+  /**
+   * Period-over-period comparisons only. null = absolute snapshot, no judgment basis.
+   * Never invent industry benchmarks.
+   */
+  comparisons: {
+    ctr: MetricComparisonDirection | null;
+    cpc: MetricComparisonDirection | null;
+    cpm: MetricComparisonDirection | null;
+    frequency: MetricComparisonDirection | null;
+  };
+  /** Actual downstream quality signals (leads→sale, CRM, show-up observed, etc.). */
+  hasDownstreamQualityEvidence: boolean;
+  /** Persisted creative analysis relevant to this campaign (not mere asset upload). */
+  hasCreativeAnalysisEvidence: boolean;
   trend: AttentionTrend;
   resultMappingConfidence: "CONFIDENT" | "AMBIGUOUS" | "UNKNOWN" | null;
   economics: {
