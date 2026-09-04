@@ -17,3 +17,15 @@ export {
   notificationMessage,
   notificationTitle,
 } from "@/lib/campaign-notifications/copy";
+
+export {
+  evaluateAndPersistCampaignNotification,
+  createMemoryNotificationStore,
+} from "@/lib/campaign-notifications/evaluate-persist";
+
+export {
+  snapshotFromAttentionItem,
+  snapshotFromMonitoringRow,
+  monitoringRowFromSnapshot,
+  identityIds,
+} from "@/lib/campaign-notifications/snapshot";

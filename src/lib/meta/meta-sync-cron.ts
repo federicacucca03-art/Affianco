@@ -1,6 +1,7 @@
 /**
  * M7A — Scheduled Meta insights sync orchestration.
- * Reuses importClientCampaignInsights. No AI, no notifications, no Meta writes.
+ * Reuses importClientCampaignInsights. No AI, no Meta writes.
+ * M7B.2: after sync, evaluates Meta notification transitions (persist only).
  *
  * Hobby MVP cadence: Vercel cron runs once daily (`0 6 * * *` in vercel.json).
  * Sub-daily schedules require Vercel Pro — do not raise cadence on Hobby.
@@ -14,6 +15,7 @@ import { markMetaConnectionStatus } from "@/lib/meta/connections";
 import { resolveMonitoringMode } from "@/lib/meta/insights-control-room";
 import { isMetaError } from "@/lib/meta/errors";
 import { isUuid } from "@/lib/meta/ids";
+import { evaluateAllMetaNotificationsAfterCron } from "@/lib/campaign-notifications/evaluate-runners";
 
 /**
  * PAUSED campaigns: at most once per day (safety if cron/manual overlap).
@@ -47,6 +49,8 @@ export type MetaSyncRunSummary = {
   errorsCount: number;
   rateLimited: boolean;
   elapsedMs: number;
+  notificationsCreated?: number;
+  notificationErrors?: number;
 };
 
 function admin() {
@@ -357,6 +361,7 @@ export async function runScheduledMetaInsightsSync(options?: {
   nowMs?: number;
   importFn?: typeof importClientCampaignInsights;
   markStatusFn?: typeof markMetaConnectionStatus;
+  skipNotificationEval?: boolean;
 }): Promise<MetaSyncRunSummary> {
   const listed = await listEligibleMetaSyncTargets({ nowMs: options?.nowMs });
   logSafe(
@@ -364,12 +369,40 @@ export async function runScheduledMetaInsightsSync(options?: {
     `client_count=${listed.connectionsChecked} due=${listed.targets.length}`,
   );
 
-  return syncMetaInsightTargets(listed.targets, {
+  const summary = await syncMetaInsightTargets(listed.targets, {
     connectionsChecked: listed.connectionsChecked,
     campaignsSkippedBase: listed.skippedNotDue + listed.skippedArchived,
     importFn: options?.importFn,
     markStatusFn: options?.markStatusFn,
   });
+
+  if (options?.skipNotificationEval) {
+    return summary;
+  }
+
+  // M7B.2 — after insights sync: evaluate Meta transitions (failure-isolated).
+  let notificationsCreated = 0;
+  let notificationErrors = 0;
+  try {
+    const notif = await evaluateAllMetaNotificationsAfterCron({
+      nowMs: options?.nowMs,
+    });
+    notificationsCreated = notif.notificationsCreated;
+    notificationErrors = notif.errors;
+    logSafe(
+      "NOTIF_EVAL",
+      `users=${notif.usersEvaluated} created=${notificationsCreated} errors=${notificationErrors}`,
+    );
+  } catch {
+    notificationErrors += 1;
+    logSafe("NOTIF_EVAL", "category=BATCH_FAILED");
+  }
+
+  return {
+    ...summary,
+    notificationsCreated,
+    notificationErrors,
+  };
 }
 
 /** Verify Authorization: Bearer <CRON_SECRET>. */

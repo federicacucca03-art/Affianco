@@ -1,8 +1,12 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Bell, ChevronDown, Menu, Plus, Search } from "lucide-react";
 import { useOnboardingCampagna } from "@/components/OnboardingCampagnaContext";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { fetchUnreadNotificationCount } from "@/lib/campaign-notifications/inbox-client";
+import { supabase } from "@/lib/supabase";
 
 type Props = {
   onApriMenu: () => void;
@@ -17,9 +21,55 @@ function inizialiDaEmail(email: string | null): string {
   return "AF";
 }
 
+function badgeLabel(count: number): string {
+  if (count <= 0) return "";
+  if (count > 9) return "9+";
+  return String(count);
+}
+
+async function triggerNativeEvaluateQuiet(): Promise<void> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return;
+  try {
+    await fetch("/api/notifications/evaluate", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ scope: "native" }),
+    });
+  } catch {
+    // ignore
+  }
+}
+
 export function BarraSuperiore({ onApriMenu }: Props) {
   const { apriModaleCampagna } = useOnboardingCampagna();
-  const { email } = useAuth();
+  const { email, user } = useAuth();
+  const [unread, setUnread] = useState(0);
+
+  const refreshUnread = useCallback(async () => {
+    if (!user?.id) {
+      setUnread(0);
+      return;
+    }
+    try {
+      await triggerNativeEvaluateQuiet();
+      const n = await fetchUnreadNotificationCount();
+      setUnread(n);
+    } catch {
+      // Table may not exist until migration; keep badge quiet.
+      setUnread(0);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    void refreshUnread();
+  }, [refreshUnread]);
+
+  const badge = badgeLabel(unread);
 
   return (
     <header className="flex h-[4.25rem] shrink-0 items-center gap-3 px-4 sm:px-2 lg:px-3">
@@ -47,14 +97,22 @@ export function BarraSuperiore({ onApriMenu }: Props) {
       </label>
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-        <button
-          type="button"
-          aria-label="Notifiche"
+        <Link
+          href="/notifiche"
+          aria-label={
+            unread > 0
+              ? `Notifiche, ${unread} non lette`
+              : "Notifiche"
+          }
           className="relative rounded-full bg-white p-2 text-[var(--ink-muted)] shadow-[var(--shadow-card)] hover:text-[var(--ink)]"
         >
           <Bell className="h-5 w-5" strokeWidth={1.75} />
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--pink-soft)]" />
-        </button>
+          {badge ? (
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--ink)] px-1 text-[10px] font-medium text-white">
+              {badge}
+            </span>
+          ) : null}
+        </Link>
 
         <button
           type="button"

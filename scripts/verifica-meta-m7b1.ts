@@ -329,15 +329,15 @@ test("S: no notifications sent", () => {
 });
 
 test("T: no database mutation", () => {
-  const root = "./src/lib/campaign-notifications";
-  for (const f of fs.readdirSync(root)) {
-    const c = read(`${root}/${f}`);
+  // M7B.1 pure evaluator files only — M7B.2 persistence lives in sibling modules.
+  for (const f of ["types.ts", "copy.ts", "resolve.ts", "index.ts"]) {
+    const c = read(`./src/lib/campaign-notifications/${f}`);
     assert(!c.includes(".insert("), f);
     assert(!c.includes(".update("), f);
     assert(!c.includes("createSupabaseAdmin"), f);
   }
   const files = fs.readdirSync("./supabase/migrations");
-  assert(!files.some((f) => /m7b|notification/i.test(f)), "no migration");
+  assert(!files.some((f) => /m7b1/i.test(f)), "no m7b1 migration");
 });
 
 test("U: no ads_management", () => {

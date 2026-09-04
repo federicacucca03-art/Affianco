@@ -44,6 +44,8 @@ async function handle(request: Request) {
       errors_count: summary.errorsCount,
       rate_limited: summary.rateLimited,
       elapsed_ms: summary.elapsedMs,
+      notifications_created: summary.notificationsCreated ?? 0,
+      notification_errors: summary.notificationErrors ?? 0,
     });
   } catch {
     console.error("[META_CRON] FATAL category=RUN_FAILED");
