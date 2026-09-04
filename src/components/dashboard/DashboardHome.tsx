@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Bell,
   LayoutDashboard,
@@ -35,12 +36,20 @@ import { loadMetaMondayBundle } from "@/lib/meta/monday-meta-loader";
 import { nomeCampagnaCard } from "@/components/risultati/ControlRoomOverview";
 import { MondayControlRoomSection } from "@/components/dashboard/MondayControlRoomSection";
 import { AllyFeatureCard } from "@/components/shell/AllyFeatureCard";
+import { HomeSetupPanel } from "@/components/dashboard/HomeSetupPanel";
 import { useOnboardingCampagna } from "@/components/OnboardingCampagnaContext";
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
   logErroreSupabaseDev,
   messaggioErroreSupabase,
 } from "@/lib/supabase-errori";
+import {
+  buildAllySetupGuidance,
+  writeSetupPathPreference,
+  type AllySetupGuidance,
+  type AllySetupSignals,
+} from "@/lib/ally-setup";
+import { loadAllySetupSignals } from "@/lib/ally-setup-loader";
 
 const MAX_REVISIONI = 3;
 const TREND_CHECK_DAYS = 30;
@@ -50,28 +59,28 @@ const QUICK_ACTIONS = [
   {
     href: "/home",
     title: "Control Room",
-    body: "Vedi subito le campagne che richiedono attenzione.",
+    body: "Le campagne che richiedono la tua attenzione.",
     icon: LayoutDashboard,
     tone: 1 as const,
   },
   {
     href: "/risultati",
     title: "Monitoraggio",
-    body: "Controlla target, KPI e trend.",
+    body: "Performance, soglie e trend.",
     icon: LineChart,
     tone: 2 as const,
   },
   {
     href: "/risultati",
     title: "Diagnosi",
-    body: "Capisci perché una campagna viene segnalata.",
+    body: "Perché una campagna viene segnalata.",
     icon: Sparkles,
     tone: 3 as const,
   },
   {
     href: "/notifiche",
     title: "Notifiche",
-    body: "Vedi solo i cambiamenti che meritano attenzione.",
+    body: "I cambiamenti importanti.",
     icon: Bell,
     tone: 4 as const,
   },
@@ -80,6 +89,7 @@ const QUICK_ACTIONS = [
 export function DashboardHome() {
   const { apriModaleCampagna } = useOnboardingCampagna();
   const { user } = useAuth();
+  const router = useRouter();
   const searchRef = useRef<HTMLInputElement>(null);
   const [campagne, setCampagne] = useState<Campagna[]>([]);
   const [ultimi, setUltimi] = useState<Map<string, CampaignCheck>>(new Map());
@@ -92,6 +102,10 @@ export function DashboardHome() {
   const [caricamento, setCaricamento] = useState(true);
   const [errore, setErrore] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [setupSignals, setSetupSignals] = useState<AllySetupSignals | null>(
+    null,
+  );
+  const [showFirstClientForm, setShowFirstClientForm] = useState(false);
 
   const carica = useCallback(async () => {
     setCaricamento(true);
@@ -110,30 +124,60 @@ export function DashboardHome() {
       setChecksSettimana(settimana);
       setChecksTrend(trendChecks);
 
+      let nextMeta: ControlRoomAttentionItem[] = [];
+      let nextLinked = new Set<string>();
       if (user?.id) {
         try {
           const bundle = await loadMetaMondayBundle(user.id);
-          const linked = collectActiveLinkedNativeIds(bundle.rows);
-          setLinkedNativeIds(linked);
-          setMetaItems(
-            bundle.rows.map((row) => {
-              const t = bundle.trends.get(row.id);
-              return buildMetaAttentionItem({
-                row,
-                trendDirection: t?.direction ?? null,
-                trendLevel: t?.level,
-              });
-            }),
-          );
+          nextLinked = collectActiveLinkedNativeIds(bundle.rows);
+          nextMeta = bundle.rows.map((row) => {
+            const t = bundle.trends.get(row.id);
+            return buildMetaAttentionItem({
+              row,
+              trendDirection: t?.direction ?? null,
+              trendLevel: t?.level,
+            });
+          });
+          setLinkedNativeIds(nextLinked);
+          setMetaItems(nextMeta);
         } catch (metaErr) {
           logErroreSupabaseDev("dashboard_home_meta", metaErr);
           setMetaItems([]);
           setLinkedNativeIds(new Set());
+          nextMeta = [];
+          nextLinked = new Set();
         }
       } else {
         setMetaItems([]);
         setLinkedNativeIds(new Set());
       }
+
+      const checksByCampaignTmp = new Map<string, CampaignCheck[]>();
+      for (const c of trendChecks) {
+        const list = checksByCampaignTmp.get(c.campaignId) ?? [];
+        list.push(c);
+        checksByCampaignTmp.set(c.campaignId, list);
+      }
+      const nativeItems = lista
+        .filter((c) => c.id)
+        .map((campagna) =>
+          buildNativeAttentionItem({
+            campagna,
+            check: mappa.get(campagna.id) ?? null,
+            checksForTrend: checksByCampaignTmp.get(campagna.id) ?? [],
+          }),
+        );
+      const merged = applyLinkedCampaignSuppression(
+        [...nativeItems, ...nextMeta],
+        nextLinked,
+      );
+
+      const signals = await loadAllySetupSignals({
+        hasNativeCampaign: lista.length > 0,
+        hasMetaCampaign: nextMeta.length > 0,
+        attentionItems: merged,
+      });
+      setSetupSignals(signals);
     } catch (e) {
       logErroreSupabaseDev("dashboard_home", e);
       setErrore(messaggioErroreSupabase(e, "lista"));
@@ -143,6 +187,7 @@ export function DashboardHome() {
       setChecksTrend([]);
       setMetaItems([]);
       setLinkedNativeIds(new Set());
+      setSetupSignals(null);
     } finally {
       setCaricamento(false);
     }
@@ -188,7 +233,17 @@ export function DashboardHome() {
     [checksSettimana],
   );
 
-  const hasAnyWork = campagne.length > 0 || metaItems.length > 0;
+  const guidance: AllySetupGuidance | null = useMemo(() => {
+    if (!setupSignals) return null;
+    return buildAllySetupGuidance(setupSignals);
+  }, [setupSignals]);
+
+  const isActiveWorkspace = guidance?.phase === "ACTIVE_WORKSPACE";
+  const showSetup = Boolean(guidance && !isActiveWorkspace);
+  const showControlRoom = Boolean(
+    guidance?.showControlRoom &&
+      (campagne.length > 0 || metaItems.length > 0),
+  );
 
   const searchHits = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -202,9 +257,70 @@ export function DashboardHome() {
       .slice(0, 5);
   }, [campagne, query]);
 
+  function chooseMeta() {
+    writeSetupPathPreference("meta");
+    const id = setupSignals?.primaryClientId;
+    if (id) {
+      router.push(`/clienti/${encodeURIComponent(id)}`);
+      return;
+    }
+    router.push("/clienti");
+  }
+
+  function chooseNative() {
+    writeSetupPathPreference("native");
+    apriModaleCampagna();
+  }
+
+  function onPrimaryClick() {
+    if (!guidance) return;
+    if (
+      guidance.primaryAction === "open_campaign_modal" ||
+      guidance.secondaryAction === "open_campaign_modal"
+    ) {
+      chooseNative();
+    }
+  }
+
+  async function onCreateClientDone(client: { id: string; name: string }) {
+    setShowFirstClientForm(false);
+    setSetupSignals((prev) =>
+      prev
+        ? {
+            ...prev,
+            hasClient: true,
+            hasDbClient: true,
+            primaryClientId: client.id,
+            primaryClientName: client.name,
+          }
+        : prev,
+    );
+    await carica();
+  }
+
+  const heroForSetup = Boolean(guidance && !isActiveWorkspace);
+  // Search/workspace + quick cards only in ACTIVE_WORKSPACE (no empty placeholders).
+  const showSearchShell = isActiveWorkspace;
+  const heroBadge = heroForSetup
+    ? guidance!.heroBadge
+    : "Ciao, sono Ally";
+  const heroTitle = heroForSetup
+    ? guidance!.heroTitle
+    : "Capisci cosa conta oggi.";
+  const heroSubtitle = heroForSetup
+    ? guidance!.heroSubtitle
+    : "Controlla le campagne che richiedono attenzione e il prossimo passo da fare.";
+
   return (
     <main className="mx-auto w-full max-w-[1040px] pb-12">
-      <section className="relative pt-10 text-center sm:pt-14 lg:pt-16">
+      <section
+        className={[
+          "relative text-center",
+          showSetup
+            ? "pt-8 sm:pt-10 lg:pt-12"
+            : "pt-10 sm:pt-14 lg:pt-16",
+        ].join(" ")}
+      >
         <div className="aff-hero-glow" aria-hidden />
 
         <div className="relative z-[1] flex flex-col items-center">
@@ -213,112 +329,121 @@ export function DashboardHome() {
           </div>
 
           <p className="mt-6 inline-flex items-center rounded-full border border-[var(--border)] bg-white/90 px-3.5 py-1.5 text-[12.5px] font-medium text-[var(--ink)]">
-            Ciao, sono Ally
+            {heroBadge}
           </p>
-
           <h2 className="mt-6 text-[clamp(38px,4vw,52px)] font-bold leading-[1.05] tracking-[-0.035em] text-[var(--ink)]">
-            Capisci cosa conta oggi.
+            {heroTitle}
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-[15px] leading-relaxed text-[var(--ink-muted)]">
-            Controlla le campagne che richiedono attenzione e il prossimo passo
-            da fare.
+            {heroSubtitle}
           </p>
 
-          <div className="mx-auto mt-10 w-full max-w-[960px]">
-            <div className="relative w-full text-left">
-              <div className="flex min-h-[180px] w-full flex-col rounded-[14px] border border-[var(--border)] bg-white shadow-[var(--shadow-card)]">
-                <div className="relative flex-1 px-5 pt-6 sm:px-6 sm:pt-7">
-                  <Search
-                    className="pointer-events-none absolute left-5 top-7 h-[18px] w-[18px] text-[var(--ink-muted)] sm:left-6 sm:top-8"
-                    strokeWidth={STROKE_NAV}
-                    aria-hidden
-                  />
-                  <input
-                    ref={searchRef}
-                    type="search"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Cerca un cliente o una campagna"
-                    className="w-full bg-transparent py-1 pl-8 text-[15px] font-medium tracking-[-0.01em] text-[var(--ink)] outline-none placeholder:font-normal placeholder:text-[var(--ink-subtle)] sm:pl-9"
-                    aria-label="Cerca un cliente o una campagna"
-                  />
+          {showSearchShell ? (
+            <div className="mx-auto mt-10 w-full max-w-[960px]">
+              <div className="relative w-full text-left">
+                <div className="flex min-h-[180px] w-full flex-col rounded-[14px] border border-[var(--border)] bg-white shadow-[var(--shadow-card)]">
+                  <div className="relative flex-1 px-5 pt-6 sm:px-6 sm:pt-7">
+                    <Search
+                      className="pointer-events-none absolute left-5 top-7 h-[18px] w-[18px] text-[var(--ink-muted)] sm:left-6 sm:top-8"
+                      strokeWidth={STROKE_NAV}
+                      aria-hidden
+                    />
+                    <input
+                      ref={searchRef}
+                      type="search"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="Cerca un cliente o una campagna"
+                      className="w-full bg-transparent py-1 pl-8 text-[15px] font-medium tracking-[-0.01em] text-[var(--ink)] outline-none placeholder:font-normal placeholder:text-[var(--ink-subtle)] sm:pl-9"
+                      aria-label="Cerca un cliente o una campagna"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] px-4 py-3.5 sm:px-5">
+                    <button
+                      type="button"
+                      className="aff-tool-chip"
+                      onClick={() => searchRef.current?.focus()}
+                    >
+                      <Search
+                        className="h-3.5 w-3.5"
+                        strokeWidth={STROKE_NAV}
+                      />
+                      Cerca
+                    </button>
+                    <Link href="/home" className="aff-tool-chip">
+                      <LayoutDashboard
+                        className="h-3.5 w-3.5"
+                        strokeWidth={STROKE_NAV}
+                      />
+                      Control Room
+                    </Link>
+                    <Link href="/risultati" className="aff-tool-chip">
+                      <LineChart
+                        className="h-3.5 w-3.5"
+                        strokeWidth={STROKE_NAV}
+                      />
+                      Risultati
+                    </Link>
+                    <Link
+                      href="/impostazioni/integrazioni"
+                      className="aff-tool-chip"
+                    >
+                      <Link2
+                        className="h-3.5 w-3.5"
+                        strokeWidth={STROKE_NAV}
+                      />
+                      Importa Meta
+                    </Link>
+                    <button
+                      type="button"
+                      className="aff-tool-chip"
+                      onClick={apriModaleCampagna}
+                    >
+                      <Plus
+                        className="h-3.5 w-3.5"
+                        strokeWidth={STROKE_NAV}
+                      />
+                      Nuova campagna
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] px-4 py-3.5 sm:px-5">
-                  <button
-                    type="button"
-                    className="aff-tool-chip"
-                    onClick={() => searchRef.current?.focus()}
-                  >
-                    <Search className="h-3.5 w-3.5" strokeWidth={STROKE_NAV} />
-                    Cerca
-                  </button>
-                  <Link href="/home" className="aff-tool-chip">
-                    <LayoutDashboard
-                      className="h-3.5 w-3.5"
-                      strokeWidth={STROKE_NAV}
-                    />
-                    Control Room
-                  </Link>
-                  <Link href="/risultati" className="aff-tool-chip">
-                    <LineChart
-                      className="h-3.5 w-3.5"
-                      strokeWidth={STROKE_NAV}
-                    />
-                    Risultati
-                  </Link>
-                  <Link
-                    href="/impostazioni/integrazioni"
-                    className="aff-tool-chip"
-                  >
-                    <Link2 className="h-3.5 w-3.5" strokeWidth={STROKE_NAV} />
-                    Importa Meta
-                  </Link>
-                  <button
-                    type="button"
-                    className="aff-tool-chip"
-                    onClick={apriModaleCampagna}
-                  >
-                    <Plus className="h-3.5 w-3.5" strokeWidth={STROKE_NAV} />
-                    Nuova campagna
-                  </button>
-                </div>
+                {searchHits.length > 0 ? (
+                  <ul className="absolute z-10 mt-2 w-full overflow-hidden rounded-[12px] border border-[var(--border)] bg-white shadow-[var(--shadow-card)]">
+                    {searchHits.map((c) => (
+                      <li key={c.id}>
+                        <Link
+                          href={`/campagne/${c.id}`}
+                          className="block px-4 py-2.5 text-left hover:bg-[var(--surface-hover)]"
+                        >
+                          <p className="text-sm font-medium text-[var(--ink)]">
+                            {c.nomeCliente}
+                          </p>
+                          <p className="text-[12px] text-[var(--ink-muted)]">
+                            {nomeCampagnaCard(c)}
+                          </p>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
 
-              {searchHits.length > 0 ? (
-                <ul className="absolute z-10 mt-2 w-full overflow-hidden rounded-[12px] border border-[var(--border)] bg-white shadow-[var(--shadow-card)]">
-                  {searchHits.map((c) => (
-                    <li key={c.id}>
-                      <Link
-                        href={`/campagne/${c.id}`}
-                        className="block px-4 py-2.5 text-left hover:bg-[var(--surface-hover)]"
-                      >
-                        <p className="text-sm font-medium text-[var(--ink)]">
-                          {c.nomeCliente}
-                        </p>
-                        <p className="text-[12px] text-[var(--ink-muted)]">
-                          {nomeCampagnaCard(c)}
-                        </p>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
+              <div className="mt-6 grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {QUICK_ACTIONS.map((card) => (
+                  <AllyFeatureCard
+                    key={card.title}
+                    href={card.href}
+                    title={card.title}
+                    body={card.body}
+                    icon={card.icon}
+                    tone={card.tone}
+                  />
+                ))}
+              </div>
             </div>
-
-            <div className="mt-6 grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {QUICK_ACTIONS.map((card) => (
-                <AllyFeatureCard
-                  key={card.title}
-                  href={card.href}
-                  title={card.title}
-                  body={card.body}
-                  icon={card.icon}
-                  tone={card.tone}
-                />
-              ))}
-            </div>
-          </div>
+          ) : null}
         </div>
       </section>
 
@@ -326,106 +451,105 @@ export function DashboardHome() {
         <p className="mt-16 text-sm text-[var(--ink-muted)]">Caricamento…</p>
       ) : errore ? (
         <p className="mt-16 text-sm text-[#7a3d58]">{errore}</p>
-      ) : !hasAnyWork ? (
-        <section className="aff-panel-white mt-16 px-5 py-8">
-          <p className="text-base font-semibold text-[var(--ink)]">
-            Non hai ancora lavori aperti.
-          </p>
-          <p className="mt-1.5 max-w-md text-sm leading-relaxed text-[var(--ink-muted)]">
-            Crea una campagna per vedere qui su cosa concentrarti.
-          </p>
-          <button
-            type="button"
-            onClick={apriModaleCampagna}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--ink)] hover:bg-[var(--surface-hover)]"
-          >
-            <Plus className="h-4 w-4" strokeWidth={STROKE_NAV} aria-hidden />
-            Crea una campagna
-          </button>
-        </section>
       ) : (
         <>
-          <div className="mt-16">
-            <MondayControlRoomSection summary={monday} />
-          </div>
+          {showSetup && guidance ? (
+            <HomeSetupPanel
+              guidance={guidance}
+              showForm={showFirstClientForm}
+              onShowForm={() => setShowFirstClientForm(true)}
+              onCreateClientDone={(c) => void onCreateClientDone(c)}
+              onChooseMeta={chooseMeta}
+              onChooseNative={chooseNative}
+              onPrimaryClick={onPrimaryClick}
+            />
+          ) : null}
 
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <section className="aff-panel-white min-w-0 p-4">
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="text-[13px] font-medium text-[var(--ink-muted)]">
-                  Revisioni cliente
-                </p>
-                {revisioni.length > MAX_REVISIONI ? (
+          {showControlRoom ? (
+            <>
+              <div className={showSetup ? "mt-10" : "mt-16"}>
+                <MondayControlRoomSection summary={monday} />
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <section className="aff-panel-white min-w-0 p-4">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-[13px] font-medium text-[var(--ink-muted)]">
+                      Revisioni cliente
+                    </p>
+                    {revisioni.length > MAX_REVISIONI ? (
+                      <Link
+                        href="/campagne"
+                        className="text-xs font-medium text-[var(--primary)] hover:opacity-80"
+                      >
+                        Vedi tutte
+                      </Link>
+                    ) : null}
+                  </div>
+                  {revisioni.length === 0 ? (
+                    <p className="mt-2 text-[13px] leading-relaxed text-[var(--ink-muted)]">
+                      Nessuna revisione in sospeso.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="mt-2 text-sm font-semibold text-[var(--ink)]">
+                        {revisioni.length === 1
+                          ? "1 revisione da gestire"
+                          : `${revisioni.length} revisioni da gestire`}
+                      </p>
+                      <ul className="mt-2 space-y-1.5">
+                        {revisioni.slice(0, MAX_REVISIONI).map((campagna) => (
+                          <li key={campagna.id}>
+                            <Link
+                              href={`/campagne/${campagna.id}`}
+                              className="block rounded-[10px] bg-[var(--surface-hover)] px-2.5 py-2 hover:opacity-90"
+                            >
+                              <p className="text-sm font-medium leading-snug text-[var(--ink)]">
+                                {campagna.nomeCliente}
+                              </p>
+                              <p className="mt-0.5 text-[12px] leading-snug text-[var(--ink-muted)]">
+                                {nomeCampagnaCard(campagna)}
+                              </p>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </section>
+
+                <section className="aff-panel-white min-w-0 p-4">
+                  <p className="text-[13px] font-medium text-[var(--ink-muted)]">
+                    Attività recente
+                  </p>
+                  {attivita.totaleCheck === 0 ? (
+                    <p className="mt-2 text-[13px] leading-relaxed text-[var(--ink-muted)]">
+                      Nessun controllo negli ultimi 7 giorni.
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-[13px] leading-relaxed text-[var(--ink)]">
+                      <span className="font-semibold tabular-nums">
+                        {attivita.campagneControllate}
+                      </span>
+                      {attivita.campagneControllate === 1
+                        ? " campagna controllata"
+                        : " campagne controllate"}
+                      {" negli ultimi 7 giorni"}
+                      {attivita.totaleCheck !== attivita.campagneControllate
+                        ? ` · ${attivita.totaleCheck} controlli`
+                        : ""}
+                    </p>
+                  )}
                   <Link
                     href="/campagne"
-                    className="text-xs font-medium text-[var(--primary)] hover:opacity-80"
+                    className="mt-3 inline-flex text-xs font-medium text-[var(--primary)] hover:opacity-80"
                   >
-                    Vedi tutte
+                    Vedi tutte le campagne
                   </Link>
-                ) : null}
+                </section>
               </div>
-              {revisioni.length === 0 ? (
-                <p className="mt-2 text-[13px] leading-relaxed text-[var(--ink-muted)]">
-                  Nessuna revisione in sospeso.
-                </p>
-              ) : (
-                <>
-                  <p className="mt-2 text-sm font-semibold text-[var(--ink)]">
-                    {revisioni.length === 1
-                      ? "1 revisione da gestire"
-                      : `${revisioni.length} revisioni da gestire`}
-                  </p>
-                  <ul className="mt-2 space-y-1.5">
-                    {revisioni.slice(0, MAX_REVISIONI).map((campagna) => (
-                      <li key={campagna.id}>
-                        <Link
-                          href={`/campagne/${campagna.id}`}
-                          className="block rounded-[10px] bg-[var(--surface-hover)] px-2.5 py-2 hover:opacity-90"
-                        >
-                          <p className="text-sm font-medium leading-snug text-[var(--ink)]">
-                            {campagna.nomeCliente}
-                          </p>
-                          <p className="mt-0.5 text-[12px] leading-snug text-[var(--ink-muted)]">
-                            {nomeCampagnaCard(campagna)}
-                          </p>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </section>
-
-            <section className="aff-panel-white min-w-0 p-4">
-              <p className="text-[13px] font-medium text-[var(--ink-muted)]">
-                Attività recente
-              </p>
-              {attivita.totaleCheck === 0 ? (
-                <p className="mt-2 text-[13px] leading-relaxed text-[var(--ink-muted)]">
-                  Nessun controllo negli ultimi 7 giorni.
-                </p>
-              ) : (
-                <p className="mt-2 text-[13px] leading-relaxed text-[var(--ink)]">
-                  <span className="font-semibold tabular-nums">
-                    {attivita.campagneControllate}
-                  </span>
-                  {attivita.campagneControllate === 1
-                    ? " campagna controllata"
-                    : " campagne controllate"}
-                  {" negli ultimi 7 giorni"}
-                  {attivita.totaleCheck !== attivita.campagneControllate
-                    ? ` · ${attivita.totaleCheck} controlli`
-                    : ""}
-                </p>
-              )}
-              <Link
-                href="/campagne"
-                className="mt-3 inline-flex text-xs font-medium text-[var(--primary)] hover:opacity-80"
-              >
-                Vedi tutte le campagne
-              </Link>
-            </section>
-          </div>
+            </>
+          ) : null}
         </>
       )}
     </main>

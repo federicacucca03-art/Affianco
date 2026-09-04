@@ -440,8 +440,13 @@ test("No migration required", () => {
 
 test("Home uses Monday section", () => {
   const home = read("./src/components/dashboard/DashboardHome.tsx");
+  const monday = read("./src/components/dashboard/MondayControlRoomSection.tsx");
   assert(home.includes("MondayControlRoomSection"), "section wired");
-  assert(home.includes("Da controllare") || read("./src/components/dashboard/MondayControlRoomSection.tsx").includes("Da controllare"), "copy");
+  assert(
+    monday.includes("Control Room") &&
+      monday.includes("Le campagne che richiedono la tua attenzione"),
+    "copy",
+  );
   assert(home.includes("loadMetaMondayBundle"), "loads meta");
 });
 

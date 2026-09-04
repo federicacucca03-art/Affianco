@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import type { Campagna } from "@/types/campagne";
 import { leggiCampagneDaSupabase } from "@/lib/campagne-db";
 import { RigaCampagna } from "@/components/RigaCampagna";
@@ -161,16 +162,21 @@ export function ListaCampagne() {
       <AllyEmptyState
         className="min-h-[11.5rem] max-w-md"
         icon={LayoutGrid}
-        title="Non hai ancora creato campagne."
-        description="Scegli uno degli obiettivi qui sopra per iniziare."
+        title="Nessuna campagna ancora"
+        description="Importa da Meta oppure pianifica una campagna Ally partendo dall'obiettivo."
         action={
-          <button
-            type="button"
-            onClick={scrollObiettiviCampagna}
-            className="aff-btn-primary"
-          >
-            Crea la prima campagna
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/home" className="aff-btn-primary">
+              Scegli come iniziare
+            </Link>
+            <button
+              type="button"
+              onClick={scrollObiettiviCampagna}
+              className="aff-btn-secondary"
+            >
+              Pianifica ora
+            </button>
+          </div>
         }
       />
     );

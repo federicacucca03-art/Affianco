@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   Bell,
   Briefcase,
@@ -13,11 +12,7 @@ import {
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
-import { useAuth } from "@/components/auth/AuthProvider";
-import {
-  logErroreAuthDev,
-  messaggioErroreAuth,
-} from "@/lib/auth-errori";
+import { useAllyLogout } from "@/components/auth/useAllyLogout";
 
 const STROKE = 1.75;
 
@@ -43,24 +38,7 @@ function isActive(pathname: string, href: string): boolean {
 /** Compact left icon rail — M8.2 reference match */
 export function IconRail() {
   const pathname = usePathname();
-  const router = useRouter();
-  const { email, signOut } = useAuth();
-  const [logoutErrore, setLogoutErrore] = useState<string | null>(null);
-  const [logoutInCorso, setLogoutInCorso] = useState(false);
-
-  async function esci() {
-    setLogoutErrore(null);
-    setLogoutInCorso(true);
-    try {
-      await signOut();
-      router.replace("/login");
-    } catch (e) {
-      logErroreAuthDev("logout", e);
-      setLogoutErrore(messaggioErroreAuth(e, "logout"));
-    } finally {
-      setLogoutInCorso(false);
-    }
-  }
+  const { esci, logoutErrore, logoutInCorso, email } = useAllyLogout();
 
   return (
     <aside
@@ -116,8 +94,14 @@ export function IconRail() {
           type="button"
           onClick={() => void esci()}
           disabled={logoutInCorso}
-          title={email ? `Esci (${email})` : "Esci"}
-          aria-label={logoutInCorso ? "Uscita…" : "Esci"}
+          title="Esci"
+          aria-label={
+            logoutInCorso
+              ? "Uscita…"
+              : email
+                ? `Esci (${email})`
+                : "Esci"
+          }
           className="aff-rail-btn disabled:opacity-60"
         >
           <LogOut className="h-5 w-5" strokeWidth={STROKE} />

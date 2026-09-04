@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, ChevronDown, Menu } from "lucide-react";
+import { Bell, Menu } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { ProfileMenu } from "@/components/shell/ProfileMenu";
 import { fetchUnreadNotificationCount } from "@/lib/campaign-notifications/inbox-client";
 import { supabase } from "@/lib/supabase";
 
@@ -13,15 +14,6 @@ const STROKE = 1.75;
 type Props = {
   onApriMenu: () => void;
 };
-
-function inizialiDaEmail(email: string | null): string {
-  if (!email) return "?";
-  const locale = email.split("@")[0] ?? "";
-  const pulito = locale.replace(/[^a-zA-Z0-9]/g, "");
-  if (pulito.length >= 2) return pulito.slice(0, 2).toUpperCase();
-  if (pulito.length === 1) return `${pulito}X`.toUpperCase();
-  return "AF";
-}
 
 function nomeDaEmail(email: string | null): string | null {
   if (!email) return null;
@@ -169,28 +161,7 @@ export function BarraSuperiore({ onApriMenu }: Props) {
           ) : null}
         </Link>
 
-        <div
-          className="flex items-center gap-2.5 rounded-[10px] border border-[var(--border)] bg-white py-1.5 pl-1.5 pr-2.5"
-          title={email ?? undefined}
-          aria-label={email ? `Account ${email}` : "Profilo utente"}
-        >
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--ally-violet-soft)] text-[11px] font-semibold text-[var(--ally-violet)]">
-            {inizialiDaEmail(email)}
-          </span>
-          <div className="hidden min-w-0 flex-col leading-tight md:flex">
-            <span className="max-w-[12rem] truncate text-[13px] font-semibold text-[var(--ink)]">
-              {firstName ?? "Account"}
-            </span>
-            <span className="max-w-[12rem] truncate text-[11px] text-[var(--ink-muted)]">
-              {email ?? ""}
-            </span>
-          </div>
-          <ChevronDown
-            className="hidden h-4 w-4 text-[var(--ink-muted)] md:block"
-            strokeWidth={STROKE}
-            aria-hidden
-          />
-        </div>
+        <ProfileMenu />
       </div>
     </header>
   );

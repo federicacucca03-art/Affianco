@@ -414,10 +414,10 @@ export function MondayControlRoomSection({
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-[var(--border)] pt-3">
         <div>
           <p className="text-[15px] font-medium text-[var(--ink)]">
-            Da controllare
+            Control Room
           </p>
           <p className="mt-0.5 text-[12px] leading-relaxed text-[var(--ink-muted)]">
-            Le campagne che meritano la tua attenzione adesso.
+            Le campagne che richiedono la tua attenzione.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

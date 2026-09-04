@@ -10,6 +10,8 @@ import type { Cliente } from "@/types/clienti";
 import { getCampaigns, getClients } from "@/utils/clientStorage";
 import { AllyEmptyState } from "@/components/shell/AllyEmptyState";
 import { AllyListRow } from "@/components/shell/AllyListRow";
+import { FirstClientForm } from "@/components/dashboard/FirstClientForm";
+import { writeSetupPathPreference } from "@/lib/ally-setup";
 
 export default function ClientiPage() {
   const router = useRouter();
@@ -17,8 +19,9 @@ export default function ClientiPage() {
   const [conteggioCampagne, setConteggioCampagne] = useState<
     Record<string, number>
   >({});
+  const [showForm, setShowForm] = useState(false);
 
-  useEffect(() => {
+  function refresh() {
     const lista = getClients();
     setClienti(lista);
     const campagne = getCampaigns();
@@ -31,9 +34,14 @@ export default function ClientiPage() {
       conteggi[cliente.id] = ids.size;
     }
     setConteggioCampagne(conteggi);
+  }
+
+  useEffect(() => {
+    refresh();
   }, []);
 
   function nuovaCampagna(cliente: Cliente) {
+    writeSetupPathPreference("native");
     salvaBozzaOnboarding({
       clienteId: cliente.id,
       nomeCliente: cliente.nome,
@@ -53,17 +61,34 @@ export default function ClientiPage() {
   return (
     <main className="aff-page">
       {clienti.length === 0 ? (
-        <AllyEmptyState
-          className="mt-1"
-          icon={Users}
-          title="Nessun cliente salvato"
-          description="Nel Passo 1 spunta «Salva cliente nei preferiti» oppure carica un profilo dopo la prima campagna."
-          action={
-            <Link href="/campagne" className="aff-btn-primary">
-              Vai a Campagne
-            </Link>
-          }
-        />
+        <div className="space-y-4">
+          <AllyEmptyState
+            className="mt-1"
+            icon={Users}
+            title="Aggiungi il primo cliente"
+            description="Partiamo dal cliente che vuoi gestire. Poi scegli se importare da Meta o pianificare una campagna."
+            action={
+              showForm ? undefined : (
+                <button
+                  type="button"
+                  className="aff-btn-primary"
+                  onClick={() => setShowForm(true)}
+                >
+                  Aggiungi il primo cliente
+                </button>
+              )
+            }
+          />
+          {showForm ? (
+            <FirstClientForm
+              onCreated={(c) => {
+                refresh();
+                setShowForm(false);
+                router.push(`/clienti/${encodeURIComponent(c.id)}`);
+              }}
+            />
+          ) : null}
+        </div>
       ) : (
         <ul className="mt-1 flex flex-col gap-2.5">
           {clienti.map((cliente) => {
@@ -74,7 +99,7 @@ export default function ClientiPage() {
                 .join(" · "),
               nCampagne > 0
                 ? `${nCampagne} campagn${nCampagne === 1 ? "a" : "e"}`
-                : "",
+                : "Nessuna campagna",
             ]
               .filter(Boolean)
               .join(" · ");
@@ -110,13 +135,18 @@ export default function ClientiPage() {
         </ul>
       )}
 
-      <p className="mt-6 text-sm text-[var(--ink-muted)]">
-        Oppure{" "}
-        <Link href="/campagne" className="font-medium text-[var(--primary)] hover:opacity-80">
-          scegli un obiettivo da Campagne
-        </Link>
-        .
-      </p>
+      {clienti.length > 0 ? (
+        <p className="mt-6 text-sm text-[var(--ink-muted)]">
+          Oppure{" "}
+          <Link
+            href="/home"
+            className="font-medium text-[var(--primary)] hover:opacity-80"
+          >
+            torna a Home
+          </Link>{" "}
+          per vedere il prossimo passo.
+        </p>
+      ) : null}
     </main>
   );
 }

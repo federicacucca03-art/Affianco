@@ -18,8 +18,9 @@ type Props = {
 };
 
 /**
- * Single shared feature card for Home quick actions and Campagne objectives.
- * Visual metrics are fixed in .aff-quick-card / .aff-card-icon — not overridable.
+ * Single shared feature card for Home quick actions, Campagne objectives,
+ * and onboarding start-path cards. Visual metrics come only from
+ * `.aff-quick-card` / `.aff-card-icon` — no layout overrides.
  */
 export function AllyFeatureCard({
   title,
@@ -34,6 +35,7 @@ export function AllyFeatureCard({
     "aff-quick-card",
     `aff-quick-card--${tone}`,
     "min-w-0",
+    "w-full",
     disabled ? "opacity-60" : "",
   ]
     .filter(Boolean)

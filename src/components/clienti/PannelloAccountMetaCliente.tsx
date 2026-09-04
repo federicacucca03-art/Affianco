@@ -83,7 +83,9 @@ function formatDataMeta(iso: string | null): string | null {
 }
 
 function messaggioQuery(meta: string | null): string | null {
-  if (meta === "connected") return "Account Meta collegato.";
+  if (meta === "connected") {
+    return "Meta collegato. Seleziona l'account pubblicitario, poi importa le campagne.";
+  }
   if (meta === "cancelled") return "Connessione annullata.";
   if (meta === "error") return "Collegamento Meta non riuscito.";
   return null;

@@ -256,6 +256,12 @@ textarea.aff-input-error {
   text-align: center;
   box-shadow: var(--shadow-card);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  /* Shared by <a> and <button> — no UA button chrome. */
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
 }
 .aff-quick-card:hover {
   border-color: rgba(99, 91, 255, 0.22);
