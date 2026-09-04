@@ -19,6 +19,10 @@ import {
   buildDiagnosisAiPayload,
   buildDiagnosisFacts,
 } from "../src/lib/campaign-diagnosis/build-context";
+import {
+  assertDiagnosisRequestCompatibleWithSonnet5,
+  buildDiagnosisAnthropicParams,
+} from "../src/lib/campaign-diagnosis/anthropic-request";
 import { DIAGNOSIS_SYSTEM_PROMPT } from "../src/lib/campaign-diagnosis/prompt";
 import {
   buildMetaAttentionItem,
@@ -384,9 +388,76 @@ test("O: JSON invalid → graceful error", () => {
 });
 
 test("P: model timeout path present", () => {
-  const svc = read("./src/lib/campaign-diagnosis/service.ts");
-  assert(svc.includes("TIMEOUT_MS") || svc.includes("AbortController"), "timeout");
-  assert(svc.includes("25_000") || svc.includes("25000"), "25s");
+  const req = read("./src/lib/campaign-diagnosis/anthropic-request.ts");
+  assert(req.includes("DIAGNOSIS_TIMEOUT_MS") || read("./src/lib/campaign-diagnosis/service.ts").includes("DIAGNOSIS_TIMEOUT_MS"), "timeout");
+  assert(req.includes("25000") || req.includes("25_000"), "25s");
+});
+
+test("Sonnet 5: diagnosis request must not set temperature", () => {
+  const payload = buildDiagnosisAiPayload({
+    source: "NATIVE",
+    objective: "LEADS",
+    status: "ACTIVE",
+    monitoringMode: "ACTIVE",
+    health: "RED",
+    attentionState: "NEEDS_ATTENTION",
+    urgencyLevel: "SOON",
+    attentionReason: "sopra soglia",
+    primaryKpi: "Costo",
+    actualValue: 38,
+    targetValue: 30,
+    spend: 100,
+    impressions: 10000,
+    linkClicks: 200,
+    ctr: 1.2,
+    cpc: 0.5,
+    cpm: 10,
+    frequency: 1.8,
+    results: 5,
+    trend: "STABLE",
+    resultMappingConfidence: null,
+    maxSustainableCpa: 30,
+    dailyBudget: 20,
+    targetMargin: null,
+    offer: null,
+    settore: null,
+    audienceHint: null,
+    hasCreativeAsset: false,
+    formatHint: null,
+  });
+  const params = buildDiagnosisAnthropicParams(payload);
+  assert(!("temperature" in params), "no temperature key");
+  assert(params.thinking.type === "disabled", "thinking disabled");
+  assertDiagnosisRequestCompatibleWithSonnet5(
+    params as unknown as Record<string, unknown>,
+  );
+  let threw = false;
+  try {
+    assertDiagnosisRequestCompatibleWithSonnet5({
+      ...(params as unknown as Record<string, unknown>),
+      temperature: 0,
+    });
+  } catch {
+    threw = true;
+  }
+  assert(threw, "temperature 0 must be rejected by guard");
+});
+
+test("Successful structured diagnosis parse still works", () => {
+  const d = parseAndNormalizeDiagnosis(mockAiJson({}), {
+    evidenceCount: 3,
+    trendKnown: true,
+    independentSignalCount: 2,
+  });
+  assert(d.summary.length > 0, "summary");
+  assert(d.evidence.length >= 1 && d.evidence.length <= 3, "evidence");
+  assert(["LOW", "MEDIUM", "HIGH"].includes(d.confidence), d.confidence);
+});
+
+test("Route auth preserved", () => {
+  const route = read("./src/app/api/diagnosi/campagna/route.ts");
+  assert(route.includes("requireRouteUserId"), "auth");
+  assert(route.includes("status: 401"), "401");
 });
 
 test("Q: native ownership enforced", () => {
