@@ -80,6 +80,8 @@ export type ControlRoomAttentionItem = {
   healthStatus: HealthStatus | null;
   /** True when this row was suppressed as secondary of a linked pair. */
   suppressedByLink: boolean;
+  /** Insights sync time for Meta freshness (null for native). */
+  insightsLastSyncedAt: string | null;
   /**
    * Optional context for M6D next-action (does not affect health/urgency).
    * resultsCount ≤ 2 → conservative WAIT.
@@ -486,6 +488,7 @@ export function buildNativeAttentionItem(input: {
       href: `/campagne/${campagna.id}`,
       healthStatus: health,
       suppressedByLink: false,
+      insightsLastSyncedAt: null,
       resultsCount: check?.resultsCount ?? null,
       healthAvailability: null,
       configurationKind: null,
@@ -546,6 +549,7 @@ export function buildNativeAttentionItem(input: {
     href: `/risultati?campaignId=${encodeURIComponent(campagna.id)}`,
     healthStatus: configurationRequired ? null : health,
     suppressedByLink: false,
+    insightsLastSyncedAt: null,
     resultsCount: check?.resultsCount ?? null,
     healthAvailability: null,
     configurationKind: configurationRequired ? configurationKind : null,
@@ -594,6 +598,7 @@ export function buildMetaAttentionItem(input: {
       href: "/risultati",
       healthStatus: null,
       suppressedByLink: false,
+      insightsLastSyncedAt: row.insightsLastSyncedAt ?? null,
       resultsCount: row.primaryResults ?? null,
       healthAvailability: row.healthAvailability ?? null,
       configurationKind: null,
@@ -696,6 +701,7 @@ export function buildMetaAttentionItem(input: {
     healthStatus:
       resolved.state === "CONFIGURATION_REQUIRED" ? null : health,
     suppressedByLink: false,
+    insightsLastSyncedAt: row.insightsLastSyncedAt ?? null,
     resultsCount: row.primaryResults ?? null,
     healthAvailability: row.healthAvailability ?? null,
     configurationKind: configurationRequired ? configurationKind : null,

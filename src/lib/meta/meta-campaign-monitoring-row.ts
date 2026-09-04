@@ -30,6 +30,8 @@ export type MetaCampaignMonitoringRow = {
   lastSyncedAt: string | null;
   insightsPeriodSince: string | null;
   insightsPeriodUntil: string | null;
+  /** Insights import timestamp (M7A freshness). */
+  insightsLastSyncedAt: string | null;
   spend: number | null;
   impressions: number | null;
   linkClicks: number | null;
@@ -63,6 +65,7 @@ export type MetaCampaignApiRow = {
   insights_period_since: string | null;
   insights_period_until: string | null;
   insights_period_frequency: number | null;
+  insights_last_synced_at?: string | null;
   primary_kpi: string | null;
   target_value: number | string | null;
   affianco_campaign_id?: string | null;
@@ -200,6 +203,7 @@ export function mapMetaCampaignToMonitoringRow(
     lastSyncedAt: c.last_synced_at,
     insightsPeriodSince: c.insights_period_since,
     insightsPeriodUntil: c.insights_period_until,
+    insightsLastSyncedAt: c.insights_last_synced_at ?? null,
     spend: controlRoom.metrics.spend,
     impressions: controlRoom.metrics.impressions,
     linkClicks: controlRoom.metrics.linkClicks,

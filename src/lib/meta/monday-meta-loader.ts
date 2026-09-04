@@ -55,7 +55,7 @@ export async function loadMetaMondayBundle(
   const { data: camps, error: campErr } = await supabase
     .from("meta_campaigns")
     .select(
-      "id, client_id, meta_campaign_id, name, effective_status, raw_objective, last_synced_at, insights_period_since, insights_period_until, insights_period_frequency, primary_kpi, target_value, affianco_campaign_id",
+      "id, client_id, meta_campaign_id, name, effective_status, raw_objective, last_synced_at, insights_period_since, insights_period_until, insights_period_frequency, insights_last_synced_at, primary_kpi, target_value, affianco_campaign_id",
     )
     .eq("user_id", userId)
     .order("last_synced_at", { ascending: false });

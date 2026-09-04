@@ -25,6 +25,10 @@ import {
   shouldShowNextAction,
   type CampaignNextAction,
 } from "@/lib/campaign-next-action";
+import {
+  etichettaFreshness,
+  resolveMetaDataFreshness,
+} from "@/lib/meta/freshness";
 import type { StatoChipKind } from "@/components/nuova-contatti/StatoChip";
 
 const MAX_URGENT = 8;
@@ -285,6 +289,14 @@ function AttentionRow({ item }: { item: ControlRoomAttentionItem }) {
             title={item.urgencyReason}
           >
             {urgencyText}
+          </p>
+        ) : null}
+        {item.source === "META" ? (
+          <p className="mt-1 text-[11px] leading-snug text-[var(--ink-muted)]/80">
+            {etichettaFreshness(
+              resolveMetaDataFreshness(item.insightsLastSyncedAt),
+              item.insightsLastSyncedAt,
+            )}
           </p>
         ) : null}
         <NextActionBlock action={nextAction} />

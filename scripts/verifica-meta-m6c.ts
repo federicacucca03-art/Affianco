@@ -132,6 +132,7 @@ function metaRow(
     lastSyncedAt: "2026-09-01T12:00:00Z",
     insightsPeriodSince: "2026-08-01",
     insightsPeriodUntil: "2026-08-31",
+    insightsLastSyncedAt: null,
     spend: 100,
     impressions: 10000,
     linkClicks: 200,
