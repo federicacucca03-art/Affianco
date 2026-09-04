@@ -20,6 +20,11 @@ import {
 } from "@/lib/campaign-diagnosis/eligibility";
 import { fetchCampaignDiagnosis } from "@/lib/campaign-diagnosis-client";
 import type { CampaignDiagnosisResponse } from "@/lib/campaign-diagnosis/types";
+import {
+  resolveNextAction,
+  shouldShowNextAction,
+  type CampaignNextAction,
+} from "@/lib/campaign-next-action";
 import type { StatoChipKind } from "@/components/nuova-contatti/StatoChip";
 
 const MAX_URGENT = 8;
@@ -90,6 +95,50 @@ function rowDiagnosisEligible(item: ControlRoomAttentionItem): boolean {
     targetValue: item.targetValue,
   });
   return isDiagnosisUiEligible(eligibility);
+}
+
+function nextActionForRow(
+  item: ControlRoomAttentionItem,
+  diagnosis: CampaignDiagnosisResponse["diagnosis"],
+): CampaignNextAction {
+  return resolveNextAction({
+    campaignId: item.campaignId,
+    source: item.source,
+    campaignStatus: item.campaignStatus,
+    attentionState: item.attentionState,
+    health: item.healthStatus,
+    trend: item.trend,
+    healthAvailability: item.healthAvailability,
+    configurationKind: item.configurationKind,
+    resultsCount: item.resultsCount,
+    rowHref: item.href,
+    diagnosis: diagnosis ?? null,
+  });
+}
+
+function NextActionBlock({ action }: { action: CampaignNextAction }) {
+  if (!shouldShowNextAction(action.actionType)) return null;
+  return (
+    <div className="mt-2">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+        Prossimo passo
+      </p>
+      <p className="mt-0.5 text-[13px] font-medium leading-snug text-[var(--ink)]">
+        {action.title}
+      </p>
+      <p className="mt-0.5 text-[12px] leading-snug text-[var(--ink-muted)]">
+        {action.rationale}
+      </p>
+      {action.ctaHref && action.ctaLabel ? (
+        <Link
+          href={action.ctaHref}
+          className="mt-1 inline-flex text-[12px] font-medium text-[var(--primary)] hover:opacity-80"
+        >
+          {action.ctaLabel} →
+        </Link>
+      ) : null}
+    </div>
+  );
 }
 
 function DiagnosisPanel({
@@ -184,15 +233,14 @@ function AttentionRow({ item }: { item: ControlRoomAttentionItem }) {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CampaignDiagnosisResponse | null>(null);
 
+  const nextAction = nextActionForRow(item, result?.diagnosis ?? null);
+
   async function runDiagnosis() {
     setLoading(true);
     setError(null);
     try {
       const res = await fetchCampaignDiagnosis(item.campaignId, item.source);
       setResult(res);
-      if (!res.diagnosis && res.message) {
-        // Keep panel open with message + retry
-      }
     } catch {
       setError("Analisi non disponibile al momento.");
       setResult(null);
@@ -239,6 +287,7 @@ function AttentionRow({ item }: { item: ControlRoomAttentionItem }) {
             {urgencyText}
           </p>
         ) : null}
+        <NextActionBlock action={nextAction} />
         {canDiagnose ? (
           <button
             type="button"

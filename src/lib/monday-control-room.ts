@@ -80,6 +80,21 @@ export type ControlRoomAttentionItem = {
   healthStatus: HealthStatus | null;
   /** True when this row was suppressed as secondary of a linked pair. */
   suppressedByLink: boolean;
+  /**
+   * Optional context for M6D next-action (does not affect health/urgency).
+   * resultsCount ≤ 2 → conservative WAIT.
+   */
+  resultsCount: number | null;
+  /** Meta healthAvailability when known (TARGET_REQUIRED, etc.). */
+  healthAvailability: string | null;
+  /** Why configuration is required — for deterministic next action. */
+  configurationKind:
+    | "DRAFT"
+    | "ACTIVE_MISSING_TARGET"
+    | "ACTIVE_MISSING_RESULTS"
+    | "RESULT_MAPPING"
+    | "OTHER"
+    | null;
 };
 
 export type MondayControlRoomSummary = {
@@ -471,6 +486,9 @@ export function buildNativeAttentionItem(input: {
       href: `/campagne/${campagna.id}`,
       healthStatus: health,
       suppressedByLink: false,
+      resultsCount: check?.resultsCount ?? null,
+      healthAvailability: null,
+      configurationKind: null,
     };
   } else if (!check) {
     configurationRequired = true;
@@ -528,6 +546,9 @@ export function buildNativeAttentionItem(input: {
     href: `/risultati?campaignId=${encodeURIComponent(campagna.id)}`,
     healthStatus: configurationRequired ? null : health,
     suppressedByLink: false,
+    resultsCount: check?.resultsCount ?? null,
+    healthAvailability: null,
+    configurationKind: configurationRequired ? configurationKind : null,
   };
 }
 
@@ -573,6 +594,9 @@ export function buildMetaAttentionItem(input: {
       href: "/risultati",
       healthStatus: null,
       suppressedByLink: false,
+      resultsCount: row.primaryResults ?? null,
+      healthAvailability: row.healthAvailability ?? null,
+      configurationKind: null,
     };
   }
 
@@ -672,6 +696,9 @@ export function buildMetaAttentionItem(input: {
     healthStatus:
       resolved.state === "CONFIGURATION_REQUIRED" ? null : health,
     suppressedByLink: false,
+    resultsCount: row.primaryResults ?? null,
+    healthAvailability: row.healthAvailability ?? null,
+    configurationKind: configurationRequired ? configurationKind : null,
   };
 }
 

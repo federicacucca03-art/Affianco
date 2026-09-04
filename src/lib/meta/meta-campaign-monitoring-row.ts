@@ -37,6 +37,8 @@ export type MetaCampaignMonitoringRow = {
   cpc: number | null;
   cpm: number | null;
   frequency: number | null;
+  /** Confident primary result count when available (M6D small-sample guard). */
+  primaryResults: number | null;
   primaryKpi: MetaMonitoringKpi | null;
   targetValue: number | null;
   storedPrimaryKpi: MetaMonitoringKpi | null;
@@ -205,6 +207,7 @@ export function mapMetaCampaignToMonitoringRow(
     cpc: controlRoom.metrics.cpc,
     cpm: controlRoom.metrics.cpm,
     frequency: controlRoom.metrics.frequency,
+    primaryResults: aggregate.primaryResults,
     primaryKpi: incompatible ? null : controlRoom.target.primaryKpi,
     targetValue: incompatible ? null : controlRoom.target.targetValue,
     storedPrimaryKpi: resolved.storedPrimaryKpi,

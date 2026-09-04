@@ -104,6 +104,7 @@ function metaRow(
     cpc: 0.5,
     cpm: 10,
     frequency: 1.5,
+    primaryResults: null,
     primaryKpi: "CPL",
     targetValue: 18,
     storedPrimaryKpi: "CPL",
