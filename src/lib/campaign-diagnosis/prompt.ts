@@ -1,12 +1,14 @@
 /**
  * M6C prompt builders — Italian, structured JSON only. Never expose to client.
+ * M6C.2: user prompt uses human-readable facts, not raw field/enum dumps.
  */
 
 import type { CampaignDiagnosisAiPayload } from "@/lib/campaign-diagnosis/types";
+import { formatEuro } from "@/lib/control-room";
 
 export const DIAGNOSIS_SYSTEM_PROMPT = `Sei un assistente diagnostico per campagne Meta Ads (paid media).
 
-Il tuo compito è spiegare i fatti di campagna forniti.
+Il tuo compito è interpretare i fatti di campagna forniti in italiano.
 Non calcolare health, target o urgenza: sono già determinati da Ally.
 
 Devi:
@@ -16,10 +18,16 @@ Devi:
 - non dare raccomandazioni o azioni
 - non inventare benchmark, metriche, lead, ROAS o conversion rate
 - non affermare saturazione audience o penalizzazioni Meta senza evidenza nei fatti
+- non ripetere solo lo stato amministrativo già ovvio
 - rispondere SOLO con JSON valido (niente markdown, niente testo extra)
 
-Lingua: italiano professionale e conciso.
+Lingua della risposta (summary, evidence, uncertainty): italiano professionale, comprensibile a un media buyer.
+VIETATO nella risposta: nomi di campi tecnici, enum interni, JSON keys, valori come RED/YELLOW/GREEN, WORSENING, INSUFFICIENT, REVISION_REQUESTED, attentionReason, healthAvailability, null.
+
 Usa formulazioni caute: "Potrebbe indicare...", "Il segnale più coerente è...", "Non ci sono abbastanza dati per concludere...".
+
+summary: interpreta la combinazione di segnali (non ripetere una sola metrica già evidente).
+evidence: massimo 3 fatti utili in linguaggio umano (es. "Il CPL è 38 € rispetto a un target di 30 €.").
 
 Schema esatto:
 {
@@ -33,18 +41,140 @@ Schema esatto:
 
 Limiti:
 - summary: al massimo 2 frasi brevi
-- evidence: massimo 3 voci, basate sui fatti
+- evidence: massimo 3 voci
 - uncertainty: 1 frase breve
 - what_not_to_conclude: opzionale
 - nessun campo "actions" o "recommendations"
 `;
 
+function formatPercentIt(n: number): string {
+  return `${String(n).replace(".", ",")}%`;
+}
+
+function healthLine(payload: CampaignDiagnosisAiPayload): string | null {
+  if (payload.actualValue == null || payload.targetValue == null) return null;
+  const kpi = payload.primaryKpi?.trim() || "Costo per risultato";
+  const actual = formatEuro(payload.actualValue);
+  const target = formatEuro(payload.targetValue);
+  if (payload.health === "RED") {
+    return `${kpi}: ${actual} rispetto a un target di ${target} (sopra soglia).`;
+  }
+  if (payload.health === "YELLOW") {
+    return `${kpi}: ${actual} rispetto a un target di ${target} (vicino alla soglia).`;
+  }
+  if (payload.health === "GREEN") {
+    return `${kpi}: ${actual} rispetto a un target di ${target} (sotto soglia).`;
+  }
+  return `${kpi}: ${actual} rispetto a un target di ${target}.`;
+}
+
+function trendLine(payload: CampaignDiagnosisAiPayload): string | null {
+  switch (payload.trend) {
+    case "WORSENING":
+      return "L'andamento del costo per risultato sta peggiorando rispetto al periodo precedente.";
+    case "IMPROVING":
+      return "L'andamento del costo per risultato sta migliorando rispetto al periodo precedente.";
+    case "STABLE":
+      return "L'andamento del costo per risultato è stabile rispetto al periodo precedente.";
+    default:
+      return null;
+  }
+}
+
+function mappingLine(payload: CampaignDiagnosisAiPayload): string | null {
+  if (payload.resultMappingConfidence === "AMBIGUOUS") {
+    return "Meta restituisce più tipi di risultato compatibili, quindi il KPI principale non è ancora affidabile.";
+  }
+  if (payload.resultMappingConfidence === "UNKNOWN") {
+    return "Il risultato principale Meta non è ancora identificato con certezza.";
+  }
+  return null;
+}
+
+/**
+ * Build a human-readable facts brief for the model (no internal field dumps).
+ */
+export function buildDiagnosisHumanFactsBrief(
+  payload: CampaignDiagnosisAiPayload,
+): string {
+  const lines: string[] = [];
+
+  const reason = payload.attentionReason?.trim();
+  if (reason) {
+    lines.push(`Contesto Ally: ${reason}`);
+  }
+
+  const perf = healthLine(payload);
+  if (perf) lines.push(`Performance: ${perf}`);
+
+  const metrics: string[] = [];
+  if (payload.metrics.ctr != null) {
+    metrics.push(`CTR ${formatPercentIt(payload.metrics.ctr)}`);
+  }
+  if (payload.metrics.cpc != null) {
+    metrics.push(`CPC ${formatEuro(payload.metrics.cpc)}`);
+  }
+  if (payload.metrics.cpm != null) {
+    metrics.push(`CPM ${formatEuro(payload.metrics.cpm)}`);
+  }
+  if (payload.metrics.frequency != null) {
+    metrics.push(`Frequenza ${String(payload.metrics.frequency).replace(".", ",")}`);
+  }
+  if (payload.metrics.spend != null) {
+    metrics.push(`Spesa ${formatEuro(payload.metrics.spend)}`);
+  }
+  if (payload.metrics.results != null) {
+    metrics.push(`Risultati ${payload.metrics.results}`);
+  }
+  if (metrics.length) {
+    lines.push(`Metriche disponibili: ${metrics.join("; ")}.`);
+  }
+
+  const trend = trendLine(payload);
+  if (trend) lines.push(`Andamento: ${trend}`);
+
+  const mapping = mappingLine(payload);
+  if (mapping) lines.push(`Affidabilità risultato: ${mapping}`);
+
+  const plan: string[] = [];
+  if (payload.campaignPlan.objective) {
+    plan.push(`obiettivo ${payload.campaignPlan.objective}`);
+  }
+  if (payload.campaignPlan.settore) {
+    plan.push(`settore ${payload.campaignPlan.settore}`);
+  }
+  if (payload.campaignPlan.offer) {
+    plan.push(`offerta: ${payload.campaignPlan.offer}`);
+  }
+  if (payload.campaignPlan.audienceHint) {
+    plan.push(`pubblico: ${payload.campaignPlan.audienceHint}`);
+  }
+  if (plan.length) {
+    lines.push(`Piano: ${plan.join("; ")}.`);
+  }
+
+  if (payload.creativeContext.hasCreativeAsset) {
+    lines.push(
+      payload.creativeContext.formatHint
+        ? `Creatività caricata (${payload.creativeContext.formatHint}).`
+        : "Creatività caricata.",
+    );
+  }
+
+  if (lines.length === 0) {
+    return "Non ci sono fatti di performance sufficienti.";
+  }
+  return lines.map((l) => `- ${l}`).join("\n");
+}
+
 export function buildDiagnosisUserPrompt(
   payload: CampaignDiagnosisAiPayload,
 ): string {
-  return `Fatti campagna (JSON). Spiega perché la situazione è questa, senza azioni.
+  return `Interpretazione richiesta: spiega cosa suggeriscono insieme questi fatti.
+Non ripetere solo lo stato già ovvio. Non usare termini tecnici interni.
 
-${JSON.stringify(payload, null, 2)}
+FATTI:
+${buildDiagnosisHumanFactsBrief(payload)}
 
 Restituisci solo lo schema JSON richiesto.`;
 }

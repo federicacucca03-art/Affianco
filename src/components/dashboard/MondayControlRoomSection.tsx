@@ -85,6 +85,9 @@ function rowDiagnosisEligible(item: ControlRoomAttentionItem): boolean {
     attentionState: item.attentionState,
     health: item.healthStatus,
     campaignStatus: item.campaignStatus,
+    trend: item.trend,
+    actualValue: item.primaryMetricValue,
+    targetValue: item.targetValue,
   });
   return isDiagnosisUiEligible(eligibility);
 }
@@ -151,11 +154,16 @@ function DiagnosisPanel({
         <span className="text-[var(--ink)]">{etichettaConfidence(d.confidence)}</span>
       </p>
       {d.evidence.length > 0 ? (
-        <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[12px] text-[var(--ink-muted)]">
-          {d.evidence.map((e) => (
-            <li key={e}>{e}</li>
-          ))}
-        </ul>
+        <>
+          <p className="mt-2 text-[11px] font-medium text-[var(--ink-muted)]">
+            Evidenze
+          </p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[12px] text-[var(--ink-muted)]">
+            {d.evidence.map((e) => (
+              <li key={e}>{e}</li>
+            ))}
+          </ul>
+        </>
       ) : null}
       {d.uncertainty || d.what_not_to_conclude ? (
         <p className="mt-1.5 text-[12px] leading-snug text-[var(--ink-muted)]">

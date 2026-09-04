@@ -287,6 +287,14 @@ export async function loadNativeDiagnosisBundle(
     attentionState: item.attentionState,
     health: item.healthStatus,
     campaignStatus: campagna.status,
+    trend: item.trend,
+    actualValue: item.primaryMetricValue,
+    targetValue: item.targetValue,
+    spend: latest?.spend ?? null,
+    ctr: latest?.ctr ?? null,
+    cpc: latest?.cpc ?? null,
+    cpm: latest?.cpm ?? null,
+    frequency: latest?.frequency ?? null,
   });
 
   const input: BuildDiagnosisContextInput = {
@@ -544,6 +552,13 @@ export async function loadMetaDiagnosisBundle(
     campaignStatus: monitoring.effectiveStatus,
     healthAvailability: monitoring.healthAvailability,
     trend: item.trend,
+    actualValue: item.primaryMetricValue,
+    targetValue: item.targetValue,
+    spend: monitoring.spend,
+    ctr: monitoring.ctr,
+    cpc: monitoring.cpc,
+    cpm: monitoring.cpm,
+    frequency: monitoring.frequency,
   });
 
   const input: BuildDiagnosisContextInput = {

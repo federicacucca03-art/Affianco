@@ -24,6 +24,25 @@ const CONF: ReadonlySet<string> = new Set(["LOW", "MEDIUM", "HIGH"]);
 const CERTAINTY_RE =
   /\b(sicuramente|certamente|è certo|devi\b|meta sta penalizzando|il pubblico è sbagliato)\b/i;
 
+/** Internal jargon that must never reach the user-facing panel. */
+const INTERNAL_JARGON_RE =
+  /\b(attentionReason|attentionState|urgencyLevel|healthAvailability|healthStatus|resultMappingConfidence|primaryKpi|actualValue|targetValue|campaignStatus|monitoringMode|REVISION_REQUESTED|TARGET_REQUIRED|RESULT_MAPPING|INSUFFICIENT_DATA|CONFIGURATION_REQUIRED|NEEDS_ATTENTION|HISTORICAL_REVIEW|WORSENING|IMPROVING|INSUFFICIENT|UNKNOWN|AMBIGUOUS|CONFIDENT|AI_DIAGNOSIS)\b|\bhealth\s*=\s*(RED|YELLOW|GREEN|INSUFFICIENT)\b|\btrend\s*=\s*\w+|\bmetrics?\s+(sono|is|are)\s+null\b/i;
+
+export function textContainsInternalJargon(text: string): boolean {
+  return INTERNAL_JARGON_RE.test(text);
+}
+
+/**
+ * Drop evidence lines that leak developer/system language.
+ * Returns filtered list (may be empty — caller must handle).
+ */
+export function filterHumanEvidence(evidence: string[]): string[] {
+  return evidence
+    .map((e) => clipSentence(e, 120))
+    .filter((e) => e.length > 0 && !textContainsInternalJargon(e))
+    .slice(0, 3);
+}
+
 export type ConfidenceCapSignals = {
   evidenceCount: number;
   trendKnown: boolean;
@@ -133,33 +152,37 @@ export function parseAndNormalizeDiagnosis(
   if (!CONF.has(confRaw)) throw new Error("confidence non valido.");
 
   const evidenceRaw = Array.isArray(o.evidence) ? o.evidence : [];
-  const evidence = evidenceRaw
-    .filter((e): e is string => typeof e === "string" && e.trim().length > 0)
-    .map((e) => clipSentence(e, 120))
-    .slice(0, 3);
+  const evidence = filterHumanEvidence(
+    evidenceRaw.filter((e): e is string => typeof e === "string" && e.trim().length > 0),
+  );
   if (evidence.length === 0) {
-    throw new Error("evidence vuoto.");
+    throw new Error("evidence vuoto o non utilizzabile.");
   }
 
-  const uncertainty =
+  const uncertaintyRaw =
     typeof o.uncertainty === "string" && o.uncertainty.trim()
       ? clipSentence(o.uncertainty, 160)
       : "Non ci sono abbastanza dati per una conclusione definitiva.";
+  const uncertainty = textContainsInternalJargon(uncertaintyRaw)
+    ? "Non ci sono abbastanza dati per una conclusione definitiva."
+    : uncertaintyRaw;
 
-  const whatNot =
+  const whatNotRaw =
     typeof o.what_not_to_conclude === "string" && o.what_not_to_conclude.trim()
       ? clipSentence(o.what_not_to_conclude, 160)
       : null;
+  const whatNot =
+    whatNotRaw && textContainsInternalJargon(whatNotRaw) ? null : whatNotRaw;
 
   let area = areaRaw as DiagnosisLikelyArea;
   let confidence = confRaw as DiagnosisAiConfidence;
-  const blob = `${summaryRaw} ${evidence.join(" ")} ${uncertainty}`;
+  let summaryDraft = summaryRaw;
+  if (textContainsInternalJargon(summaryDraft)) {
+    throw new Error("summary contiene linguaggio tecnico interno.");
+  }
+  const blob = `${summaryDraft} ${evidence.join(" ")} ${uncertainty}`;
   if (CERTAINTY_RE.test(blob)) {
     confidence = "LOW";
-    if (area !== "UNKNOWN") {
-      // Keep area but force humble confidence; certainty language is unsupported.
-      confidence = "LOW";
-    }
   }
 
   const capped = applyConfidenceCap(confidence, {
@@ -168,7 +191,7 @@ export function parseAndNormalizeDiagnosis(
   });
 
   // Max 2 short sentences for summary.
-  const sentences = summaryRaw
+  const sentences = summaryDraft
     .split(/(?<=[.!?])\s+/)
     .map((s) => s.trim())
     .filter(Boolean)

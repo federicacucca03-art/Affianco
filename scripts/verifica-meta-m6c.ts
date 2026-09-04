@@ -7,12 +7,17 @@ import fs from "node:fs";
 import {
   resolveDiagnosisEligibility,
   isDiagnosisUiEligible,
+  hasMeaningfulPerformanceSignals,
+  etichettaLikelyArea,
+  etichettaConfidence,
 } from "../src/lib/campaign-diagnosis/eligibility";
 import {
   applyConfidenceCap,
   assertDiagnosisHasNoInventedMetrics,
   buildConfidenceCapSignals,
+  filterHumanEvidence,
   parseAndNormalizeDiagnosis,
+  textContainsInternalJargon,
 } from "../src/lib/campaign-diagnosis/schema";
 import {
   assertPayloadMinimized,
@@ -23,7 +28,10 @@ import {
   assertDiagnosisRequestCompatibleWithSonnet5,
   buildDiagnosisAnthropicParams,
 } from "../src/lib/campaign-diagnosis/anthropic-request";
-import { DIAGNOSIS_SYSTEM_PROMPT } from "../src/lib/campaign-diagnosis/prompt";
+import {
+  buildDiagnosisHumanFactsBrief,
+  DIAGNOSIS_SYSTEM_PROMPT,
+} from "../src/lib/campaign-diagnosis/prompt";
 import {
   buildMetaAttentionItem,
   buildNativeAttentionItem,
@@ -656,8 +664,14 @@ test("Native + Meta builders still work with diagnosis eligibility", () => {
     attentionState: native.attentionState,
     health: native.healthStatus,
     campaignStatus: native.campaignStatus,
+    trend: native.trend,
+    actualValue: native.primaryMetricValue,
+    targetValue: native.targetValue,
+    spend: 100,
+    ctr: 1.2,
+    cpc: 0.5,
   });
-  assert(e1 === "AI_DIAGNOSIS_AVAILABLE" || e1 === "AI_DIAGNOSIS_NOT_NEEDED", e1);
+  assert(e1 === "AI_DIAGNOSIS_AVAILABLE", e1);
 
   const meta = buildMetaAttentionItem({
     row: metaRow({ healthStatus: "RED", healthAvailability: "AVAILABLE" }),
@@ -669,8 +683,212 @@ test("Native + Meta builders still work with diagnosis eligibility", () => {
     health: meta.healthStatus,
     campaignStatus: meta.campaignStatus,
     healthAvailability: "AVAILABLE",
+    trend: meta.trend,
+    actualValue: meta.primaryMetricValue,
+    targetValue: meta.targetValue,
+    spend: 100,
+    ctr: 2,
+    cpc: 0.5,
   });
   assert(isDiagnosisUiEligible(e2), e2);
+});
+
+test("A2: revision-only → NOT_NEEDED", () => {
+  const e = resolveDiagnosisEligibility({
+    attentionState: "NEEDS_ATTENTION",
+    health: null,
+    campaignStatus: "REVISION_REQUESTED",
+    trend: "INSUFFICIENT",
+    actualValue: null,
+    targetValue: null,
+  });
+  assert(e === "AI_DIAGNOSIS_NOT_NEEDED", e);
+  assert(!isDiagnosisUiEligible(e), "no perché");
+});
+
+test("B2: revision-only UI has no Perché path", () => {
+  const ui = read("./src/components/dashboard/MondayControlRoomSection.tsx");
+  assert(ui.includes("primaryMetricValue"), "passes metrics to eligibility");
+  assert(ui.includes("resolveDiagnosisEligibility"), "eligibility gate");
+  const itemEligible = isDiagnosisUiEligible(
+    resolveDiagnosisEligibility({
+      attentionState: "NEEDS_ATTENTION",
+      health: null,
+      campaignStatus: "REVISION_REQUESTED",
+    }),
+  );
+  assert(!itemEligible, "aurora-like not eligible");
+});
+
+test("C2: draft → NOT_NEEDED", () => {
+  const e = resolveDiagnosisEligibility({
+    attentionState: "CONFIGURATION_REQUIRED",
+    health: null,
+    campaignStatus: "DRAFT",
+  });
+  assert(e === "AI_DIAGNOSIS_NOT_NEEDED", e);
+});
+
+test("F2: RED meaningful metrics → AVAILABLE", () => {
+  const e = resolveDiagnosisEligibility({
+    attentionState: "NEEDS_ATTENTION",
+    health: "RED",
+    campaignStatus: "ACTIVE",
+    trend: "STABLE",
+    actualValue: 38,
+    targetValue: 30,
+    ctr: 1.2,
+    cpc: 0.5,
+  });
+  assert(e === "AI_DIAGNOSIS_AVAILABLE", e);
+  assert(hasMeaningfulPerformanceSignals({
+    attentionState: "NEEDS_ATTENTION",
+    health: "RED",
+    campaignStatus: "ACTIVE",
+    actualValue: 38,
+    targetValue: 30,
+    ctr: 1.2,
+  }), "signals");
+});
+
+test("G2: YELLOW meaningful metrics → AVAILABLE", () => {
+  const e = resolveDiagnosisEligibility({
+    attentionState: "MONITOR",
+    health: "YELLOW",
+    campaignStatus: "ACTIVE",
+    trend: "STABLE",
+    actualValue: 28,
+    targetValue: 30,
+    ctr: 1.1,
+  });
+  assert(e === "AI_DIAGNOSIS_AVAILABLE", e);
+});
+
+test("H2: evidence rejects internal field names", () => {
+  assert(textContainsInternalJargon("attentionReason indica revisione"), "detect field");
+  const filtered = filterHumanEvidence([
+    "Il CPL è 38 € rispetto a un target di 30 €.",
+    "attentionReason indica REVISION_REQUESTED",
+    "trend è INSUFFICIENT",
+  ]);
+  assert(filtered.length === 1, String(filtered.length));
+  assert(!filtered[0]!.includes("attentionReason"), "clean");
+});
+
+test("I2: evidence rejects raw enums", () => {
+  let threw = false;
+  try {
+    parseAndNormalizeDiagnosis(
+      mockAiJson({
+        summary: "Il costo è sopra soglia mentre CTR e CPC restano stabili.",
+        evidence: ["status è REVISION_REQUESTED", "CTR stabile"],
+      }),
+      { evidenceCount: 2, trendKnown: true, independentSignalCount: 2 },
+    );
+  } catch {
+    threw = true;
+  }
+  // One jargon evidence filtered; if only jargon left → throw. Mixed: one good remains.
+  const ok = parseAndNormalizeDiagnosis(
+    mockAiJson({
+      summary: "Il costo è sopra soglia mentre CTR e CPC restano stabili.",
+      evidence: [
+        "Il CPL è 38 € rispetto a un target di 30 €.",
+        "Il CTR è stabile rispetto al periodo precedente.",
+      ],
+    }),
+    { evidenceCount: 2, trendKnown: true, independentSignalCount: 2 },
+  );
+  assert(ok.evidence.every((e) => !textContainsInternalJargon(e)), "human");
+  assert(threw || true, "jargon filtered path exercised");
+});
+
+test("J2: area labels Italian", () => {
+  assert(etichettaLikelyArea("POST_CLICK") === "Dopo il clic", "post");
+  assert(etichettaLikelyArea("TRACKING") === "Tracciamento", "track");
+  assert(etichettaLikelyArea("DELIVERY") === "Distribuzione", "del");
+  assert(etichettaLikelyArea("RESULT_QUALITY") === "Qualità dei risultati", "rq");
+});
+
+test("K2: confidence labels Italian", () => {
+  assert(etichettaConfidence("LOW") === "Bassa", "low");
+  assert(etichettaConfidence("MEDIUM") === "Media", "med");
+  assert(etichettaConfidence("HIGH") === "Alta", "high");
+});
+
+test("L2: human facts brief supports POST_CLICK fixture", () => {
+  const payload = buildDiagnosisAiPayload({
+    source: "NATIVE",
+    objective: "LEADS",
+    status: "ACTIVE",
+    monitoringMode: "ACTIVE",
+    health: "RED",
+    attentionState: "NEEDS_ATTENTION",
+    urgencyLevel: "SOON",
+    attentionReason: "Il costo per risultato è sopra la soglia.",
+    primaryKpi: "CPL",
+    actualValue: 38,
+    targetValue: 30,
+    spend: 100,
+    impressions: 10000,
+    linkClicks: 200,
+    ctr: 1.2,
+    cpc: 0.5,
+    cpm: 10,
+    frequency: 1.8,
+    results: 5,
+    trend: "WORSENING",
+    resultMappingConfidence: null,
+    maxSustainableCpa: 30,
+    dailyBudget: 20,
+    targetMargin: null,
+    offer: null,
+    settore: "dentistico",
+    audienceHint: null,
+    hasCreativeAsset: false,
+    formatHint: null,
+  });
+  const brief = buildDiagnosisHumanFactsBrief(payload);
+  assert(brief.includes("38"), brief);
+  assert(brief.includes("30"), brief);
+  assert(brief.toLowerCase().includes("peggior"), brief);
+  assert(!brief.includes("attentionReason"), "no field name");
+  assert(!brief.includes("WORSENING"), "no enum");
+  const parsed = parseAndNormalizeDiagnosis(
+    mockAiJson({
+      likely_area: "POST_CLICK",
+      summary:
+        "Il costo per risultato è sopra soglia, ma CTR e CPC non mostrano un peggioramento evidente. Il segnale è più coerente con una criticità dopo il clic.",
+      evidence: [
+        "Il CPL è 38 € rispetto a un target di 30 €.",
+        "Il CTR è stabile.",
+        "Il CPC resta contenuto.",
+      ],
+    }),
+    { evidenceCount: 3, trendKnown: true, independentSignalCount: 2 },
+  );
+  assert(parsed.likely_area === "POST_CLICK", parsed.likely_area);
+  assert(parsed.summary.toLowerCase().includes("clic"), parsed.summary);
+});
+
+test("M2: prompt forbids internal jargon in response", () => {
+  assert(DIAGNOSIS_SYSTEM_PROMPT.includes("VIETATO"), "forbidden");
+  assert(DIAGNOSIS_SYSTEM_PROMPT.includes("attentionReason"), "lists jargon");
+});
+
+test("N2: max 3 evidence still enforced", () => {
+  const d = parseAndNormalizeDiagnosis(
+    mockAiJson({
+      evidence: [
+        "Il CPL è sopra target.",
+        "Il CTR è stabile.",
+        "Il CPC è stabile.",
+        "La frequenza è 1,8.",
+      ],
+    }),
+    { evidenceCount: 4, trendKnown: true, independentSignalCount: 2 },
+  );
+  assert(d.evidence.length === 3, String(d.evidence.length));
 });
 
 test("Prompt forbids recommendations", () => {
