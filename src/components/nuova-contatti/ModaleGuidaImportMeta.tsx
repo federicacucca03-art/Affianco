@@ -59,7 +59,7 @@ export function ModaleGuidaImportMeta({ aperta, onChiudi }: Props) {
             href="https://adsmanager.facebook.com"
             target="_blank"
             rel="noreferrer"
-            className="inline-flex w-full items-center justify-center rounded-full bg-[#3D8B57] px-5 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            className="aff-btn-primary w-full"
           >
             Capito, vai ad Ads Manager
           </a>

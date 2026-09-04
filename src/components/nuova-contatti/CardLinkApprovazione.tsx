@@ -54,7 +54,7 @@ export function CardLinkApprovazione({
         type="button"
         onClick={onCopia}
         disabled={inCorso}
-        className="mt-4 inline-flex items-center justify-center gap-2 rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        className="aff-btn-primary mt-4 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {inCorso ? (
           <>
@@ -75,7 +75,7 @@ export function CardLinkApprovazione({
       </button>
 
       {errore ? (
-        <p className="mt-3 text-sm text-[#C45C5C]">{errore}</p>
+        <p className="mt-3 text-sm aff-text-danger">{errore}</p>
       ) : null}
     </section>
   );

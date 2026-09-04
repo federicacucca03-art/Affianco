@@ -101,12 +101,12 @@ type Props = {
 
 function badgeClass(tag: CuratedFormat["tag"][number]): string {
   if (tag === "Formato evergreen") {
-    return "bg-[#E8F5EE] text-[#2D6A4A] border-[#B7E4C7]";
+    return "aff-badge aff-badge--success aff-badge--pill";
   }
   if (tag === "Hook immediato") {
-    return "bg-[var(--accent-soft)] text-[var(--accent)] border-[#c6d8f0]";
+    return "aff-badge aff-badge--violet aff-badge--pill";
   }
-  return "bg-[#FFF6E5] text-[#9A6700] border-[#F5D78E]";
+  return "aff-badge aff-badge--warning aff-badge--pill";
 }
 
 export function StudioCreativo({
@@ -547,7 +547,7 @@ export function StudioCreativo({
         <h3 className="text-sm font-medium text-[var(--ink)]">
           Format consigliati di settore
         </h3>
-        <span className="inline-flex w-fit rounded-full border border-[#2D6A4A]/30 bg-[#E8F5EE] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#2D6A4A]">
+        <span className="aff-badge aff-badge--success aff-badge--pill text-[10px] font-semibold uppercase tracking-wide">
           Format di riferimento
         </span>
       </div>
@@ -735,7 +735,7 @@ export function StudioCreativo({
             Analizza screenshot
           </button>
           {errore ? (
-            <p className="text-xs text-[#C45C5C]">{errore}</p>
+            <p className="text-xs aff-text-danger">{errore}</p>
           ) : null}
           {mockInfo ? (
             <p className="text-xs text-[var(--ink-muted)]">
@@ -775,8 +775,8 @@ export function StudioCreativo({
               </pre>
             </div>
 
-            <div className="rounded-xl border border-[#c6e7c8] bg-[#f0faf1] p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-[#3D8B57]">
+            <div className="aff-callout aff-callout--info p-4">
+              <p className="text-xs font-medium uppercase tracking-wide aff-text-success">
                 Istruzioni Smartphone da Inviare al Cliente
               </p>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[var(--ink)]">
@@ -847,7 +847,7 @@ export function StudioCreativo({
                 faccia capire cosa c&apos;è di nuovo e dove scoprirlo.
               </p>
             </div>
-            <span className="rounded-full border border-[#B7E4C7] bg-[#E8F5EE] px-3 py-1 text-[11px] font-medium text-[#2D6A4A]">
+            <span className="aff-badge aff-badge--success aff-badge--pill">
               Creatività di apertura
             </span>
           </div>
@@ -896,7 +896,7 @@ export function StudioCreativo({
                 visivo che dia un motivo concreto per tornare.
               </p>
             </div>
-            <span className="rounded-full border border-[#B7E4C7] bg-[#E8F5EE] px-3 py-1 text-[11px] font-medium text-[#2D6A4A]">
+            <span className="aff-badge aff-badge--success aff-badge--pill">
               Creatività di recupero
             </span>
           </div>
@@ -945,7 +945,7 @@ export function StudioCreativo({
                 capire subito attività, zona e motivo per venire.
               </p>
             </div>
-            <span className="rounded-full border border-[#B7E4C7] bg-[#E8F5EE] px-3 py-1 text-[11px] font-medium text-[#2D6A4A]">
+            <span className="aff-badge aff-badge--success aff-badge--pill">
               Traffico in negozio
             </span>
           </div>
@@ -994,7 +994,7 @@ export function StudioCreativo({
                 presenti prodotto, beneficio e offerta in modo chiaro.
               </p>
             </div>
-            <span className="rounded-full border border-[#B7E4C7] bg-[#E8F5EE] px-3 py-1 text-[11px] font-medium text-[#2D6A4A]">
+            <span className="aff-badge aff-badge--success aff-badge--pill">
               Vendite online
             </span>
           </div>
@@ -1052,7 +1052,7 @@ export function StudioCreativo({
                 {sottotitoloStep}
               </p>
             </div>
-            <span className="rounded-full border border-[#B7E4C7] bg-[#E8F5EE] px-3 py-1 text-[11px] font-medium text-[#2D6A4A]">
+            <span className="aff-badge aff-badge--success aff-badge--pill">
               {badgeNicchia}
             </span>
           </div>
@@ -1104,7 +1104,7 @@ export function StudioCreativo({
               carichi gli asset finali per Ads Manager.
             </p>
           </div>
-          <span className="rounded-full border border-[#B7E4C7] bg-[#E8F5EE] px-3 py-1 text-[11px] font-medium text-[#2D6A4A]">
+          <span className="aff-badge aff-badge--success aff-badge--pill">
             {ETICHETTE_NICCHIA[nicchia]}
           </span>
         </div>
@@ -1127,7 +1127,7 @@ export function StudioCreativo({
             href={urlAdLibrary}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            className="aff-btn-primary shrink-0"
           >
             <Sparkles className="h-4 w-4" strokeWidth={1.75} />
             ✦ Cerca annunci attivi dei competitor su Meta Ad Library

@@ -19,19 +19,19 @@ const STILE_LIVELLO: Record<
   { badge: string; etichetta: string }
 > = {
   INFO: {
-    badge: "bg-[var(--lavender-muted)] text-[#5b4fa8]",
+    badge: "aff-badge aff-badge--violet aff-badge--pill",
     etichetta: "Info",
   },
   SUGGESTION: {
-    badge: "bg-[var(--green-soft)] text-[#2d6a4a]",
+    badge: "aff-badge aff-badge--success aff-badge--pill",
     etichetta: "Suggerimento",
   },
   WARNING: {
-    badge: "bg-[var(--yellow-soft)] text-[#6b5420]",
+    badge: "aff-badge aff-badge--warning aff-badge--pill",
     etichetta: "Attenzione",
   },
   BLOCKER: {
-    badge: "bg-[var(--pink-soft)] text-[#7a3d58]",
+    badge: "aff-badge aff-badge--danger aff-badge--pill",
     etichetta: "Da sistemare",
   },
 };

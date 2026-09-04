@@ -200,7 +200,7 @@ export function PannelloPerche({
 
   return (
     <div className="space-y-4">
-      <section className="rounded-[var(--radius)] bg-[#e8f0fe] p-5">
+      <section className="aff-panel-white p-5">
         <h2 className="text-sm font-medium text-[var(--ink)]">
           Perché questa configurazione
         </h2>
@@ -279,7 +279,7 @@ export function PannelloPerche({
         </section>
       ) : null}
 
-      <section className="rounded-[var(--radius)] bg-[#fff6e5] p-5">
+      <section className="aff-callout aff-callout--warning p-5">
         <h2 className="text-sm font-medium text-[var(--ink)]">
           Fase di apprendimento e tempistiche
         </h2>
@@ -361,8 +361,8 @@ export function PannelloPerche({
               )}
             </div>
           ) : categoriaAmpia ? (
-            <div className="mt-4 rounded-xl border border-[#f5c9b8] bg-[#fff4f0] p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-[#C26A0A]">
+            <div className="mt-4 aff-callout aff-callout--danger p-4">
+              <p className="text-xs font-medium uppercase tracking-wide aff-text-warning">
                 Livello 3 · Categoria ampia
               </p>
               <p className="mt-2 text-2xl font-medium tracking-tight text-[var(--ink)]">
@@ -374,7 +374,7 @@ export function PannelloPerche({
                 (prodotto/servizio concreto) e valuta la sostenibilità sul
                 scontrino medio del cliente, non su medie di nicchia.
               </p>
-              <p className="mt-3 border-t border-[#f5c9b8] pt-3 text-xs leading-relaxed text-[var(--ink-muted)]">
+              <p className="mt-3 border-t border-[var(--border-soft)] pt-3 text-xs leading-relaxed text-[var(--ink-muted)]">
                 Guida qualitativa: parti con budget contenuto, messaggio chiaro
                 sul servizio offerto e raggio locale. Affina i numeri solo dopo
                 i primi contatti reali.

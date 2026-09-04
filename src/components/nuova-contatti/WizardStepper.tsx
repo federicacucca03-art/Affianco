@@ -76,7 +76,7 @@ export function WizardStepper({
               >
                 {fatto ? (
                   <Check
-                    className="h-3.5 w-3.5 shrink-0 text-[#2d6a4a]"
+                    className="h-3.5 w-3.5 shrink-0 text-[var(--ally-success)]"
                     strokeWidth={2.5}
                     aria-hidden
                   />

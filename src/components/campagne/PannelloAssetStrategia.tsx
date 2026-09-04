@@ -329,7 +329,7 @@ export function PannelloAssetStrategia({ campagna, onEsportata }: Props) {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
+      <section className="aff-panel-white p-5 sm:p-6">
         <h2 className="text-sm font-medium text-[var(--ink)]">
           Brief e sito web
         </h2>
@@ -386,7 +386,7 @@ export function PannelloAssetStrategia({ campagna, onEsportata }: Props) {
         </div>
       </section>
 
-      <section className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
+      <section className="aff-panel-white p-5 sm:p-6">
         <h2 className="text-sm font-medium text-[var(--ink)]">
           Testi annuncio
         </h2>
@@ -423,7 +423,7 @@ export function PannelloAssetStrategia({ campagna, onEsportata }: Props) {
         </div>
       </section>
 
-      <section className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
+      <section className="aff-panel-white p-5 sm:p-6">
         <h2 className="text-sm font-medium text-[var(--ink)]">
           Riepilogo target
         </h2>
@@ -474,7 +474,7 @@ export function PannelloAssetStrategia({ campagna, onEsportata }: Props) {
               onEsportata?.();
             });
           }}
-          className="inline-flex w-full items-center justify-center rounded-full bg-[var(--ink)] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+          className="aff-btn-primary w-full sm:w-auto"
         >
           {LABEL_CTA_EXPORT_META}
         </button>

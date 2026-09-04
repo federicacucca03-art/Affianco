@@ -60,7 +60,7 @@ export default function DettaglioClientePage() {
 
   if (locale === undefined) {
     return (
-      <main className="mx-auto w-full max-w-[720px]">
+      <main className="aff-page aff-page--narrow">
         <p className="text-sm text-[var(--ink-muted)]">Caricamento…</p>
       </main>
     );
@@ -68,11 +68,11 @@ export default function DettaglioClientePage() {
 
   if (!locale) {
     return (
-      <main className="mx-auto w-full max-w-[720px]">
+      <main className="aff-page aff-page--narrow">
         <p className="text-sm text-[var(--ink-muted)]">Cliente non trovato.</p>
         <Link
           href="/clienti"
-          className="mt-3 inline-block text-sm text-[var(--accent)] hover:underline"
+          className="mt-3 inline-block text-sm text-[var(--primary)] hover:underline"
         >
           Torna ai clienti
         </Link>
@@ -81,20 +81,17 @@ export default function DettaglioClientePage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-[720px]">
-      <Link
-        href="/clienti"
-        className="text-sm text-[var(--accent)] hover:underline"
-      >
+    <main className="aff-page aff-page--narrow">
+      <Link href="/clienti" className="aff-btn-tertiary min-h-8 px-0">
         Clienti
       </Link>
-      <h1 className="mt-3 text-lg font-medium text-[var(--ink)]">{locale.nome}</h1>
-      <p className="mt-1 text-sm text-[var(--ink-muted)]">
+      <h1 className="aff-page-title mt-3">{locale.nome}</h1>
+      <p className="aff-page-subtitle">
         {[locale.settore, locale.citta].filter(Boolean).join(" · ")}
       </p>
       <Suspense
         fallback={
-          <p className="mt-8 text-sm text-[var(--ink-muted)]">Caricamento…</p>
+          <p className="mt-8 aff-muted">Caricamento…</p>
         }
       >
         <PannelloAccountMetaCliente clientId={dbClientId} />

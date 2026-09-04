@@ -16,13 +16,27 @@ import {
   logErroreSupabaseDev,
   messaggioErroreSupabase,
 } from "@/lib/supabase-errori";
+import { AllyBadge } from "@/components/shell/AllyBadge";
+import { AllyEmptyState } from "@/components/shell/AllyEmptyState";
+import { Bell } from "lucide-react";
 
-function severityClass(severity: InboxNotification["severity"]): string {
+function severityBadge(severity: InboxNotification["severity"]) {
   switch (severity) {
     case "HIGH":
-      return "border-[var(--primary)]/35 bg-[var(--primary-soft)]/70";
+      return "danger" as const;
     case "MEDIUM":
-      return "border-black/5 bg-white";
+      return "warning" as const;
+    case "LOW":
+      return "neutral" as const;
+  }
+}
+
+function severitySurface(severity: InboxNotification["severity"]): string {
+  switch (severity) {
+    case "HIGH":
+      return "border-[var(--ally-violet-border)] bg-[var(--ally-violet-soft)]/80";
+    case "MEDIUM":
+      return "border-[var(--border-soft)] bg-[var(--ally-surface)]";
     case "LOW":
       return "border-transparent bg-[var(--lavender-muted)]/40";
   }
@@ -120,56 +134,64 @@ export function NotificheInbox() {
   const unread = items.filter((n) => !n.isRead).length;
 
   return (
-    <main className="mx-auto w-full max-w-[720px] pb-8">
+    <main className="aff-page aff-page--narrow">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="aff-eyebrow">Inbox</p>
+          <h2 className="aff-page-title mt-1.5">Notifiche</h2>
+          <p className="aff-page-subtitle">Solo i cambiamenti che meritano attenzione.</p>
+        </div>
       <div className="flex flex-wrap items-center justify-end gap-3">
         {unread > 0 ? (
           <button
             type="button"
             disabled={busy}
             onClick={() => void onMarkAll()}
-            className="text-sm font-medium text-[var(--primary)] hover:opacity-80 disabled:opacity-50"
+            className="aff-btn-secondary min-h-8 text-xs"
           >
             Segna tutte come lette
           </button>
         ) : null}
       </div>
+      </div>
 
       {loading ? (
-        <p className="mt-6 text-sm text-[var(--ink-muted)]">Caricamento…</p>
+        <p className="mt-6 aff-muted">Caricamento…</p>
       ) : error ? (
-        <p className="mt-6 text-sm text-[#7a3d58]">{error}</p>
+        <p className="mt-6 text-sm aff-text-danger">{error}</p>
       ) : items.length === 0 ? (
-        <section className="aff-panel-white mt-4 px-5 py-8">
-          <p className="text-base font-medium text-[var(--ink)]">
-            Nessuna notifica
-          </p>
-          <p className="mt-1.5 text-sm text-[var(--ink-muted)]">
-            Quando una campagna richiede attenzione in modo significativo,
-            la trovi qui.
-          </p>
-        </section>
+        <AllyEmptyState
+          className="mt-4"
+          icon={Bell}
+          title="Nessuna notifica"
+          description="Quando una campagna richiede attenzione in modo significativo, la trovi qui."
+        />
       ) : (
         <ul className="mt-4 space-y-3">
           {items.map((n) => (
             <li
               key={n.id}
-              className={`rounded-[12px] border px-4 py-3.5 ${severityClass(n.severity)} ${
-                n.isRead ? "opacity-80" : "shadow-[var(--shadow-card)]"
+              className={`rounded-[var(--radius)] border px-4 py-3.5 ${severitySurface(n.severity)} ${
+                n.isRead
+                  ? "opacity-75"
+                  : "border-[var(--ally-violet-border)] shadow-[var(--shadow-card)]"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[12px] font-medium text-[var(--ink-muted)]">
-                    {etichettaSeverityUi(n.severity)}
-                    {!n.isRead ? " · Nuova" : ""}
-                  </p>
-                  <p className="mt-1 text-[15px] font-medium text-[var(--ink)]">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <AllyBadge variant={severityBadge(n.severity)}>
+                      {etichettaSeverityUi(n.severity)}
+                    </AllyBadge>
+                    {!n.isRead ? (
+                      <AllyBadge variant="violet">Nuova</AllyBadge>
+                    ) : null}
+                  </div>
+                  <p className="mt-2 text-[15px] font-semibold tracking-[-0.02em] text-[var(--ink)]">
                     {n.title}
                   </p>
-                  <p className="mt-1 text-sm leading-relaxed text-[var(--ink-muted)]">
-                    {n.message}
-                  </p>
-                  <p className="mt-2 text-xs text-[var(--ink-muted)]">
+                  <p className="mt-1 aff-muted">{n.message}</p>
+                  <p className="mt-2 aff-meta">
                     {[n.clientName, n.campaignName].filter(Boolean).join(" · ")}
                     {n.clientName || n.campaignName ? " · " : ""}
                     {formatRelativeCreatedAt(n.createdAt)}
@@ -179,7 +201,7 @@ export function NotificheInbox() {
                   type="button"
                   disabled={busy}
                   onClick={() => void onDismiss(n.id)}
-                  className="shrink-0 text-xs text-[var(--ink-muted)] hover:text-[var(--ink)] disabled:opacity-50"
+                  className="aff-btn-tertiary shrink-0 min-h-8 text-xs text-[var(--ink-muted)]"
                   aria-label="Nascondi notifica"
                 >
                   Nascondi
@@ -192,7 +214,7 @@ export function NotificheInbox() {
                     onClick={() => {
                       if (!n.isRead) void onMarkRead(n.id);
                     }}
-                    className="inline-flex rounded-[10px] bg-[var(--ink)] px-3.5 py-1.5 text-xs font-medium text-white hover:opacity-90"
+                    className="aff-btn-primary min-h-8 text-xs"
                   >
                     {n.ctaLabel}
                   </Link>
@@ -202,7 +224,7 @@ export function NotificheInbox() {
                     type="button"
                     disabled={busy}
                     onClick={() => void onMarkRead(n.id)}
-                    className="text-xs font-medium text-[var(--primary)] hover:opacity-80 disabled:opacity-50"
+                    className="aff-btn-secondary min-h-8 text-xs"
                   >
                     Segna come letta
                   </button>

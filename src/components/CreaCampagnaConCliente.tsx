@@ -21,8 +21,8 @@ export function CreaCampagnaConCliente() {
   return (
     <>
       {nomeCliente ? (
-        <p className="mb-3 rounded-xl border border-[var(--accent)]/25 bg-[var(--accent-soft)] px-4 py-3 text-sm text-[var(--ink)]">
-          Campagna per <span className="font-medium">{nomeCliente}</span>.
+        <p className="mb-4 rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--ally-violet-soft)] px-4 py-3 text-[13.5px] leading-snug text-[var(--ink)]">
+          Campagna per <span className="font-semibold">{nomeCliente}</span>.
           Scegli l&apos;obiettivo: al Passo 1 i dati del cliente saranno già
           compilati.
         </p>

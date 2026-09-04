@@ -451,7 +451,7 @@ export function PannelloAccountMetaCliente({
 
   if (!clientId) {
     return (
-      <section className="mt-8 rounded-[var(--radius)] border border-[var(--ink)]/10 bg-white p-5 shadow-[var(--shadow-soft)]">
+      <section className="aff-panel-white mt-8 p-5">
         <h2 className="text-base font-medium text-[var(--ink)]">Meta Ads</h2>
         <p className="mt-2 text-sm text-[var(--ink-muted)]">
           Questo cliente non è ancora salvato nel profilo Affianco. Crea una
@@ -466,11 +466,11 @@ export function PannelloAccountMetaCliente({
   const connectedNoAccount = !caricamento && connected && !mapped;
 
   return (
-    <section className="mt-8 rounded-[var(--radius)] border border-[var(--ink)]/10 bg-white p-5 shadow-[var(--shadow-soft)]">
+    <section className="aff-panel-white mt-8 p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h2 className="text-base font-medium text-[var(--ink)]">Meta Ads</h2>
         {connected ? (
-          <span className="rounded-full bg-[var(--primary-soft)] px-3 py-1 text-xs font-medium text-[var(--primary)]">
+          <span className="aff-badge aff-badge--violet">
             Meta collegato
           </span>
         ) : null}
@@ -522,7 +522,7 @@ export function PannelloAccountMetaCliente({
       ) : null}
 
       {errore ? (
-        <p className="mt-3 text-sm text-[#7a3d58]" role="status">
+        <p className="mt-3 text-sm aff-text-danger" role="status">
           {errore}
         </p>
       ) : null}
@@ -534,7 +534,7 @@ export function PannelloAccountMetaCliente({
               type="button"
               onClick={() => void collegaMeta()}
               disabled={busy}
-              className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+              className="aff-btn-primary"
             >
               Collega Meta
             </button>
@@ -544,7 +544,7 @@ export function PannelloAccountMetaCliente({
               type="button"
               onClick={() => void apriSelettore()}
               disabled={busy}
-              className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+              className="aff-btn-primary"
             >
               {mapped ? "Cambia account" : "Seleziona account"}
             </button>
@@ -554,7 +554,7 @@ export function PannelloAccountMetaCliente({
               type="button"
               onClick={() => void importaCampagne()}
               disabled={busy}
-              className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+              className="aff-btn-primary"
             >
               Importa campagne Meta
             </button>
@@ -564,7 +564,7 @@ export function PannelloAccountMetaCliente({
               type="button"
               onClick={() => void disconnettiMeta()}
               disabled={busy}
-              className="rounded-full border border-[var(--ink)]/15 bg-white px-4 py-2 text-sm font-medium text-[var(--ink)] hover:bg-[var(--surface-hover)] disabled:opacity-60"
+              className="aff-btn-secondary"
             >
               Disconnetti Meta
             </button>
@@ -573,7 +573,7 @@ export function PannelloAccountMetaCliente({
       ) : null}
 
       {aperto ? (
-        <div className="mt-5 rounded-2xl border border-[var(--ink)]/10 bg-[var(--surface)] p-4">
+        <div className="mt-5 rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--ally-surface)] p-4">
           <p className="text-sm font-medium text-[var(--ink)]">
             Seleziona un account
           </p>
@@ -590,10 +590,10 @@ export function PannelloAccountMetaCliente({
                   <button
                     type="button"
                     onClick={() => setSelezionato(account.id)}
-                    className={`w-full rounded-xl border px-3 py-2 text-left text-sm ${
+                    className={`w-full rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm ${
                       selezionato === account.id
-                        ? "border-[var(--primary)] bg-[var(--primary-soft)]"
-                        : "border-[var(--ink)]/10 bg-white"
+                        ? "border-[var(--ally-violet-border)] bg-[var(--ally-violet-soft)]"
+                        : "border-[var(--border-soft)] bg-white"
                     }`}
                   >
                     <span className="block font-medium text-[var(--ink)]">
@@ -615,14 +615,14 @@ export function PannelloAccountMetaCliente({
               type="button"
               onClick={() => void collegaAccount()}
               disabled={!selezionato || busy}
-              className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              className="aff-btn-primary"
             >
               Collega questo account
             </button>
             <button
               type="button"
               onClick={() => setAperto(false)}
-              className="rounded-full px-4 py-2 text-sm text-[var(--ink-muted)]"
+              className="aff-btn-tertiary"
             >
               Annulla
             </button>
@@ -654,13 +654,13 @@ export function PannelloAccountMetaCliente({
               return (
                 <li
                   key={campagna.metaCampaignId}
-                  className="rounded-xl border border-[var(--ink)]/10 bg-[var(--surface)] px-3 py-2"
+                  className="rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--ally-surface)] px-3 py-2"
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium text-[var(--ink)]">
                       {campagna.name}
                     </span>
-                    <span className="rounded-full bg-[var(--primary-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--primary)]">
+                    <span className="aff-badge aff-badge--violet">
                       Meta
                     </span>
                   </div>
@@ -685,7 +685,7 @@ export function PannelloAccountMetaCliente({
                         void sincronizzaInsights(campagna.metaCampaignId)
                       }
                       disabled={busy || syncingCampaign != null}
-                      className="rounded-full border border-[var(--ink)]/15 bg-white px-3 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--surface-hover)] disabled:opacity-60"
+                      className="aff-btn-secondary min-h-8 text-xs"
                     >
                       {syncingCampaign === campagna.metaCampaignId
                         ? "Sincronizzazione…"

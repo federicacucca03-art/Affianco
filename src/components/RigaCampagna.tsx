@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import type { Campagna } from "@/types/campagne";
 import {
   badgeReviewDaStatus,
@@ -8,6 +7,7 @@ import {
   formatDataBreve,
 } from "@/types/campagne";
 import { BadgeReviewClienteLabel } from "@/components/campagne/BadgeReviewCliente";
+import { AllyListRow } from "@/components/shell/AllyListRow";
 import { etichettaObiettivo } from "@/lib/pre-lancio-check";
 
 type Props = {
@@ -22,29 +22,23 @@ export function RigaCampagna({ campagna }: Props) {
   const meta = [data, obiettivo, status].filter(Boolean).join(" · ");
 
   return (
-    <Link
+    <AllyListRow
       href={`/campagne/${campagna.id}`}
-      className="flex w-full items-center gap-3 rounded-[12px] border border-[var(--border)] bg-white px-4 py-3 text-left transition-colors hover:bg-[var(--surface-hover)] sm:gap-4"
-    >
-      <span
-        aria-hidden
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-sm font-medium text-[var(--accent)]"
-      >
-        {campagna.iniziali}
-      </span>
-
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-[var(--ink)]">
-          {campagna.nomeCampagna?.trim() || campagna.nomeCliente}
-        </p>
-        <p className="mt-0.5 truncate text-sm text-[var(--ink-muted)]">
-          {campagna.nomeCampagna?.trim()
-            ? `${campagna.nomeCliente} · ${meta}`
-            : meta || campagna.stato}
-        </p>
-      </div>
-
-      <BadgeReviewClienteLabel badge={badge} />
-    </Link>
+      leading={
+        <span
+          aria-hidden
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--ally-violet-soft)] text-sm font-semibold text-[var(--ally-violet)]"
+        >
+          {campagna.iniziali}
+        </span>
+      }
+      title={campagna.nomeCampagna?.trim() || campagna.nomeCliente}
+      meta={
+        campagna.nomeCampagna?.trim()
+          ? `${campagna.nomeCliente} · ${meta}`
+          : meta || campagna.stato
+      }
+      trailing={<BadgeReviewClienteLabel badge={badge} />}
+    />
   );
 }

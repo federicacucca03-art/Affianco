@@ -1,33 +1,34 @@
 import { Suspense } from "react";
 import { BannerHero } from "@/components/BannerHero";
 import { CreaCampagnaConCliente } from "@/components/CreaCampagnaConCliente";
-import { IntestazioneSezione } from "@/components/IntestazioneSezione";
 import { ListaCampagne } from "@/components/ListaCampagne";
 
 export default function CampagnePage() {
   return (
-    <main className="mx-auto w-full max-w-[1100px] pb-8">
-      <BannerHero />
-
-      <section id="obiettivi-campagna" className="mt-8 scroll-mt-6">
-        <IntestazioneSezione titolo="Crea una campagna" />
-        <p className="-mt-2 mb-4 text-sm text-[var(--ink-muted)]">
-          Scegli cosa deve ottenere il cliente.
-        </p>
-        <Suspense
-          fallback={
-            <p className="mt-3 text-sm text-[var(--ink-muted)]">
-              Caricamento obiettivi…
-            </p>
-          }
-        >
-          <CreaCampagnaConCliente />
-        </Suspense>
+    <main className="aff-page">
+      <section id="obiettivi-campagna" className="scroll-mt-6">
+        <BannerHero />
+        <div className="mt-6">
+          <Suspense
+            fallback={
+              <p className="aff-muted">Caricamento obiettivi…</p>
+            }
+          >
+            <CreaCampagnaConCliente />
+          </Suspense>
+        </div>
       </section>
 
-      <section className="mt-8">
-        <IntestazioneSezione titolo="Le tue campagne" />
-        <ListaCampagne />
+      <section className="mt-12">
+        <h2 className="aff-section-title text-[17px] tracking-[-0.02em]">
+          Le tue campagne
+        </h2>
+        <p className="aff-section-sub">
+          Apri una campagna per continuare pianificazione e attività.
+        </p>
+        <div className="mt-5">
+          <ListaCampagne />
+        </div>
       </section>
     </main>
   );

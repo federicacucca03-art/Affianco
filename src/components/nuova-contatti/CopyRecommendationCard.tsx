@@ -93,7 +93,7 @@ export function CopyRecommendationCard({
               type="button"
               data-affianco-swap-confirm-apply
               onClick={applica}
-              className="rounded-full bg-[var(--ink)] px-3 py-1.5 text-xs font-medium text-white"
+              className="aff-btn-primary min-h-8 px-3 text-xs"
             >
               Usa Variante {conferma}
             </button>
@@ -138,7 +138,7 @@ export function BadgeCopyVariant({
       ? "bg-[var(--accent-soft)] text-[var(--accent)]"
       : status === "ALTERNATIVE"
         ? "bg-[var(--surface-hover)] text-[var(--ink-muted)]"
-        : "bg-[#fff4f0] text-[#c2410c]";
+        : "aff-badge aff-badge--danger aff-badge--pill";
   return (
     <span
       data-affianco-copy-badge={status}

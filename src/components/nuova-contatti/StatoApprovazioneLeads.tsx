@@ -34,11 +34,11 @@ export function etichettaStatoApprovazioneLeads(
 export function stileBadgeStatoApprovazione(stato: StatoApprovazioneLeads): string {
   switch (stato) {
     case "approvata":
-      return "border-[#c6e7c8] bg-[#f0faf1] text-[#2D6A4A]";
+      return "aff-badge aff-badge--success aff-badge--pill";
     case "modifiche_richieste":
-      return "border-[#f5c9b8] bg-[#fff4f0] text-[#C45C5C]";
+      return "aff-badge aff-badge--danger aff-badge--pill";
     case "in_attesa":
-      return "border-[#f5e0a8] bg-[#fff9e8] text-[#9A6700]";
+      return "aff-badge aff-badge--warning aff-badge--pill";
     default:
       return "border-[var(--border)] bg-[var(--surface-hover)] text-[var(--ink-muted)]";
   }

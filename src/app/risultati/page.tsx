@@ -82,8 +82,7 @@ import {
 import { MetaCampagneSection } from "@/components/risultati/MetaCampagneSection";
 import { supabase as supabaseClient } from "@/lib/supabase";
 
-const inputClass =
-  "w-full rounded-xl border border-[var(--border)] bg-white px-3.5 py-2.5 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--ink-muted)] focus:border-[var(--accent)]";
+const inputClass = "aff-input";
 
 type InputMode = "kpi" | "import";
 type ImportTab = "screenshot" | "csv";
@@ -996,26 +995,29 @@ function RisultatiPage() {
   );
 
   return (
-    <main className="mx-auto w-full max-w-[1100px] pb-8">
-      <header className="max-w-3xl">
-        <h1 className="text-xl font-semibold tracking-tight text-[var(--ink)] sm:text-2xl">
-          {mostraOverview
-            ? "Monitoraggio campagne"
-            : "Controlla come sta andando la campagna"}
-        </h1>
-        <p className="mt-1.5 text-sm leading-relaxed text-[var(--ink-muted)]">
-          {mostraOverview
-            ? "Tutte le campagne con l’ultimo controllo. Stato economico, diagnosi e next action."
-            : "Confronta i risultati reali con la soglia economica definita prima del lancio e capisci cosa fare dopo."}
-        </p>
-        {!mostraOverview ? (
-          <Link
-            href="/risultati"
-            className="mt-3 inline-block text-sm font-medium text-[var(--primary)]"
-          >
-            ← Tutte le campagne
-          </Link>
-        ) : null}
+    <main className="aff-page aff-page--wide">
+      <header>
+        {mostraOverview ? (
+          <>
+            <h2 className="aff-page-title">Risultati</h2>
+            <p className="aff-page-subtitle">
+              Controlla performance, soglie e campagne da monitorare.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="aff-page-title">
+              Controlla come sta andando la campagna
+            </h2>
+            <p className="aff-page-subtitle">
+              Confronta i risultati reali con la soglia economica definita prima
+              del lancio e capisci cosa fare dopo.
+            </p>
+            <Link href="/risultati" className="aff-btn-tertiary mt-3 min-h-8 px-0">
+              ← Tutte le campagne
+            </Link>
+          </>
+        )}
       </header>
 
       {mostraOverview ? (
@@ -1033,7 +1035,7 @@ function RisultatiPage() {
       {/* TOP: campagna */}
       {!mostraOverview ? (
       <>
-      <section className="mt-8 rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">
+      <section className="aff-panel-white mt-8 p-5">
         <h2 className="text-sm font-medium text-[var(--ink)]">
           Campagna da analizzare
         </h2>
@@ -1107,7 +1109,7 @@ function RisultatiPage() {
         )}
 
         {fallbackLocale ? (
-          <p className="mt-3 rounded-xl border border-[#F5D78E] bg-[#FFF6E5] px-4 py-3 text-xs text-[#9A6700]">
+          <p className="aff-callout aff-callout--warning mt-3 text-xs">
             Connessione al database non disponibile: mostrando solo campagne
             salvate in questo browser. Accedi con lo stesso account e riprova.
           </p>
@@ -1248,7 +1250,7 @@ function RisultatiPage() {
         {!manuale &&
         campagnaAttiva &&
         economic.threshold == null ? (
-          <p className="mt-4 rounded-xl border border-[#F5D78E] bg-[#FFF6E5] px-4 py-3 text-sm text-[#9A6700]">
+          <p className="aff-callout aff-callout--warning mt-4 text-sm">
             Dati insufficienti per lo stato economico. Inserisci la soglia solo se
             la conosci.
             <label className="mt-3 block">
@@ -1292,30 +1294,30 @@ function RisultatiPage() {
               ) : null}
             </div>
             {health.deltaLabel ? (
-              <span className="rounded-full bg-[var(--lavender-muted)] px-3 py-1 text-xs font-medium text-[var(--ink)]">
+              <span className="aff-badge aff-badge--neutral aff-badge--pill">
                 {health.deltaLabel}
               </span>
             ) : null}
           </div>
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-xl bg-white px-4 py-3 shadow-[var(--shadow-card)]">
+            <div className="aff-metric">
               <p className="text-xs text-[var(--ink-muted)]">
                 {health.mode === "efficiency"
                   ? "CPM attuale"
                   : `${metricLabel} attuale`}
               </p>
-              <p className="mt-1 text-2xl font-medium text-[var(--ink)]">
+              <p className="aff-metric__value">
                 {formatEuro(economic.actual)}
               </p>
             </div>
-            <div className="rounded-xl bg-white px-4 py-3 shadow-[var(--shadow-card)]">
+            <div className="aff-metric">
               <p className="text-xs text-[var(--ink-muted)]">
                 {health.mode === "efficiency"
                   ? "CPM di riferimento (piano)"
                   : `${metricLabel} massimo sostenibile`}
               </p>
-              <p className="mt-1 text-2xl font-medium text-[var(--ink)]">
+              <p className="aff-metric__value">
                 {formatEuro(economic.threshold)}
               </p>
             </div>
@@ -1324,11 +1326,11 @@ function RisultatiPage() {
           {economic.objective === "ECOMMERCE" &&
           economic.roasAttuale != null &&
           economic.roasBreakEvenHint != null ? (
-            <div className="mt-4 rounded-xl bg-white px-4 py-3 text-sm shadow-[var(--shadow-card)]">
-              <p className="text-xs text-[var(--ink-muted)]">
+            <div className="aff-metric mt-4">
+              <p className="aff-metric__label">
                 ROAS attuale vs break-even (da campagna)
               </p>
-              <p className="mt-1 font-medium text-[var(--ink)]">
+              <p className="aff-metric__value text-[15px]">
                 {economic.roasAttuale}x attuale · {economic.roasBreakEvenHint}x
                 break-even stimato
               </p>
@@ -1348,15 +1350,15 @@ function RisultatiPage() {
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12">
           {/* LEFT: KPI + screenshot */}
           <div className="space-y-5 lg:col-span-6">
-            <section className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">
+            <section className="aff-panel-white p-5">
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => setInputMode("kpi")}
-                  className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                  className={`aff-tool-chip ${
                     inputMode === "kpi"
-                      ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                      : "bg-[var(--surface-hover)] text-[var(--ink-muted)]"
+                      ? "border-[var(--ally-violet-border)] bg-[var(--ally-violet-soft)] text-[var(--ally-violet-active-text)]"
+                      : ""
                   }`}
                 >
                   Inserisci KPI
@@ -1364,10 +1366,10 @@ function RisultatiPage() {
                 <button
                   type="button"
                   onClick={() => setInputMode("import")}
-                  className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                  className={`aff-tool-chip ${
                     inputMode === "import"
-                      ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                      : "bg-[var(--surface-hover)] text-[var(--ink-muted)]"
+                      ? "border-[var(--ally-violet-border)] bg-[var(--ally-violet-soft)] text-[var(--ally-violet-active-text)]"
+                      : ""
                   }`}
                 >
                   Importa da Ads Manager
@@ -1536,7 +1538,7 @@ function RisultatiPage() {
                       </p>
                     ) : null}
                     {conteggiFunnel.errors.length > 0 ? (
-                      <p className="mt-2 text-xs text-[#B42318]">
+                      <p className="mt-2 text-xs aff-text-danger">
                         {conteggiFunnel.errors[0]}
                       </p>
                     ) : null}
@@ -1556,10 +1558,10 @@ function RisultatiPage() {
                     <button
                       type="button"
                       onClick={() => setImportTab("screenshot")}
-                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                      className={`aff-tool-chip ${
                         importTab === "screenshot"
-                          ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                          : "bg-[var(--surface-hover)] text-[var(--ink-muted)]"
+                          ? "border-[var(--ally-violet-border)] bg-[var(--ally-violet-soft)] text-[var(--ally-violet-active-text)]"
+                          : ""
                       }`}
                     >
                       Screenshot
@@ -1567,10 +1569,10 @@ function RisultatiPage() {
                     <button
                       type="button"
                       onClick={() => setImportTab("csv")}
-                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                      className={`aff-tool-chip ${
                         importTab === "csv"
-                          ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                          : "bg-[var(--surface-hover)] text-[var(--ink-muted)]"
+                          ? "border-[var(--ally-violet-border)] bg-[var(--ally-violet-soft)] text-[var(--ally-violet-active-text)]"
+                          : ""
                       }`}
                     >
                       CSV
@@ -1635,7 +1637,7 @@ function RisultatiPage() {
                         </p>
                       ) : null}
                       {erroreCsv ? (
-                        <p className="mt-3 text-sm text-[#B42318]">{erroreCsv}</p>
+                        <p className="mt-3 text-sm aff-text-danger">{erroreCsv}</p>
                       ) : null}
                       {righeCsv.length > 0 ? (
                         <ul className="mt-4 space-y-2">
@@ -1733,7 +1735,7 @@ function RisultatiPage() {
                     type="button"
                     onClick={() => void analizzaScreenshot()}
                     disabled={caricamentoAi || !imageBase64}
-                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="aff-btn-primary mt-4 w-full"
                   >
                     {caricamentoAi ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -1751,7 +1753,7 @@ function RisultatiPage() {
                     </p>
                   ) : null}
                   {erroreAi ? (
-                    <p className="mt-3 text-sm text-[#B42318]">{erroreAi}</p>
+                    <p className="mt-3 text-sm aff-text-danger">{erroreAi}</p>
                   ) : null}
                   {analisiAi ? (
                     <p className="mt-3 text-xs text-[var(--ink-muted)]">
@@ -1769,7 +1771,7 @@ function RisultatiPage() {
 
           {/* RIGHT: Diagnosi + azioni */}
           <div className="space-y-5 lg:col-span-6">
-            <section className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">
+            <section className="aff-panel-white p-5">
               <h3 className="text-sm font-medium text-[var(--ink)]">Diagnosi</h3>
               <p className="mt-1 text-xs text-[var(--ink-muted)]">
                 Ipotesi sui segnali, distinta dallo stato economico. Non è una
@@ -1785,7 +1787,7 @@ function RisultatiPage() {
               ) : null}
             </section>
 
-            <section className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">
+            <section className="aff-panel-white p-5">
               <h3 className="text-sm font-medium text-[var(--ink)]">
                 Cosa fare adesso
               </h3>
@@ -1801,7 +1803,7 @@ function RisultatiPage() {
                     <div className="min-w-0 flex-1">
                       <p>{azione.text}</p>
                       <span
-                        className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${priorityBadgeClasses(azione.priority)}`}
+                        className={`mt-1 ${priorityBadgeClasses(azione.priority)}`}
                       >
                         {priorityLabel(azione.priority)}
                       </span>
@@ -1811,7 +1813,7 @@ function RisultatiPage() {
               </ol>
             </section>
 
-            <section className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">
+            <section className="aff-panel-white p-5">
               <h3 className="text-sm font-medium text-[var(--ink)]">
                 Nota del media buyer
               </h3>
@@ -1831,7 +1833,7 @@ function RisultatiPage() {
                 disabled={
                   salvataggio || !campagnaAttiva?.id || giaSalvatoOggi
                 }
-                className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-[var(--ink)] px-4 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="aff-btn-primary mt-4 w-full"
               >
                 {salvataggio ? "Salvataggio…" : "Salva controllo"}
               </button>
@@ -1847,16 +1849,16 @@ function RisultatiPage() {
                 </p>
               ) : null}
               {erroreSalvataggio ? (
-                <p className="mt-2 text-sm text-[#B42318]">{erroreSalvataggio}</p>
+                <p className="mt-2 text-sm aff-text-danger">{erroreSalvataggio}</p>
               ) : null}
               {okSalvataggio ? (
-                <p className="mt-2 text-sm text-[#2D6A4A]">{okSalvataggio}</p>
+                <p className="mt-2 text-sm aff-text-success">{okSalvataggio}</p>
               ) : null}
             </section>
           </div>
         </div>
       ) : (
-        <div className="mt-4 rounded-[var(--radius)] border border-dashed border-[var(--border)] bg-white px-6 py-6 text-center shadow-[var(--shadow-soft)]">
+        <div className="aff-empty mt-4 text-center">
           <p className="text-sm text-[var(--ink-muted)]">
             Seleziona una campagna salvata (o usa l&apos;inserimento manuale)
             per vedere stato economico, KPI e diagnosi.
@@ -1865,7 +1867,7 @@ function RisultatiPage() {
       )}
 
       <section
-        className={`rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)] ${haSelezione ? "mt-10" : "mt-6"}`}
+        className={`aff-panel-white p-5 ${haSelezione ? "mt-10" : "mt-6"}`}
       >
         <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2">
           <h2 className="text-lg font-medium text-[var(--ink)]">
@@ -1894,7 +1896,7 @@ function RisultatiPage() {
         <p className="mt-1 max-w-2xl text-sm text-[var(--ink-muted)]">
           Valori indicativi, non soglie decisionali.
         </p>
-        <div className="mt-4 overflow-x-auto rounded-[var(--radius)] bg-white shadow-[var(--shadow-soft)]">
+        <div className="mt-4 overflow-x-auto rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--ally-surface)] shadow-[var(--shadow-soft)]">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] text-xs uppercase tracking-wide text-[var(--ink-muted)]">
@@ -1942,7 +1944,7 @@ export default function RisultatiPageRoute() {
   return (
     <Suspense
       fallback={
-        <main className="mx-auto w-full max-w-[1100px] pb-8">
+        <main className="aff-page aff-page--wide">
           <p className="text-sm text-[var(--ink-muted)]">Caricamento Control Room…</p>
         </main>
       }

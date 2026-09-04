@@ -2304,24 +2304,24 @@ export function azioniConsigliate(
 export function healthBadgeClasses(status: HealthStatus): string {
   switch (status) {
     case "GREEN":
-      return "border-[#B7E4C7] bg-[#E8F5EE] text-[#2D6A4A]";
+      return "aff-badge aff-badge--success aff-badge--pill";
     case "YELLOW":
-      return "border-[#F5D78E] bg-[#FFF6E5] text-[#9A6700]";
+      return "aff-badge aff-badge--warning aff-badge--pill";
     case "RED":
-      return "border-[#F5C2C2] bg-[#FDEDED] text-[#B42318]";
+      return "aff-badge aff-badge--danger aff-badge--pill";
     default:
-      return "border-[#D8DCE3] bg-[#EEF0F3] text-[#5A6578]";
+      return "aff-badge aff-badge--neutral aff-badge--pill";
   }
 }
 
 export function priorityBadgeClasses(priority: ActionPriority): string {
   switch (priority) {
     case "alta":
-      return "bg-[#FDEDED] text-[#B42318]";
+      return "aff-badge aff-badge--danger";
     case "media":
-      return "bg-[#FFF6E5] text-[#9A6700]";
+      return "aff-badge aff-badge--warning";
     default:
-      return "bg-[#EEF0F3] text-[#5A6578]";
+      return "aff-badge aff-badge--neutral";
   }
 }
 

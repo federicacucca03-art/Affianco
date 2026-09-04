@@ -1,10 +1,11 @@
 import type { Giudizio } from "@/types/campagne";
+import { AllyBadge, type AllyBadgeVariant } from "@/components/shell/AllyBadge";
 
-const stili: Record<Giudizio, string> = {
-  "Va bene": "bg-[#E8F5EE] text-[#3D8B57]",
-  "Ancora presto": "bg-[#FFF6E5] text-[#B8860B]",
-  "Da monitorare": "bg-[#FFF0E0] text-[#C26A0A]",
-  "Da controllare": "bg-[#FDECEC] text-[#C45C5C]",
+const VARIANT: Record<Giudizio, AllyBadgeVariant> = {
+  "Va bene": "success",
+  "Ancora presto": "warning",
+  "Da monitorare": "warning",
+  "Da controllare": "danger",
 };
 
 type Props = {
@@ -14,12 +15,12 @@ type Props = {
 
 export function EtichettaGiudizio({ giudizio, grande = false }: Props) {
   return (
-    <span
-      className={`inline-flex shrink-0 items-center rounded-full font-medium ${
-        grande ? "px-4 py-2 text-base" : "px-3 py-1 text-xs"
-      } ${stili[giudizio]}`}
+    <AllyBadge
+      variant={VARIANT[giudizio]}
+      pill
+      className={grande ? "min-h-8 px-4 text-sm" : undefined}
     >
       {giudizio}
-    </span>
+    </AllyBadge>
   );
 }

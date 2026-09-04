@@ -367,10 +367,10 @@ function segClass(attivo: boolean, extra = "") {
 }
 
 const GANCI_PILL = [
-  "bg-[var(--pink-soft)] text-[#7a3d58]",
-  "bg-[var(--green-soft)] text-[#2d6a4a]",
-  "bg-[var(--yellow-soft)] text-[#6b5420]",
-  "bg-[var(--lavender-muted)] text-[#5b4fa8]",
+  "aff-badge aff-badge--danger aff-badge--pill",
+  "aff-badge aff-badge--success aff-badge--pill",
+  "aff-badge aff-badge--warning aff-badge--pill",
+  "aff-badge aff-badge--violet aff-badge--pill",
 ];
 
 export function FormConfigurazione({
@@ -1080,7 +1080,7 @@ export function FormConfigurazione({
           <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[var(--ink-muted)]">
             {step1.stepSubtitle}
           </p>
-          <p className="mt-4 inline-flex rounded-full bg-[var(--pink-soft)] px-3 py-1 text-[13px] font-medium text-[#7a3d58]">
+          <p className="mt-4 inline-flex rounded-full bg-[var(--pink-soft)] px-3 py-1 text-[13px] font-medium aff-text-danger">
             Obiettivo: {etichettaObiettivo(objectiveEffettivo)}
           </p>
         </header>
@@ -1118,7 +1118,7 @@ export function FormConfigurazione({
             />
           </Campo>
           {erroriPasso1?.nomeCliente ? (
-            <p className="-mt-2 text-xs text-[#C45C5C]">
+            <p className="-mt-2 text-xs aff-text-danger">
               Campo obbligatorio: inserisci il nome dello store / attività.
             </p>
           ) : null}
@@ -1254,13 +1254,13 @@ export function FormConfigurazione({
             </div>
           ) : null}
           {settoreIntel?.policyAlert ? (
-            <div className="flex gap-3 rounded-[16px] bg-[var(--yellow-soft)]/80 px-4 py-3">
+            <div className="flex gap-3 aff-callout aff-callout--warning">
               <ShieldAlert
-                className="mt-0.5 h-4 w-4 shrink-0 text-[#6b5420]"
+                className="mt-0.5 h-4 w-4 shrink-0 aff-text-warning"
                 strokeWidth={1.75}
               />
               <div>
-                <p className="text-[13px] font-medium text-[#6b5420]">
+                <p className="text-[13px] font-medium aff-text-warning">
                   Policy Meta
                 </p>
                 <p className="mt-1 text-[13px] leading-relaxed text-[var(--ink)]">
@@ -1298,7 +1298,7 @@ export function FormConfigurazione({
               />
               <InlineGuidance item={guidanceBrief} />
               {erroriPasso1?.elevatorPitch ? (
-                <p className="mt-2 text-xs text-[#C45C5C]">
+                <p className="mt-2 text-xs aff-text-danger">
                   Campo obbligatorio:{" "}
                   {isPercorsoInstore || isPercorsoAwareness
                     ? "compila il brief attività."
@@ -1308,17 +1308,17 @@ export function FormConfigurazione({
                 </p>
               ) : elevatorPitch.trim() ? (
                 validazioneBrief.isValid ? (
-                  <div className="mt-2 flex gap-3 rounded-[16px] bg-[var(--green-soft)]/80 px-4 py-3">
+                  <div className="mt-2 flex gap-3 aff-callout aff-callout--info">
                     <CircleCheck
-                      className="mt-0.5 h-4 w-4 shrink-0 text-[#2d6a4a]"
+                      className="mt-0.5 h-4 w-4 shrink-0 aff-text-success"
                       strokeWidth={1.75}
                     />
-                    <p className="text-[13px] font-medium text-[#2d6a4a]">
+                    <p className="text-[13px] font-medium aff-text-success">
                       Brief specifico e utilizzabile
                     </p>
                   </div>
                 ) : (
-                  <p className="mt-2 text-[13px] leading-relaxed text-[#C26A0A]">
+                  <p className="mt-2 text-[13px] leading-relaxed aff-text-warning">
                     {validazioneBrief.reason}
                   </p>
                 )
@@ -1448,7 +1448,7 @@ export function FormConfigurazione({
             </div>
           ) : null}
           {erroriPasso1?.frontEndOffer ? (
-            <p className="-mt-2 text-xs text-[#C45C5C]">
+            <p className="-mt-2 text-xs aff-text-danger">
               Campo obbligatorio: inserisci l&apos;offerta / gancio
               d&apos;ingresso.
             </p>
@@ -1971,22 +1971,22 @@ export function FormConfigurazione({
               />
               <InlineGuidance item={guidanceBrief} />
               {erroriPasso1?.elevatorPitch ? (
-                <p className="mt-2 text-xs text-[#C45C5C]">
+                <p className="mt-2 text-xs aff-text-danger">
                   Campo obbligatorio: compila il brief prodotto / collezione.
                 </p>
               ) : elevatorPitch.trim() ? (
                 validazioneBrief.isValid ? (
-                  <div className="mt-2 flex gap-3 rounded-[16px] bg-[var(--green-soft)]/80 px-4 py-3">
+                  <div className="mt-2 flex gap-3 aff-callout aff-callout--info">
                     <CircleCheck
-                      className="mt-0.5 h-4 w-4 shrink-0 text-[#2d6a4a]"
+                      className="mt-0.5 h-4 w-4 shrink-0 aff-text-success"
                       strokeWidth={1.75}
                     />
-                    <p className="text-[13px] font-medium text-[#2d6a4a]">
+                    <p className="text-[13px] font-medium aff-text-success">
                       Brief specifico e utilizzabile
                     </p>
                   </div>
                 ) : (
-                  <p className="mt-2 text-[13px] leading-relaxed text-[#C26A0A]">
+                  <p className="mt-2 text-[13px] leading-relaxed aff-text-warning">
                     {validazioneBrief.reason}
                   </p>
                 )
@@ -2391,7 +2391,7 @@ export function FormConfigurazione({
                     roasRiferimento={roasTarget}
                   />
                   {riferimentoMercato ? (
-                    <p className="mt-2 rounded-lg border border-[#c6d8f0] bg-[#f3f7fc] px-3 py-2 text-xs leading-relaxed text-[var(--ink)]">
+                    <p className="mt-2 aff-callout aff-callout--info px-3 py-2 text-xs text-xs leading-relaxed text-[var(--ink)]">
                       Asta Meta · {riferimentoMercato.etichetta}: CPA tipico{" "}
                       <span className="font-medium">
                         {riferimentoMercato.min}–{riferimentoMercato.max}€
@@ -2399,7 +2399,7 @@ export function FormConfigurazione({
                       . Confronta il tuo CPA Max con questo range.
                     </p>
                   ) : null}
-                  <p className="mt-4 rounded-lg border border-[#c6d8f0] bg-white/80 px-3 py-2.5 text-sm leading-relaxed text-[var(--ink)]">
+                  <p className="mt-4 aff-callout aff-callout--info text-sm leading-relaxed text-[var(--ink)]">
                     💡 Regola E-commerce: CPA Max ={" "}
                     <span className="font-medium">{valoreVisita}€</span> ×{" "}
                     <span className="font-medium">{margineProdotto}%</span>
@@ -2714,7 +2714,7 @@ export function FormConfigurazione({
               ) : null}
 
               {conversionRateSource === "UNKNOWN" ? (
-                <div className="rounded-xl border border-[#f5e0c8] bg-[#fffaf3] p-4">
+                <div className="aff-callout aff-callout--warning p-4">
                   <p className="text-sm font-medium text-[var(--ink)]">
                     Soglia economica non ancora disponibile
                   </p>
@@ -3548,7 +3548,7 @@ export function FormConfigurazione({
             <p className="text-sm font-medium text-[var(--ink)]">
               {boxes[0]?.etichetta ?? "Variante A"}
             </p>
-            <span className="rounded-full bg-[#fff6e5] px-2.5 py-0.5 text-xs font-medium text-[#9a6700]">
+            <span className="aff-badge aff-badge--warning aff-badge--pill">
               {isPercorsoLeads ||
               isPercorsoBookings ||
               isPercorsoEcommerce ||
@@ -3651,7 +3651,7 @@ export function FormConfigurazione({
         </div>
 
         {isBookings ? (
-          <div className="mt-3 rounded-xl border border-[#c6d8f0] bg-[#f3f7fc] px-4 py-3">
+          <div className="mt-3 aff-callout aff-callout--info">
             <p className="text-sm leading-relaxed text-[var(--ink)]">
               💡 Consiglio Anti No-Show: Per ridurre i clienti che non si
               presentano, invia un promemoria automatico via WhatsApp 24 ore
@@ -3983,7 +3983,7 @@ export function FormConfigurazione({
               isPercorsoRetargeting ||
               isPercorsoAwareness
                 ? "border-[var(--border)] bg-[var(--surface-hover)]"
-                : "border-[#f5c9b8] bg-[#fff4f0]"
+                : "aff-callout aff-callout--danger border"
             }`}
           >
             <p className="text-sm font-medium text-[var(--ink)]">

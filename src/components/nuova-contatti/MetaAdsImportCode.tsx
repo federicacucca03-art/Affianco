@@ -243,7 +243,7 @@ export function MetaAdsImportCode({
       <>
         <section className="min-w-0 rounded-[var(--radius)] border border-[var(--ink)]/10 bg-white p-5 shadow-[var(--shadow-soft)]">
           {mostraWarningApprovazione ? (
-            <div className="mb-4 rounded-xl border border-[#f5e0a8] bg-[#fff9e8] px-4 py-3.5">
+            <div className="mb-4 aff-callout aff-callout--warning">
               <p className="text-sm font-medium text-[var(--ink)]">
                 {revisioneRichiesta
                   ? "Il cliente ha richiesto delle modifiche."
@@ -258,7 +258,7 @@ export function MetaAdsImportCode({
           ) : null}
 
           {approvata ? (
-            <p className="mb-4 text-sm font-medium text-[#2D6A4A]">
+            <p className="mb-4 text-sm font-medium aff-text-success">
               Campagna approvata dal cliente.
             </p>
           ) : null}
@@ -273,7 +273,7 @@ export function MetaAdsImportCode({
             type="button"
             onClick={scaricaFileCsv}
             disabled={!exportAbilitato}
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-[var(--ink)] px-5 py-3.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            className="aff-btn-primary w-full disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Download className="h-4 w-4" strokeWidth={1.75} />
             {LABEL_CTA_EXPORT_META}
@@ -341,7 +341,7 @@ export function MetaAdsImportCode({
             type="button"
             onClick={scaricaFileCsv}
             disabled={!exportAbilitato}
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-[var(--ink)] px-5 py-3.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            className="aff-btn-primary w-full disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Download className="h-4 w-4" strokeWidth={1.75} />
             {LABEL_CTA_EXPORT_META}

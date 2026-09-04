@@ -2371,11 +2371,11 @@ export function PercorsoContatti({
     wizardStep === 6;
 
   return (
-    <div className="py-2">
-      <div className={`mx-auto ${wizardStep === 1 ? "max-w-[1120px]" : "max-w-7xl"}`}>
+    <div className="aff-page py-2">
+      <div className={`mx-auto w-full ${wizardStep === 1 ? "max-w-[1120px]" : "max-w-7xl"}`}>
         <Link
           href="/campagne"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--ink-muted)] transition-colors hover:text-[var(--ink)]"
+          className="aff-btn-tertiary min-h-8 gap-1.5 px-0"
         >
           <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
           Torna alle campagne
@@ -2383,33 +2383,31 @@ export function PercorsoContatti({
 
         <div className="mt-5 mb-8 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-[13px] font-medium text-[var(--ink-muted)]">
-              Affianco / Campagna
-            </p>
+            <p className="aff-eyebrow">Affianco / Campagna</p>
             {config.nomeCliente?.trim() ? (
-              <p className="mt-1 text-lg font-medium text-[var(--ink)]">
+              <p className="mt-1 text-[17px] font-semibold tracking-[-0.02em] text-[var(--ink)]">
                 {config.nomeCliente.trim()}
               </p>
             ) : null}
-            <h1 className="mt-2 text-[28px] font-medium tracking-tight text-[var(--ink)] sm:text-[32px]">
+            <h1 className="aff-page-title mt-2 text-[28px] sm:text-[32px]">
               {titoloPagina}
             </h1>
-            <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-[var(--ink-muted)]">
+            <p className="aff-page-subtitle max-w-2xl text-[15px]">
               {sottotitolo}
             </p>
           </div>
           {isEditMode ? (
-            <div className="inline-flex max-w-full flex-col rounded-full bg-[var(--yellow-soft)] px-4 py-2 sm:px-5">
-              <p className="text-[13px] font-medium text-[#6b5420]">
+            <div className="aff-callout aff-callout--warning max-w-sm">
+              <p className="text-[13px] font-medium">
                 Stai modificando una campagna esistente
               </p>
               {hydrateEditInCorso ? (
-                <p className="mt-0.5 text-[12px] text-[#6b5420]/80">
+                <p className="mt-0.5 text-[12px] opacity-80">
                   Caricamento dati dal database…
                 </p>
               ) : null}
               {erroreHydrateEdit ? (
-                <p className="mt-0.5 text-[12px] text-[#a85a72]">{erroreHydrateEdit}</p>
+                <p className="mt-0.5 text-[12px] aff-text-danger">{erroreHydrateEdit}</p>
               ) : null}
             </div>
           ) : null}
@@ -2527,7 +2525,7 @@ export function PercorsoContatti({
                     }
                   />
                   {statoApprovazioneLeads === "modifiche_richieste" ? (
-                    <section className="rounded-[var(--radius)] border border-[#f5c9b8] bg-[#fff4f0] p-5 shadow-[var(--shadow-soft)]">
+                    <section className="aff-callout aff-callout--danger p-5">
                       <h2 className="text-sm font-medium text-[var(--ink)]">
                         Feedback del cliente
                       </h2>
@@ -2545,14 +2543,14 @@ export function PercorsoContatti({
                         type="button"
                         onClick={() => void rimandaInApprovazione()}
                         disabled={rimandaApprovazioneInCorso}
-                        className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                        className="aff-btn-primary mt-4 w-full disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                       >
                         {rimandaApprovazioneInCorso
                           ? "Invio in corso…"
                           : "Modifiche completate — Rimanda in approvazione"}
                       </button>
                       {erroreRimandaApprovazione ? (
-                        <p className="mt-2 text-sm text-[#C45C5C]">
+                        <p className="mt-2 text-sm aff-text-danger">
                           {erroreRimandaApprovazione}
                         </p>
                       ) : null}
@@ -2820,7 +2818,7 @@ export function PercorsoContatti({
               type="button"
               onClick={vaiIndietro}
               disabled={wizardStep === 1}
-              className="rounded-[16px] bg-white px-5 py-2.5 text-sm font-medium text-[var(--ink)] shadow-[var(--shadow-card)] transition-opacity hover:bg-[var(--lavender-muted)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="aff-btn-secondary disabled:cursor-not-allowed disabled:opacity-40"
             >
               Indietro
             </button>
@@ -2828,7 +2826,7 @@ export function PercorsoContatti({
               <button
                 type="button"
                 onClick={() => router.push(`/campagne/${campaignIdEdit}`)}
-                className="rounded-[16px] bg-white px-5 py-2.5 text-sm font-medium text-[var(--ink)] shadow-[var(--shadow-card)] transition-opacity hover:bg-[var(--lavender-muted)]"
+                className="aff-btn-secondary"
               >
                 Annulla
               </button>
@@ -2837,7 +2835,7 @@ export function PercorsoContatti({
 
           <div className="flex flex-col items-stretch gap-3 sm:items-end">
             {erroreSalvataggio ? (
-              <p className="max-w-md text-right text-sm text-[#C45C5C]">
+              <p className="max-w-md text-right text-sm aff-text-danger">
                 {erroreSalvataggio}
               </p>
             ) : null}
@@ -2857,7 +2855,7 @@ export function PercorsoContatti({
                     isPercorsoAwareness) &&
                   Boolean(diagnosi.haErroriBloccanti))
                 }
-                className="rounded-[16px] bg-[var(--ink)] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                className="aff-btn-primary disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {etichettaPulsanteAvanti}
               </button>
@@ -2866,7 +2864,7 @@ export function PercorsoContatti({
                 type="button"
                 onClick={() => void lanciaCampagna()}
                 disabled={salvataggioInCorso}
-                className="rounded-full bg-[var(--ink)] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                className="aff-btn-primary disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {salvataggioInCorso
                   ? "Salvataggio in corso…"
@@ -2886,7 +2884,7 @@ export function PercorsoContatti({
                   hydrateEditInCorso ||
                   Boolean(erroreHydrateEdit)
                 }
-                className="rounded-[16px] bg-[var(--ink)] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                className="aff-btn-primary disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {salvataggioInCorso ? "Salvataggio in corso…" : "Salva modifiche"}
               </button>

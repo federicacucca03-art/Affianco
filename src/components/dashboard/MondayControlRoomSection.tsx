@@ -30,17 +30,11 @@ import {
   resolveMetaDataFreshness,
 } from "@/lib/meta/freshness";
 import type { StatoChipKind } from "@/components/nuova-contatti/StatoChip";
+import { StatoChip } from "@/components/nuova-contatti/StatoChip";
+import { AllyNextAction } from "@/components/shell/AllyNextAction";
 
 const MAX_URGENT = 8;
 const MAX_STABLE = 3;
-
-const STILE: Record<StatoChipKind, string> = {
-  ok: "bg-[var(--green-soft)] text-[#2d6a4a]",
-  watch: "bg-[var(--yellow-soft)] text-[#6b5420]",
-  critico: "bg-[#f8d5e2] text-[#7a3d58]",
-  pending: "bg-[var(--lavender-muted)] text-[#5b4fa8]",
-  info: "bg-[var(--primary-soft)] text-[var(--primary)]",
-};
 
 function chipKind(state: AttentionState): StatoChipKind {
   switch (state) {
@@ -79,16 +73,6 @@ function urgencyTone(level: UrgencyLevel): string {
   }
 }
 
-function Badge({ kind, label }: { kind: StatoChipKind; label: string }) {
-  return (
-    <span
-      className={`inline-flex h-5 max-w-full shrink-0 items-center rounded-full px-2 text-[10px] font-medium leading-none ${STILE[kind]}`}
-    >
-      {label}
-    </span>
-  );
-}
-
 function rowDiagnosisEligible(item: ControlRoomAttentionItem): boolean {
   const eligibility = resolveDiagnosisEligibility({
     attentionState: item.attentionState,
@@ -123,20 +107,12 @@ function nextActionForRow(
 function NextActionBlock({ action }: { action: CampaignNextAction }) {
   if (!shouldShowNextAction(action.actionType)) return null;
   return (
-    <div className="inline-flex max-w-full flex-col rounded-[10px] border border-[var(--border)] bg-[var(--lavender-muted)]/50 px-2.5 py-1.5">
-      <p className="text-[11px] text-[var(--ink-muted)]">Prossimo passo</p>
-      <p className="text-[13px] font-medium leading-snug text-[var(--ink)]">
-        {action.title}
-      </p>
-      {action.ctaHref && action.ctaLabel ? (
-        <Link
-          href={action.ctaHref}
-          className="mt-0.5 text-[12px] font-medium text-[var(--primary)] hover:opacity-80"
-        >
-          {action.ctaLabel}
-        </Link>
-      ) : null}
-    </div>
+    <AllyNextAction
+      eyebrow="Prossimo passo"
+      title={action.title}
+      ctaHref={action.ctaHref}
+      ctaLabel={action.ctaLabel}
+    />
   );
 }
 
@@ -263,7 +239,7 @@ function AttentionRow({ item }: { item: ControlRoomAttentionItem }) {
           <p className="text-sm font-medium leading-snug text-[var(--ink)]">
             {item.campaignName}
           </p>
-          <Badge kind={kind} label={etichettaAttentionState(item.attentionState)} />
+          <StatoChip kind={kind} label={etichettaAttentionState(item.attentionState)} />
         </div>
         <p className="mt-0.5 text-[12px] leading-snug text-[var(--ink-muted)]">
           {item.clientName}

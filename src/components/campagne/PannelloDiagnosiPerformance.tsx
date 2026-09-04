@@ -121,7 +121,7 @@ export function PannelloDiagnosiPerformance({
 
   return (
     <div className="mt-6 space-y-6">
-      <section className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
+      <section className="aff-panel-white p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
@@ -136,7 +136,7 @@ export function PannelloDiagnosiPerformance({
           </div>
           <Link
             href={`/risultati?campaignId=${encodeURIComponent(campagna.id)}`}
-            className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            className="aff-btn-primary"
           >
             Nuovo controllo
           </Link>
@@ -147,21 +147,19 @@ export function PannelloDiagnosiPerformance({
             Caricamento ultimi controlli…
           </p>
         ) : errore ? (
-          <p className="mt-5 text-sm text-[#B42318]">{errore}</p>
+          <p className="mt-5 text-sm aff-text-danger">{errore}</p>
         ) : !ultimo || !healthStatus || !diagnosisLive ? (
-          <div className="mt-5 rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-4 py-5">
-            <p className="text-sm font-medium text-[var(--ink)]">
-              Mai controllata
-            </p>
-            <p className="mt-1 text-sm text-[var(--ink-muted)]">
+          <div className="aff-empty mt-5">
+            <p className="aff-empty__title">Mai controllata</p>
+            <p className="aff-empty__body">
               Nessun check salvato. Apri la Control Room per inserire i KPI
               reali e salvare il primo controllo.
             </p>
           </div>
         ) : (
           <>
-            <div className="mt-5 rounded-xl bg-white px-4 py-4 shadow-[var(--shadow-card)]">
-              <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+            <div className="mt-5 rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--ally-violet-soft)]/40 px-4 py-4">
+              <p className="aff-meta font-medium uppercase tracking-wide">
                 Ultimo controllo · {formatDataCheck(ultimo.createdAt)}
               </p>
               <BloccoDiagnosiTrend
@@ -172,40 +170,38 @@ export function PannelloDiagnosiPerformance({
             </div>
 
             <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-xl bg-[var(--surface-hover)] px-4 py-3">
-                <dt className="text-xs text-[var(--ink-muted)]">{metricLabel}</dt>
-                <dd className="mt-0.5 text-sm font-medium text-[var(--ink)]">
+              <div className="aff-metric">
+                <dt className="aff-metric__label">{metricLabel}</dt>
+                <dd className="aff-metric__value text-[15px]">
                   {formatEuro(ultimo.primaryCost)}
                 </dd>
               </div>
-              <div className="rounded-xl bg-[var(--surface-hover)] px-4 py-3">
-                <dt className="text-xs text-[var(--ink-muted)]">Soglia</dt>
-                <dd className="mt-0.5 text-sm font-medium text-[var(--ink)]">
+              <div className="aff-metric">
+                <dt className="aff-metric__label">Soglia</dt>
+                <dd className="aff-metric__value text-[15px]">
                   {formatEuro(ultimo.threshold)}
                 </dd>
               </div>
-              <div className="rounded-xl bg-[var(--surface-hover)] px-4 py-3">
-                <dt className="text-xs text-[var(--ink-muted)]">Giorni attivi</dt>
-                <dd className="mt-0.5 text-sm font-medium text-[var(--ink)]">
+              <div className="aff-metric">
+                <dt className="aff-metric__label">Giorni attivi</dt>
+                <dd className="aff-metric__value text-[15px]">
                   {ultimo.daysActive ?? "—"}
                 </dd>
               </div>
-              <div className="rounded-xl bg-[var(--surface-hover)] px-4 py-3">
-                <dt className="text-xs text-[var(--ink-muted)]">Risultati</dt>
-                <dd className="mt-0.5 text-sm font-medium text-[var(--ink)]">
+              <div className="aff-metric">
+                <dt className="aff-metric__label">Risultati</dt>
+                <dd className="aff-metric__value text-[15px]">
                   {ultimo.resultsCount ?? "—"}
                 </dd>
               </div>
             </dl>
 
             {nextAction ? (
-              <div className="mt-4 rounded-xl border border-[var(--border)] px-4 py-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-                  Next action
-                </p>
-                <p className="mt-1 text-sm font-medium text-[var(--ink)]">
-                  {nextAction}
-                </p>
+              <div className="mt-4">
+                <div className="aff-next-action">
+                  <p className="aff-next-action__eyebrow">Prossimo passo</p>
+                  <p className="aff-next-action__title">{nextAction}</p>
+                </div>
               </div>
             ) : null}
 
@@ -225,7 +221,7 @@ export function PannelloDiagnosiPerformance({
         )}
       </section>
 
-      <section className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
+      <section className="aff-panel-white p-5 sm:p-6">
         <h3 className="text-sm font-medium text-[var(--ink)]">
           Storico controlli
         </h3>

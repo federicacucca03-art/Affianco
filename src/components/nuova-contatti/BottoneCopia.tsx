@@ -31,7 +31,7 @@ export function BottoneCopia({ valore, etichetta = "Copia" }: Props) {
       }}
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-all ${
         copiato
-          ? "border-[#cce5d4] bg-[#f3faf5] text-[#3D8B57]"
+          ? "aff-btn-secondary border-[var(--ally-success)] text-[var(--ally-success)]"
           : "border-[var(--border)] bg-white text-[var(--ink-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
       }`}
       title={copiato ? "Copiato!" : `Copia: ${valore}`}

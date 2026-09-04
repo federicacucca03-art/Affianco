@@ -95,19 +95,19 @@ const STILE_INLINE: Record<
 > = {
   INFO: {
     wrap: "bg-[var(--lavender-muted)]",
-    label: "text-[#5b4fa8]",
+    label: "text-[var(--ally-violet-active-text)]",
   },
   SUGGESTION: {
     wrap: "bg-[var(--green-soft)]/75",
-    label: "text-[#2d6a4a]",
+    label: "aff-text-success",
   },
   WARNING: {
     wrap: "bg-[var(--yellow-soft)]/90",
-    label: "text-[#6b5420]",
+    label: "aff-text-warning",
   },
   BLOCKER: {
     wrap: "bg-[var(--pink-soft)]/85",
-    label: "text-[#7a3d58]",
+    label: "aff-text-danger",
   },
 };
 

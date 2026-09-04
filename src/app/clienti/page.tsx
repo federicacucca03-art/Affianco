@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Users } from "lucide-react";
 import { salvaBozzaOnboarding } from "@/data/clienti-store";
 import { nomeCampagnaContatti } from "@/data/defaults-contatti";
 import type { Cliente } from "@/types/clienti";
 import { getCampaigns, getClients } from "@/utils/clientStorage";
+import { AllyEmptyState } from "@/components/shell/AllyEmptyState";
+import { AllyListRow } from "@/components/shell/AllyListRow";
 
 export default function ClientiPage() {
   const router = useRouter();
@@ -49,55 +51,59 @@ export default function ClientiPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-[1100px] pb-8">
-      <p className="max-w-xl text-sm text-[var(--ink-muted)]">
-        Profili salvati per riutilizzare nome, nicchia, città, target e brief
-        al Passo 1.
-      </p>
-
+    <main className="aff-page">
       {clienti.length === 0 ? (
-        <p className="mt-6 max-w-md text-sm text-[var(--ink-muted)]">
-          Nessun cliente nei preferiti. Nel Passo 1 spunta «Salva cliente nei
-          preferiti» oppure carica un profilo dopo la prima campagna.
-        </p>
+        <AllyEmptyState
+          className="mt-1"
+          icon={Users}
+          title="Nessun cliente salvato"
+          description="Nel Passo 1 spunta «Salva cliente nei preferiti» oppure carica un profilo dopo la prima campagna."
+          action={
+            <Link href="/campagne" className="aff-btn-primary">
+              Vai a Campagne
+            </Link>
+          }
+        />
       ) : (
-        <ul className="mt-6 flex flex-col gap-2.5">
+        <ul className="mt-1 flex flex-col gap-2.5">
           {clienti.map((cliente) => {
             const nCampagne = conteggioCampagne[cliente.id] ?? 0;
+            const meta = [
+              [cliente.settore, cliente.citta, cliente.targetType]
+                .filter(Boolean)
+                .join(" · "),
+              nCampagne > 0
+                ? `${nCampagne} campagn${nCampagne === 1 ? "a" : "e"}`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" · ");
+
             return (
-              <li
-                key={cliente.id}
-                className="flex flex-col gap-3 rounded-[16px] border border-[var(--border)] bg-white px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-[var(--ink)]">
-                    {cliente.nome}
-                  </p>
-                  <p className="mt-0.5 truncate text-sm text-[var(--ink-muted)]">
-                    {[cliente.settore, cliente.citta, cliente.targetType]
-                      .filter(Boolean)
-                      .join(" · ")}
-                    {nCampagne > 0
-                      ? ` · ${nCampagne} campagn${nCampagne === 1 ? "a" : "e"}`
-                      : ""}
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
-                  <Link
-                    href={`/clienti/${encodeURIComponent(cliente.id)}`}
-                    className="inline-flex items-center justify-center rounded-[12px] border border-[var(--border)] px-3.5 py-2 text-sm font-medium text-[var(--ink)] hover:bg-[var(--surface-hover)]"
-                  >
-                    Dettaglio
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => nuovaCampagna(cliente)}
-                    className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[12px] bg-[var(--ink)] px-3.5 py-2 text-sm font-medium text-white hover:opacity-90"
-                  >
-                    <Plus className="h-4 w-4" strokeWidth={1.75} />
-                    Nuova Campagna per questo cliente
-                  </button>
-                </div>
+              <li key={cliente.id}>
+                <AllyListRow
+                  title={cliente.nome}
+                  meta={meta}
+                  className="flex-col items-stretch sm:flex-row sm:items-center"
+                  trailing={
+                    <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+                      <Link
+                        href={`/clienti/${encodeURIComponent(cliente.id)}`}
+                        className="aff-btn-secondary"
+                      >
+                        Dettaglio
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => nuovaCampagna(cliente)}
+                        className="aff-btn-primary"
+                      >
+                        <Plus className="h-4 w-4" strokeWidth={1.75} />
+                        Nuova campagna
+                      </button>
+                    </div>
+                  }
+                />
               </li>
             );
           })}
@@ -106,7 +112,7 @@ export default function ClientiPage() {
 
       <p className="mt-6 text-sm text-[var(--ink-muted)]">
         Oppure{" "}
-        <Link href="/campagne" className="text-[var(--primary)] hover:underline">
+        <Link href="/campagne" className="font-medium text-[var(--primary)] hover:opacity-80">
           scegli un obiettivo da Campagne
         </Link>
         .

@@ -19,8 +19,7 @@ type Props = {
   onChiudi: () => void;
 };
 
-const inputClass =
-  "w-full rounded-xl border border-[var(--border)] bg-white px-3.5 py-2.5 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--ink-muted)] focus:border-[var(--accent)]";
+const inputClass = "aff-input";
 
 export function ModaleConfiguraCampagna({ aperta, onChiudi }: Props) {
   const router = useRouter();
@@ -220,7 +219,7 @@ export function ModaleConfiguraCampagna({ aperta, onChiudi }: Props) {
                     type="button"
                     onClick={avantiClienteEsistente}
                     disabled={!nomeCampagna.trim()}
-                    className="w-full rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="aff-btn-primary w-full disabled:cursor-not-allowed"
                   >
                     Avanti
                   </button>
@@ -285,14 +284,14 @@ export function ModaleConfiguraCampagna({ aperta, onChiudi }: Props) {
                   type="button"
                   onClick={creaClienteEGenera}
                   disabled={!nuovoValido}
-                  className="flex-1 rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="aff-btn-primary flex-1 disabled:cursor-not-allowed"
                 >
                   Crea e genera campagna
                 </button>
                 <button
                   type="button"
                   onClick={tornaAllaSelezione}
-                  className="rounded-full border border-[var(--border)] bg-white px-5 py-3 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--surface-hover)] sm:min-w-[120px]"
+                  className="aff-btn-secondary sm:min-w-[120px]"
                 >
                   Indietro
                 </button>

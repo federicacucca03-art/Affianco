@@ -104,7 +104,7 @@ function TargetSetter({
   }
 
   return (
-    <div className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-4 text-sm">
+    <div className="mt-3 rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--ally-surface)] px-4 py-4 text-sm shadow-[var(--shadow-soft)]">
       <p className="font-medium text-[var(--ink)]">Imposta target</p>
       {isLead && !currentKpi && (
         <p className="mt-1 text-xs text-[var(--ink-muted)]">
@@ -121,7 +121,7 @@ function TargetSetter({
               setOk(false);
               setError(null);
             }}
-            className="w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            className="aff-input"
           >
             <option value="">— Scegli —</option>
             {KPI_OPTIONS.map((o) => (
@@ -147,7 +147,7 @@ function TargetSetter({
                 setError(null);
               }}
               placeholder="Es. 20"
-              className="w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+              className="aff-input"
             />
           </label>
         )}
@@ -161,7 +161,7 @@ function TargetSetter({
         type="button"
         onClick={() => void handleSave()}
         disabled={saving || !kpi}
-        className="mt-3 rounded-xl bg-[var(--ink)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="aff-btn-primary mt-3"
       >
         {saving ? "Salvataggio…" : "Salva target"}
       </button>
@@ -232,7 +232,7 @@ function LinkPicker({
   }
 
   return (
-    <div className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-4 text-sm">
+    <div className="mt-3 rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--ally-surface)] px-4 py-4 text-sm shadow-[var(--shadow-soft)]">
       <p className="font-medium text-[var(--ink)]">Collega campagna Affianco</p>
       <p className="mt-1 text-xs text-[var(--ink-muted)]">
         Solo campagne di questo cliente. Il collegamento è esplicito: nessun
@@ -256,7 +256,7 @@ function LinkPicker({
               setSelected(e.target.value);
               setError(null);
             }}
-            className="w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            className="aff-input"
           >
             <option value="">— Scegli —</option>
             {options.map((o) => (
@@ -272,14 +272,14 @@ function LinkPicker({
           type="button"
           onClick={() => void handleConfirm()}
           disabled={saving || loading || options.length === 0 || !selected}
-          className="rounded-xl bg-[var(--ink)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="aff-btn-primary"
         >
           {saving ? "Collegamento…" : "Conferma"}
         </button>
         <button
           type="button"
           onClick={onClose}
-          className="rounded-xl px-3 py-2 text-sm font-medium text-[var(--ink-muted)]"
+          className="aff-btn-tertiary"
         >
           Annulla
         </button>
@@ -309,7 +309,7 @@ function MetaCampaignCard({
   const healthBadge =
     row.healthStatus != null ? (
       <span
-        className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${healthBadgeClasses(row.healthStatus)}`}
+        className={healthBadgeClasses(row.healthStatus)}
       >
         {metaHealthStatusLabel(row.healthStatus)}
       </span>
@@ -317,7 +317,7 @@ function MetaCampaignCard({
 
   const targetState =
     row.linkState === "LINKED_BUT_KPI_INCOMPATIBLE" ? (
-      <span className="rounded-full border border-[#F5D78E] bg-[#FFF6E5] px-2.5 py-0.5 text-xs font-medium text-[#9A6700]">
+      <span className="aff-badge aff-badge--warning aff-badge--pill">
         KPI non compatibile
       </span>
     ) : row.primaryKpi && row.primaryKpi !== "NONE" ? (
@@ -327,7 +327,7 @@ function MetaCampaignCard({
         {row.targetSource === "LINKED_AFFIANCO" ? " · Affianco" : ""}
       </span>
     ) : (
-      <span className="rounded-full border border-[#F5D78E] bg-[#FFF6E5] px-2.5 py-0.5 text-xs font-medium text-[#9A6700]">
+      <span className="aff-badge aff-badge--warning aff-badge--pill">
         Target da impostare
       </span>
     );
@@ -344,32 +344,30 @@ function MetaCampaignCard({
             : null;
 
   return (
-    <div className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)]">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
+    <div className="rounded-[var(--radius)] border border-[rgba(0,0,0,0.06)] bg-[var(--ally-surface)] px-4 py-3.5 shadow-[var(--shadow-card)] sm:px-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-[var(--accent-muted)] bg-[var(--accent-soft)] px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--accent)]">
-              Meta
-            </span>
-            {isPaused && (
-              <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-0.5 text-[10px] font-medium text-[var(--ink-muted)]">
+            <span className="aff-badge aff-badge--violet">Meta</span>
+            {isPaused ? (
+              <span className="aff-badge aff-badge--neutral">
                 {etichettaMonitoringMode(row.mode)}
               </span>
-            )}
+            ) : null}
             {healthBadge}
             {targetState}
           </div>
-          <p className="mt-1.5 font-medium text-[var(--ink)] leading-snug">
+          <p className="mt-1.5 text-[17px] font-semibold tracking-[-0.02em] text-[var(--ink)] leading-snug">
             {row.name}
           </p>
-          <p className="mt-0.5 text-xs text-[var(--ink-muted)]">
+          <p className="mt-1 aff-meta">
             {row.clientName}
             {row.rawObjective ? ` · ${row.rawObjective}` : ""}
           </p>
         </div>
         <div className="shrink-0 text-right">
           {row.lastSyncedAt && (
-            <p className="text-[10px] text-[var(--ink-muted)]">
+            <p className="aff-meta">
               Sincronizzato{" "}
               {new Date(row.lastSyncedAt).toLocaleDateString("it-IT", {
                 day: "2-digit",
@@ -379,7 +377,7 @@ function MetaCampaignCard({
             </p>
           )}
           {row.insightsPeriodSince && row.insightsPeriodUntil && (
-            <p className="text-[10px] text-[var(--ink-muted)]">
+            <p className="aff-meta">
               {new Date(row.insightsPeriodSince).toLocaleDateString("it-IT", {
                 day: "2-digit",
                 month: "short",
@@ -398,51 +396,51 @@ function MetaCampaignCard({
       {(row.spend != null ||
         row.impressions != null ||
         row.linkClicks != null) && (
-        <dl className="mt-4 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3 lg:grid-cols-5">
+        <dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3 lg:grid-cols-5">
           {row.spend != null && (
-            <div className="rounded-xl bg-[var(--surface)] px-3 py-2">
-              <dt className="text-[10px] text-[var(--ink-muted)]">Spesa</dt>
-              <dd className="mt-0.5 font-medium text-[var(--ink)]">
+            <div className="aff-metric aff-metric--compact">
+              <dt className="aff-metric__label">Spesa</dt>
+              <dd className="aff-metric__value text-[15px]">
                 {formatEuro(row.spend)}
               </dd>
             </div>
           )}
           {row.impressions != null && (
-            <div className="rounded-xl bg-[var(--surface)] px-3 py-2">
-              <dt className="text-[10px] text-[var(--ink-muted)]">Impression</dt>
-              <dd className="mt-0.5 font-medium text-[var(--ink)]">
+            <div className="aff-metric aff-metric--compact">
+              <dt className="aff-metric__label">Impression</dt>
+              <dd className="aff-metric__value text-[15px]">
                 {row.impressions.toLocaleString("it-IT")}
               </dd>
             </div>
           )}
           {row.linkClicks != null && (
-            <div className="rounded-xl bg-[var(--surface)] px-3 py-2">
-              <dt className="text-[10px] text-[var(--ink-muted)]">Link click</dt>
-              <dd className="mt-0.5 font-medium text-[var(--ink)]">
+            <div className="aff-metric aff-metric--compact">
+              <dt className="aff-metric__label">Link click</dt>
+              <dd className="aff-metric__value text-[15px]">
                 {row.linkClicks.toLocaleString("it-IT")}
               </dd>
             </div>
           )}
           {row.ctr != null && (
-            <div className="rounded-xl bg-[var(--surface)] px-3 py-2">
-              <dt className="text-[10px] text-[var(--ink-muted)]">CTR</dt>
-              <dd className="mt-0.5 font-medium text-[var(--ink)]">
+            <div className="aff-metric aff-metric--compact">
+              <dt className="aff-metric__label">CTR</dt>
+              <dd className="aff-metric__value text-[15px]">
                 {row.ctr.toFixed(2)}%
               </dd>
             </div>
           )}
           {row.cpc != null && (
-            <div className="rounded-xl bg-[var(--surface)] px-3 py-2">
-              <dt className="text-[10px] text-[var(--ink-muted)]">CPC</dt>
-              <dd className="mt-0.5 font-medium text-[var(--ink)]">
+            <div className="aff-metric aff-metric--compact">
+              <dt className="aff-metric__label">CPC</dt>
+              <dd className="aff-metric__value text-[15px]">
                 {formatEuro(row.cpc)}
               </dd>
             </div>
           )}
           {row.frequency != null && (
-            <div className="rounded-xl bg-[var(--surface)] px-3 py-2">
-              <dt className="text-[10px] text-[var(--ink-muted)]">Frequenza</dt>
-              <dd className="mt-0.5 font-medium text-[var(--ink)]">
+            <div className="aff-metric aff-metric--compact">
+              <dt className="aff-metric__label">Frequenza</dt>
+              <dd className="aff-metric__value text-[15px]">
                 {row.frequency.toFixed(2)}
               </dd>
             </div>

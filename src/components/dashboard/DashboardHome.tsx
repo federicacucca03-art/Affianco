@@ -34,6 +34,7 @@ import {
 import { loadMetaMondayBundle } from "@/lib/meta/monday-meta-loader";
 import { nomeCampagnaCard } from "@/components/risultati/ControlRoomOverview";
 import { MondayControlRoomSection } from "@/components/dashboard/MondayControlRoomSection";
+import { AllyFeatureCard } from "@/components/shell/AllyFeatureCard";
 import { useOnboardingCampagna } from "@/components/OnboardingCampagnaContext";
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
@@ -44,7 +45,6 @@ import {
 const MAX_REVISIONI = 3;
 const TREND_CHECK_DAYS = 30;
 const STROKE_NAV = 1.75;
-const STROKE_CARD = 1.85;
 
 const QUICK_ACTIONS = [
   {
@@ -52,32 +52,28 @@ const QUICK_ACTIONS = [
     title: "Control Room",
     body: "Vedi subito le campagne che richiedono attenzione.",
     icon: LayoutDashboard,
-    cardClass: "aff-quick-card--1",
-    iconClass: "aff-card-icon--1",
+    tone: 1 as const,
   },
   {
     href: "/risultati",
     title: "Monitoraggio",
     body: "Controlla target, KPI e trend.",
     icon: LineChart,
-    cardClass: "aff-quick-card--2",
-    iconClass: "aff-card-icon--2",
+    tone: 2 as const,
   },
   {
     href: "/risultati",
     title: "Diagnosi",
     body: "Capisci perché una campagna viene segnalata.",
     icon: Sparkles,
-    cardClass: "aff-quick-card--3",
-    iconClass: "aff-card-icon--3",
+    tone: 3 as const,
   },
   {
     href: "/notifiche",
     title: "Notifiche",
     body: "Vedi solo i cambiamenti che meritano attenzione.",
     icon: Bell,
-    cardClass: "aff-quick-card--4",
-    iconClass: "aff-card-icon--4",
+    tone: 4 as const,
   },
 ] as const;
 
@@ -311,28 +307,16 @@ export function DashboardHome() {
             </div>
 
             <div className="mt-6 grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {QUICK_ACTIONS.map((card) => {
-                const Icon = card.icon;
-                return (
-                  <Link
-                    key={card.title}
-                    href={card.href}
-                    className={`aff-quick-card min-w-0 ${card.cardClass}`}
-                  >
-                    <span className={`aff-card-icon ${card.iconClass}`}>
-                      <Icon className="h-7 w-7" strokeWidth={STROKE_CARD} />
-                    </span>
-                    <div>
-                      <p className="text-[17px] font-semibold tracking-[-0.02em] text-[var(--ink)]">
-                        {card.title}
-                      </p>
-                      <p className="mt-1.5 text-[13.5px] leading-snug text-[var(--ink-muted)]">
-                        {card.body}
-                      </p>
-                    </div>
-                  </Link>
-                );
-              })}
+              {QUICK_ACTIONS.map((card) => (
+                <AllyFeatureCard
+                  key={card.title}
+                  href={card.href}
+                  title={card.title}
+                  body={card.body}
+                  icon={card.icon}
+                  tone={card.tone}
+                />
+              ))}
             </div>
           </div>
         </div>

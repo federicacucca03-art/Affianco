@@ -331,7 +331,7 @@ export function DropzoneCreativita({
       </p>
 
       {creativeGuidelines ? (
-        <div className="mt-4 rounded-xl border border-[#c6d8f0] bg-[#f3f7fc] px-4 py-3">
+        <div className="mt-4 aff-callout aff-callout--info">
           <p className="text-sm font-medium text-[var(--ink)]">
             Formato visivo consigliato per questa nicchia
           </p>
@@ -369,7 +369,7 @@ export function DropzoneCreativita({
       ) : null}
 
       {isEcommerce ? (
-        <div className="mt-4 rounded-xl border border-[#c6d8f0] bg-[#f3f7fc] px-4 py-3">
+        <div className="mt-4 aff-callout aff-callout--info">
           <p className="text-sm font-medium text-[var(--ink)]">
             💡 Cosa genera più vendite in un E-commerce?
           </p>
@@ -524,7 +524,7 @@ export function DropzoneCreativita({
                   </p>
                   {attiva.isVideo ? (
                     <>
-                      <p className="mt-2 text-xs font-medium text-[#3D8B57]">
+                      <p className="mt-2 text-xs font-medium aff-text-success">
                         Mostra il prodotto in azione nei primi 2 secondi.
                       </p>
                       <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
@@ -532,15 +532,15 @@ export function DropzoneCreativita({
                       </p>
                     </>
                   ) : attiva.formatoOrizzontale ? (
-                    <p className="mt-2 text-xs font-medium text-[#C26A0A]">
+                    <p className="mt-2 text-xs font-medium aff-text-warning">
                       Formato orizzontale: occupa meno spazio nel feed mobile.
                     </p>
                   ) : attiva.avvisoFormato ? (
-                    <p className="mt-2 text-xs font-medium text-[#C26A0A]">
+                    <p className="mt-2 text-xs font-medium aff-text-warning">
                       Formato da ottimizzare: preferisci 4:5 o 1:1.
                     </p>
                   ) : (
-                    <p className="mt-2 text-xs font-medium text-[#3D8B57]">
+                    <p className="mt-2 text-xs font-medium aff-text-success">
                       Formato ok per Feed (4:5, 1:1) o Stories (9:16).
                     </p>
                   )}
@@ -636,13 +636,13 @@ export function DropzoneCreativita({
       ) : null}
 
       {isRetargeting && isCarosello ? (
-        <div className="mt-4 rounded-xl border border-[#c6d8f0] bg-[#f3f7fc] px-4 py-3">
+        <div className="mt-4 aff-callout aff-callout--info">
           <p className="text-sm leading-relaxed text-[var(--ink)]">
             Carica da 3 a 5 contenuti per il carosello.
           </p>
         </div>
       ) : isRetargeting && !isCarosello && !isVideo ? (
-        <div className="mt-4 rounded-xl border border-[#c6d8f0] bg-[#f3f7fc] px-4 py-3">
+        <div className="mt-4 aff-callout aff-callout--info">
           <p className="text-sm leading-relaxed text-[var(--ink)]">
             Carica fino a 3 immagini per la creatività.
           </p>
@@ -650,13 +650,13 @@ export function DropzoneCreativita({
       ) : null}
 
       {isInStore && isCarosello ? (
-        <div className="mt-4 rounded-xl border border-[#c6d8f0] bg-[#f3f7fc] px-4 py-3">
+        <div className="mt-4 aff-callout aff-callout--info">
           <p className="text-sm leading-relaxed text-[var(--ink)]">
             Carica da 3 a 5 contenuti per il carosello.
           </p>
         </div>
       ) : isInStore && !isCarosello && !isVideo ? (
-        <div className="mt-4 rounded-xl border border-[#c6d8f0] bg-[#f3f7fc] px-4 py-3">
+        <div className="mt-4 aff-callout aff-callout--info">
           <p className="text-sm leading-relaxed text-[var(--ink)]">
             Carica fino a 3 immagini per la creatività.
           </p>
@@ -664,13 +664,13 @@ export function DropzoneCreativita({
       ) : null}
 
       {isAwareness && usaFormatiCreativi && isCarosello ? (
-        <div className="mt-4 rounded-xl border border-[#c6d8f0] bg-[#f3f7fc] px-4 py-3">
+        <div className="mt-4 aff-callout aff-callout--info">
           <p className="text-sm leading-relaxed text-[var(--ink)]">
             Carica da 3 a 5 contenuti per il carosello.
           </p>
         </div>
       ) : isAwareness && usaFormatiCreativi && !isCarosello && !isVideo ? (
-        <div className="mt-4 rounded-xl border border-[#c6d8f0] bg-[#f3f7fc] px-4 py-3">
+        <div className="mt-4 aff-callout aff-callout--info">
           <p className="text-sm leading-relaxed text-[var(--ink)]">
             Carica fino a 3 immagini per la creatività.
           </p>
@@ -680,7 +680,7 @@ export function DropzoneCreativita({
       {/* Tip legacy RETARGETING (carrello / sconti / creepy) rimossi sul ramo formati avanzati. */}
 
       {isAwareness && !usaFormatiCreativi ? (
-        <div className="mt-4 rounded-xl border border-[#c6d8f0] bg-[#f3f7fc] px-4 py-3">
+        <div className="mt-4 aff-callout aff-callout--info">
           <p className="text-sm leading-relaxed text-[var(--ink)]">
             📸 Formati consigliati: 1:1 (Feed) e 9:16 (Stories/Reels). Per i
             lanci locali, le Stories mostrano un tasso di memorizzazione del
@@ -711,7 +711,7 @@ export function DropzoneCreativita({
       ) : null}
 
       {isEcommerce || isRetargeting || (isAwareness && usaFormatiCreativi) ? null : isAwareness ? (
-        <div className="mt-4 rounded-xl border border-[#fff0c2] bg-[#fff6e5] px-4 py-3">
+        <div className="mt-4 aff-callout aff-callout--warning">
           <p className="text-sm font-medium text-[var(--ink)]">
             💡 Regola d&apos;oro per l&apos;Apertura: Per riempire il locale il
             giorno dell&apos;inaugurazione, carica 3 immagini ad alto impatto:
@@ -731,7 +731,7 @@ export function DropzoneCreativita({
           </ol>
         </div>
       ) : isInStore ? (
-        <div className="mt-4 rounded-xl border border-[#c6d8f0] bg-[#f3f7fc] px-4 py-3">
+        <div className="mt-4 aff-callout aff-callout--info">
           <p className="text-sm leading-relaxed text-[var(--ink)]">
             💡 Regola d&apos;oro per il Business Locale: Le foto reali della
             vetrina/ingresso, del titolare, del team o dei prodotti/piatti
@@ -739,7 +739,7 @@ export function DropzoneCreativita({
           </p>
         </div>
       ) : isBookings ? (
-        <div className="mt-4 rounded-xl border border-[#c6d8f0] bg-[#f3f7fc] px-4 py-3">
+        <div className="mt-4 aff-callout aff-callout--info">
           <p className="text-sm font-medium text-[var(--ink)]">
             💡 Cosa converte di più per le prenotazioni?
           </p>
@@ -758,7 +758,7 @@ export function DropzoneCreativita({
           </ol>
         </div>
       ) : (
-        <div className="mt-4 rounded-xl border border-[#c6d8f0] bg-[#f3f7fc] px-4 py-3">
+        <div className="mt-4 aff-callout aff-callout--info">
           <p className="text-sm leading-relaxed text-[var(--ink)]">
             💡 Regola d&apos;oro per il Business Locale: Le foto reali del
             titolare, del team, della sede o dei lavori finiti (prima/dopo)
@@ -768,7 +768,7 @@ export function DropzoneCreativita({
       )}
 
       {errore ? (
-        <p className="mt-3 text-xs text-[#C45C5C]">{errore}</p>
+        <p className="mt-3 text-xs aff-text-danger">{errore}</p>
       ) : null}
 
       <input

@@ -2,9 +2,10 @@ import { PannelloIntegrazioneMeta } from "@/components/impostazioni/PannelloInte
 
 export default function IntegrazioniPage() {
   return (
-    <main className="mx-auto w-full max-w-[720px]">
-      <h1 className="text-lg font-medium text-[var(--ink)]">Integrazioni</h1>
-      <p className="mt-1 text-sm text-[var(--ink-muted)]">
+    <main className="aff-page aff-page--narrow">
+      <p className="aff-eyebrow">Impostazioni</p>
+      <h2 className="aff-page-title mt-1.5">Integrazioni</h2>
+      <p className="aff-page-subtitle">
         Collegamenti esterni per Affianco.
       </p>
       <PannelloIntegrazioneMeta />

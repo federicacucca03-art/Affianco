@@ -61,7 +61,7 @@ export function SelettoreClienteEsistente({
           value={query}
           placeholder="Cerca per nome, settore o città…"
           autoComplete="off"
-          className="w-full rounded-xl border border-[var(--border)] bg-white py-2.5 pl-9 pr-3.5 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--ink-muted)] focus:border-[var(--accent)]"
+          className="aff-input w-full pl-9"
           onFocus={() => setAperto(true)}
           onChange={(e) => {
             setQuery(e.target.value);

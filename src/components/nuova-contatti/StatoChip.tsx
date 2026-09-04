@@ -1,6 +1,7 @@
 "use client";
 
 import type { HealthStatus } from "@/lib/control-room";
+import { AllyBadge, type AllyBadgeVariant } from "@/components/shell/AllyBadge";
 
 export type StatoChipKind = "ok" | "watch" | "critico" | "pending" | "info";
 
@@ -12,12 +13,12 @@ const ETICHETTA: Record<StatoChipKind, string> = {
   info: "Info",
 };
 
-const STILE: Record<StatoChipKind, string> = {
-  ok: "bg-[var(--green-soft)] text-[#2d6a4a]",
-  watch: "bg-[var(--yellow-soft)] text-[#6b5420]",
-  critico: "bg-[var(--pink-soft)] text-[#7a3d58]",
-  pending: "bg-[var(--lavender-muted)] text-[#5b4fa8]",
-  info: "bg-[var(--primary-soft)] text-[var(--primary)]",
+const VARIANT: Record<StatoChipKind, AllyBadgeVariant> = {
+  ok: "success",
+  watch: "warning",
+  critico: "danger",
+  pending: "neutral",
+  info: "violet",
 };
 
 const INDICATORE_INIZIALE =
@@ -35,11 +36,9 @@ export function StatoChip({
   label?: string;
 }) {
   return (
-    <span
-      className={`inline-flex max-w-full shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium leading-tight ${STILE[kind]}`}
-    >
+    <AllyBadge variant={VARIANT[kind]} pill>
       {label ?? ETICHETTA[kind]}
-    </span>
+    </AllyBadge>
   );
 }
 

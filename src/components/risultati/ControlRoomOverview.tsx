@@ -12,6 +12,9 @@ import {
   type HealthStatus,
 } from "@/lib/control-room";
 import { StatoChip, chipDaHealth } from "@/components/nuova-contatti/StatoChip";
+import { AllyEmptyState } from "@/components/shell/AllyEmptyState";
+import { AllyMetric } from "@/components/shell/AllyMetric";
+import { AllyNextAction } from "@/components/shell/AllyNextAction";
 import { normalizzaObjective } from "@/types/campagne";
 import type { CampaignCheck } from "@/lib/campaign-checks-db";
 
@@ -179,11 +182,15 @@ function copyDiagnosiOverview(signal: string | null | undefined): string {
   return etichettaSegnaleDiagnosi(signal);
 }
 
-function BadgeStato({
-  ultimo,
-}: {
-  ultimo: CampaignCheck | null;
-}) {
+function filterChipClass(attivo: boolean): string {
+  return `aff-tool-chip ${
+    attivo
+      ? "border-[var(--ally-violet-border)] bg-[var(--ally-violet-soft)] text-[var(--ally-violet-active-text)]"
+      : ""
+  }`;
+}
+
+function BadgeStato({ ultimo }: { ultimo: CampaignCheck | null }) {
   const label = etichettaStatoOperativo(
     ultimo?.healthStatus ?? null,
     Boolean(ultimo),
@@ -193,6 +200,33 @@ function BadgeStato({
   }
   return (
     <StatoChip kind={chipDaHealth(ultimo.healthStatus)} label={label} />
+  );
+}
+
+function AttentionMetricButton({
+  label,
+  value,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`aff-metric w-full text-left transition-colors ${
+        active
+          ? "border-[var(--ally-violet-border)] bg-[var(--ally-violet-soft)]"
+          : "hover:border-[rgba(99,91,255,0.22)]"
+      }`}
+    >
+      <p className="aff-metric__label">{label}</p>
+      <p className="aff-metric__value tabular-nums">{value}</p>
+    </button>
   );
 }
 
@@ -220,90 +254,78 @@ export function ControlRoomOverview({
 
   if (caricamento) {
     return (
-      <div className="mt-8 space-y-3">
-        <div className="h-24 animate-pulse rounded-[var(--radius)] bg-[var(--surface-hover)]" />
-        <div className="h-24 animate-pulse rounded-[var(--radius)] bg-[var(--surface-hover)]" />
+      <div className="mt-6 space-y-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="h-[88px] animate-pulse rounded-[var(--radius)] bg-[var(--surface-hover)]" />
+          <div className="h-[88px] animate-pulse rounded-[var(--radius)] bg-[var(--surface-hover)]" />
+          <div className="h-[88px] animate-pulse rounded-[var(--radius)] bg-[var(--surface-hover)]" />
+        </div>
       </div>
     );
   }
 
   if (errore && righe.length === 0) {
     return (
-      <div className="mt-8 rounded-[var(--radius)] border border-[var(--border)] bg-white px-4 py-5 text-sm text-[var(--ink-muted)]">
-        <p>{errore}</p>
-        <button
-          type="button"
-          onClick={onRiprova}
-          className="mt-2 text-sm font-medium text-[var(--accent)]"
-        >
-          Riprova
-        </button>
-      </div>
+      <AllyEmptyState
+        className="mt-6"
+        title="Non riesco a caricare la Control Room."
+        description={errore}
+        action={
+          <button type="button" onClick={onRiprova} className="aff-btn-secondary">
+            Riprova
+          </button>
+        }
+      />
     );
   }
 
   if (righe.length === 0) {
     return (
-      <div className="mt-8 rounded-[var(--radius)] border border-dashed border-[var(--border)] bg-white px-6 py-8 text-center">
-        <p className="text-sm text-[var(--ink-muted)]">
-          Non hai ancora campagne salvate. Creane una dal wizard, poi torna
-          qui per il controllo settimanale.
-        </p>
-      </div>
+      <AllyEmptyState
+        className="mt-6"
+        title="Nessuna campagna salvata"
+        description="Creane una dal wizard, poi torna qui per il controllo settimanale."
+      />
     );
   }
 
   return (
-    <div className="mt-8">
-      <section className="rounded-[var(--radius)] bg-white p-4 shadow-[var(--shadow-soft)] sm:p-5">
-        <h2 className="text-sm font-medium text-[var(--ink)]">
-          Cosa richiede attenzione
-        </h2>
+    <div className="mt-6">
+      <section>
+        <h2 className="aff-section-title">Cosa richiede attenzione</h2>
         {zeroAttenzione ? (
-          <p className="mt-2 text-sm text-[var(--ink-muted)]">
+          <p className="aff-section-sub">
             Nessuna campagna richiede intervento oggi.
           </p>
         ) : (
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setFiltro("red")}
-              className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-                filtro === "red"
-                  ? "bg-[#FDEDED] text-[#B42318]"
-                  : "bg-[#FDEDED]/70 text-[#B42318] hover:bg-[#FDEDED]"
-              }`}
-            >
-              {attenzione.red} da intervenire
-            </button>
-            <button
-              type="button"
-              onClick={() => setFiltro("yellow")}
-              className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-                filtro === "yellow"
-                  ? "bg-[#FFF6E5] text-[#9A6700]"
-                  : "bg-[#FFF6E5]/70 text-[#9A6700] hover:bg-[#FFF6E5]"
-              }`}
-            >
-              {attenzione.yellow} da monitorare
-            </button>
-            <button
-              type="button"
-              onClick={() => setFiltro("no_check")}
-              className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-                filtro === "no_check"
-                  ? "bg-[#EEF0F3] text-[#5A6578]"
-                  : "bg-[#EEF0F3]/70 text-[#5A6578] hover:bg-[#EEF0F3]"
-              }`}
-            >
-              {attenzione.noCheck} mai controllate
-            </button>
-          </div>
+          <p className="aff-section-sub">
+            Tocca una card per filtrare l&apos;elenco.
+          </p>
         )}
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <AttentionMetricButton
+            label="Da intervenire"
+            value={attenzione.red}
+            active={filtro === "red"}
+            onClick={() => setFiltro("red")}
+          />
+          <AttentionMetricButton
+            label="Da monitorare"
+            value={attenzione.yellow}
+            active={filtro === "yellow"}
+            onClick={() => setFiltro("yellow")}
+          />
+          <AttentionMetricButton
+            label="Mai controllate"
+            value={attenzione.noCheck}
+            active={filtro === "no_check"}
+            onClick={() => setFiltro("no_check")}
+          />
+        </div>
       </section>
 
       <div
-        className="mt-4 flex flex-wrap gap-2"
+        className="mt-6 flex flex-wrap gap-2"
         role="tablist"
         aria-label="Filtra campagne"
       >
@@ -316,11 +338,7 @@ export function ControlRoomOverview({
               role="tab"
               aria-selected={attivo}
               onClick={() => setFiltro(chip.id)}
-              className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                attivo
-                  ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                  : "bg-white text-[var(--ink-muted)] shadow-[var(--shadow-soft)] hover:text-[var(--ink)]"
-              }`}
+              className={filterChipClass(attivo)}
             >
               {chip.label}
             </button>
@@ -329,11 +347,9 @@ export function ControlRoomOverview({
       </div>
 
       {visibili.length === 0 ? (
-        <p className="mt-6 text-sm text-[var(--ink-muted)]">
-          Nessuna campagna in questo filtro.
-        </p>
+        <p className="mt-6 aff-muted">Nessuna campagna in questo filtro.</p>
       ) : (
-        <ul className="mt-6 space-y-3">
+        <ul className="mt-6 flex flex-col gap-3">
           {visibili.map(({ campagna, ultimo }) => {
             const objective = normalizzaObjective(campagna.objective);
             const metricLabel = etichettaMetricaPrimaria(objective);
@@ -341,78 +357,67 @@ export function ControlRoomOverview({
             const diagnosi = ultimo
               ? copyDiagnosiOverview(ultimo.signal)
               : "Diagnosi non ancora definita";
+            const hrefControllo = `/risultati?campaignId=${encodeURIComponent(campagna.id)}`;
+
             return (
               <li
                 key={campagna.id}
-                className="rounded-[var(--radius)] bg-white p-4 shadow-[var(--shadow-soft)] sm:p-5"
+                className="rounded-[var(--radius)] border border-[rgba(0,0,0,0.06)] bg-[var(--ally-surface)] px-4 py-3.5 shadow-[var(--shadow-card)] sm:px-5"
               >
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="order-2 min-w-0 sm:order-1">
-                    <p className="text-xs text-[var(--ink-muted)]">
-                      {campagna.nomeCliente}
-                    </p>
-                    <p className="mt-0.5 text-base font-medium text-[var(--ink)]">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="aff-meta">{campagna.nomeCliente}</p>
+                    <p className="mt-0.5 text-[17px] font-semibold tracking-[-0.02em] text-[var(--ink)]">
                       {nomeCampagnaCard(campagna)}
                     </p>
-                    <p className="mt-0.5 text-xs text-[var(--ink-muted)]">
+                    <p className="mt-1 aff-meta">
                       {etichettaObiettivo(objective)}
                     </p>
                   </div>
-                  <div className="order-1 sm:order-2 sm:text-right">
-                    <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-                      Stato
-                    </p>
-                    <BadgeStato ultimo={ultimo} />
-                  </div>
+                  <BadgeStato ultimo={ultimo} />
                 </div>
 
                 {ultimo ? (
-                  <p className="mt-3 text-sm text-[var(--ink)]">
-                    <span className="text-[var(--ink-muted)]">
-                      {metricLabel}{" "}
-                    </span>
-                    <span className="font-medium">
-                      {formatEuro(ultimo.primaryCost)}
-                    </span>
-                    <span className="text-[var(--ink-muted)]"> · soglia </span>
-                    <span className="font-medium">
-                      {formatEuro(ultimo.threshold)}
-                    </span>
-                    <span className="text-[var(--ink-muted)]">
-                      {" "}
-                      · {deltaPct(ultimo)}
-                    </span>
-                  </p>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <AllyMetric
+                      label={metricLabel}
+                      value={formatEuro(ultimo.primaryCost)}
+                      className="aff-metric--compact"
+                    />
+                    <AllyMetric
+                      label="Soglia"
+                      value={formatEuro(ultimo.threshold)}
+                      className="aff-metric--compact"
+                    />
+                    <AllyMetric
+                      label="Scostamento"
+                      value={deltaPct(ultimo)}
+                      className="aff-metric--compact"
+                    />
+                  </div>
                 ) : (
-                  <p className="mt-3 text-sm text-[var(--ink-muted)]">
+                  <p className="mt-3 aff-muted">
                     Non hai ancora salvato un controllo performance.
                   </p>
                 )}
 
-                <div className="mt-3 border-t border-[var(--border)] pt-3">
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-                    Diagnosi
+                <div className="mt-3 border-t border-[var(--border-soft)] pt-3">
+                  <p className="aff-meta">Diagnosi</p>
+                  <p className="mt-0.5 text-[13.5px] leading-snug text-[var(--ink)]">
+                    {diagnosi}
                   </p>
-                  <p className="mt-0.5 text-sm text-[var(--ink)]">{diagnosi}</p>
                 </div>
 
-                {prima ? (
-                  <div className="mt-3">
-                    <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-                      Prossima azione
-                    </p>
-                    <p className="mt-0.5 text-sm text-[var(--ink)]">
-                      {prima.text}
-                    </p>
-                  </div>
-                ) : null}
-
-                <Link
-                  href={`/risultati?campaignId=${encodeURIComponent(campagna.id)}`}
-                  className="mt-4 inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-                >
-                  {ultimo ? "Apri controllo" : "Controlla ora"}
-                </Link>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                  {prima ? (
+                    <AllyNextAction title={prima.text} />
+                  ) : (
+                    <span />
+                  )}
+                  <Link href={hrefControllo} className="aff-btn-primary shrink-0">
+                    {ultimo ? "Apri controllo" : "Controlla ora"}
+                  </Link>
+                </div>
               </li>
             );
           })}

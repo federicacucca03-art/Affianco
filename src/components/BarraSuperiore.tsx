@@ -69,7 +69,7 @@ function pageCopy(
   if (pathname.startsWith("/risultati")) {
     return {
       title: "Risultati",
-      subtitle: "Monitora le campagne e individua cosa controllare.",
+      subtitle: "Controlla performance, soglie e campagne da monitorare.",
     };
   }
   if (pathname.startsWith("/notifiche")) {
@@ -81,19 +81,19 @@ function pageCopy(
   if (pathname.startsWith("/campagne")) {
     return {
       title: "Campagne",
-      subtitle: "Crea, organizza e apri le campagne dei tuoi clienti.",
+      subtitle: "Gestisci pianificazione e attività delle campagne.",
     };
   }
   if (pathname.startsWith("/clienti")) {
     return {
       title: "Clienti",
-      subtitle: "Gestisci i clienti e le loro campagne.",
+      subtitle: "Organizza clienti, campagne e collegamenti.",
     };
   }
   if (pathname.startsWith("/impostazioni")) {
     return {
       title: "Impostazioni",
-      subtitle: "Connessioni e preferenze del workspace.",
+      subtitle: "Gestisci account e integrazioni.",
     };
   }
   return {

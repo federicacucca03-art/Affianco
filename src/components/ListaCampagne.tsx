@@ -4,11 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import type { Campagna } from "@/types/campagne";
 import { leggiCampagneDaSupabase } from "@/lib/campagne-db";
 import { RigaCampagna } from "@/components/RigaCampagna";
+import { AllyEmptyState } from "@/components/shell/AllyEmptyState";
 import { getCampaigns, type SavedCampaign } from "@/utils/clientStorage";
 import {
   logErroreSupabaseDev,
   messaggioErroreSupabase,
 } from "@/lib/supabase-errori";
+import { LayoutGrid } from "lucide-react";
 
 function inizialiDaNome(nome: string): string {
   const parti = nome.trim().split(/\s+/).filter(Boolean);
@@ -73,7 +75,7 @@ function SkeletonCampagne() {
       {[0, 1, 2].map((i) => (
         <li
           key={i}
-          className="flex animate-pulse items-center gap-3 rounded-[16px] border border-[var(--border)] bg-white px-4 py-3 sm:gap-4"
+          className="aff-list-row animate-pulse"
         >
           <span className="h-10 w-10 shrink-0 rounded-full bg-[var(--surface-hover)]" />
           <div className="min-w-0 flex-1 space-y-2">
@@ -135,42 +137,42 @@ export function ListaCampagne() {
 
   if (errore) {
     return (
-      <div className="min-h-[11.5rem] max-w-md rounded-[var(--radius)] border border-[var(--border)] bg-white px-5 py-6 shadow-[var(--shadow-soft)]">
-        <p className="text-sm font-medium text-[var(--ink)]">
-          Non riesco a caricare le campagne.
-        </p>
-        <p className="mt-2 text-sm leading-relaxed text-[var(--ink-muted)]">
-          {messaggioErrore ??
-            "Riprova tra qualche secondo."}
-        </p>
-        <button
-          type="button"
-          onClick={() => void caricaCampagne()}
-          className="mt-4 rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium text-[var(--ink)] transition-colors hover:border-[var(--accent-muted)] hover:text-[var(--accent)]"
-        >
-          Riprova
-        </button>
-      </div>
+      <AllyEmptyState
+        className="min-h-[11.5rem] max-w-md"
+        title="Non riesco a caricare le campagne."
+        description={
+          messaggioErrore ?? "Riprova tra qualche secondo."
+        }
+        action={
+          <button
+            type="button"
+            onClick={() => void caricaCampagne()}
+            className="aff-btn-secondary"
+          >
+            Riprova
+          </button>
+        }
+      />
     );
   }
 
   if (campagne.length === 0) {
     return (
-      <div className="min-h-[11.5rem] max-w-md rounded-[var(--radius)] border border-[var(--border)] bg-white px-5 py-6 shadow-[var(--shadow-soft)]">
-        <p className="text-sm font-medium text-[var(--ink)]">
-          Non hai ancora creato campagne.
-        </p>
-        <p className="mt-2 text-sm leading-relaxed text-[var(--ink-muted)]">
-          Scegli uno degli obiettivi qui sopra per iniziare.
-        </p>
-        <button
-          type="button"
-          onClick={scrollObiettiviCampagna}
-          className="mt-4 rounded-full bg-[var(--ink)] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-        >
-          Crea la prima campagna
-        </button>
-      </div>
+      <AllyEmptyState
+        className="min-h-[11.5rem] max-w-md"
+        icon={LayoutGrid}
+        title="Non hai ancora creato campagne."
+        description="Scegli uno degli obiettivi qui sopra per iniziare."
+        action={
+          <button
+            type="button"
+            onClick={scrollObiettiviCampagna}
+            className="aff-btn-primary"
+          >
+            Crea la prima campagna
+          </button>
+        }
+      />
     );
   }
 

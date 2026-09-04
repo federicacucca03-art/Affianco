@@ -235,21 +235,21 @@ export function emojiEvento(tipo: CampaignLogEventType): string {
 export function stileBadgeEvento(tipo: CampaignLogEventType): string {
   switch (tipo) {
     case "CREATED":
-      return "bg-[#E8F0FE] text-[#3B6EA5]";
+      return "aff-badge aff-badge--violet";
     case "APPROVED":
-      return "bg-[#E8F5EE] text-[#3D8B57]";
+      return "aff-badge aff-badge--success";
     case "EXPORTED":
-      return "bg-[#E8F1FB] text-[#3A5A7A]";
+      return "aff-badge aff-badge--neutral";
     case "METRICS_UPDATED":
-      return "bg-[#FFF6E5] text-[#9A6700]";
+      return "aff-badge aff-badge--warning";
     case "DIAGNOSIS_CHANGED":
-      return "bg-[#FFF0F0] text-[#C45C5C]";
+      return "aff-badge aff-badge--danger";
     case "NOTE_ADDED":
-      return "bg-[var(--surface-hover)] text-[var(--ink)]";
+      return "aff-badge aff-badge--neutral";
     case "UPDATED":
-      return "bg-[#F3EEFF] text-[#5B4B8A]";
+      return "aff-badge aff-badge--violet";
     default:
-      return "bg-[var(--surface-hover)] text-[var(--ink-muted)]";
+      return "aff-badge aff-badge--neutral";
   }
 }
 

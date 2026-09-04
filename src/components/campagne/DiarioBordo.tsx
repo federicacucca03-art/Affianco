@@ -92,7 +92,7 @@ export function DiarioBordo({
   }
 
   return (
-    <section className="mt-6 mb-8 rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
+    <section className="aff-panel-white mt-6 mb-8 p-5 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
@@ -109,7 +109,7 @@ export function DiarioBordo({
         <button
           type="button"
           onClick={() => void copiaStorico()}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--surface-hover)]"
+          className="aff-btn-secondary shrink-0"
         >
           {storicoCopiato ? (
             <>
@@ -135,7 +135,7 @@ export function DiarioBordo({
             onChange={(e) => setNota(e.target.value)}
             rows={2}
             placeholder='Es. "Il cliente ha chiesto di abbassare il budget a 15€/giorno causa ferie"'
-            className="w-full rounded-xl border border-[var(--border)] bg-white px-3.5 py-2.5 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--ink-muted)] focus:border-[var(--accent)]"
+            className="aff-input"
           />
         </label>
         {erroreNota ? (
@@ -145,7 +145,7 @@ export function DiarioBordo({
           type="button"
           onClick={() => void aggiungiNota()}
           disabled={salvataggioNota || !nota.trim()}
-          className="mt-3 rounded-full bg-[var(--ink)] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="aff-btn-primary mt-3"
         >
           {salvataggioNota ? "Salvataggio…" : "Aggiungi nota al diario"}
         </button>
@@ -170,7 +170,7 @@ export function DiarioBordo({
               />
               <div className="flex flex-wrap items-center gap-2">
                 <span
-                  className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-medium ${stileBadgeEvento(log.eventType)}`}
+                  className={stileBadgeEvento(log.eventType)}
                 >
                   {etichettaEvento(log.eventType)}
                 </span>
