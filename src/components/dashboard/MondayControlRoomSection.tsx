@@ -123,22 +123,17 @@ function nextActionForRow(
 function NextActionBlock({ action }: { action: CampaignNextAction }) {
   if (!shouldShowNextAction(action.actionType)) return null;
   return (
-    <div className="mt-2">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-        Prossimo passo
-      </p>
-      <p className="mt-0.5 text-[13px] font-medium leading-snug text-[var(--ink)]">
+    <div className="inline-flex max-w-full flex-col rounded-[10px] border border-[var(--border)] bg-[var(--lavender-muted)]/50 px-2.5 py-1.5">
+      <p className="text-[11px] text-[var(--ink-muted)]">Prossimo passo</p>
+      <p className="text-[13px] font-medium leading-snug text-[var(--ink)]">
         {action.title}
-      </p>
-      <p className="mt-0.5 text-[12px] leading-snug text-[var(--ink-muted)]">
-        {action.rationale}
       </p>
       {action.ctaHref && action.ctaLabel ? (
         <Link
           href={action.ctaHref}
-          className="mt-1 inline-flex text-[12px] font-medium text-[var(--primary)] hover:opacity-80"
+          className="mt-0.5 text-[12px] font-medium text-[var(--primary)] hover:opacity-80"
         >
-          {action.ctaLabel} →
+          {action.ctaLabel}
         </Link>
       ) : null}
     </div>
@@ -262,34 +257,32 @@ function AttentionRow({ item }: { item: ControlRoomAttentionItem }) {
   }
 
   return (
-    <li className="flex flex-col gap-2 border-b border-[rgba(80,70,130,0.06)] py-3 last:border-0 sm:flex-row sm:items-start sm:gap-4">
-      <div className="flex flex-wrap items-center gap-1.5 sm:w-[9rem] sm:flex-col sm:items-start">
-        <Badge kind={kind} label={etichettaAttentionState(item.attentionState)} />
-      </div>
+    <li className="flex flex-col gap-2 border-b border-[var(--border)] py-3.5 last:border-0 sm:flex-row sm:items-center sm:gap-4">
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium leading-snug text-[var(--ink)]">
-          {item.clientName}
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-medium leading-snug text-[var(--ink)]">
+            {item.campaignName}
+          </p>
+          <Badge kind={kind} label={etichettaAttentionState(item.attentionState)} />
+        </div>
         <p className="mt-0.5 text-[12px] leading-snug text-[var(--ink-muted)]">
-          {item.campaignName}
+          {item.clientName}
           <span className="text-[var(--ink-muted)]/70">
             {" · "}
             {etichettaAttentionSource(item.source)}
           </span>
+          {urgencyText ? (
+            <span className={` ${urgencyTone(item.urgencyLevel)}`} title={item.urgencyReason}>
+              {" · "}
+              {urgencyText}
+            </span>
+          ) : null}
         </p>
-        <p className="mt-1 text-[13px] leading-snug text-[var(--ink)]">
+        <p className="mt-1.5 text-[13px] leading-snug text-[var(--ink)]">
           {item.reason}
         </p>
         {metric ? (
           <p className="mt-0.5 text-[12px] text-[var(--ink-muted)]">{metric}</p>
-        ) : null}
-        {urgencyText ? (
-          <p
-            className={`mt-1 leading-snug ${urgencyTone(item.urgencyLevel)}`}
-            title={item.urgencyReason}
-          >
-            {urgencyText}
-          </p>
         ) : null}
         {item.source === "META" ? (
           <p className="mt-1 text-[11px] leading-snug text-[var(--ink-muted)]/80">
@@ -299,16 +292,18 @@ function AttentionRow({ item }: { item: ControlRoomAttentionItem }) {
             )}
           </p>
         ) : null}
-        <NextActionBlock action={nextAction} />
-        {canDiagnose ? (
-          <button
-            type="button"
-            onClick={onPerche}
-            className="mt-1.5 text-[12px] font-medium text-[var(--primary)] hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
-          >
-            {open ? "Nascondi" : "Perché?"}
-          </button>
-        ) : null}
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <NextActionBlock action={nextAction} />
+          {canDiagnose ? (
+            <button
+              type="button"
+              onClick={onPerche}
+              className="text-[12px] font-medium text-[var(--primary)] hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+            >
+              {open ? "Nascondi" : "Perché?"}
+            </button>
+          ) : null}
+        </div>
         {open && canDiagnose ? (
           <DiagnosisPanel
             result={result}
@@ -320,9 +315,9 @@ function AttentionRow({ item }: { item: ControlRoomAttentionItem }) {
       </div>
       <Link
         href={item.href}
-        className="inline-flex min-h-8 w-fit shrink-0 items-center text-[13px] font-medium text-[var(--primary)] hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+        className="inline-flex min-h-8 w-fit shrink-0 items-center rounded-[10px] border border-[var(--border)] bg-white px-3 py-1.5 text-[13px] font-medium text-[var(--ink)] hover:border-[var(--primary)]/30 hover:text-[var(--primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
       >
-        Apri →
+        Apri
       </Link>
     </li>
   );
@@ -437,10 +432,10 @@ export function MondayControlRoomSection({
   const historicalCount = summary.counts.HISTORICAL;
 
   return (
-    <section className="aff-panel-white mt-4 min-w-0 p-4 sm:p-5">
+    <section className="aff-panel-white min-w-0 p-4 sm:p-5">
       <TodaySummary summary={summary} />
 
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-[rgba(80,70,130,0.06)] pt-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-[var(--border)] pt-3">
         <div>
           <p className="text-[15px] font-medium text-[var(--ink)]">
             Da controllare

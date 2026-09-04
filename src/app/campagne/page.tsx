@@ -6,7 +6,7 @@ import { ListaCampagne } from "@/components/ListaCampagne";
 
 export default function CampagnePage() {
   return (
-    <main className="mx-auto w-full max-w-[1400px] px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
+    <main className="mx-auto w-full max-w-[1100px] pb-8">
       <BannerHero />
 
       <section id="obiettivi-campagna" className="mt-8 scroll-mt-6">

@@ -73,7 +73,7 @@ function SkeletonCampagne() {
       {[0, 1, 2].map((i) => (
         <li
           key={i}
-          className="flex animate-pulse items-center gap-3 rounded-[var(--radius)] bg-white px-4 py-3 shadow-[var(--shadow-soft)] sm:gap-4"
+          className="flex animate-pulse items-center gap-3 rounded-[16px] border border-[var(--border)] bg-white px-4 py-3 sm:gap-4"
         >
           <span className="h-10 w-10 shrink-0 rounded-full bg-[var(--surface-hover)]" />
           <div className="min-w-0 flex-1 space-y-2">

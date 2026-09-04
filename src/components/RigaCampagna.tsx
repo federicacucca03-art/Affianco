@@ -24,7 +24,7 @@ export function RigaCampagna({ campagna }: Props) {
   return (
     <Link
       href={`/campagne/${campagna.id}`}
-      className="flex w-full items-center gap-3 rounded-[var(--radius)] bg-white px-4 py-3 text-left shadow-[var(--shadow-soft)] transition-colors hover:bg-[var(--surface-hover)] sm:gap-4"
+      className="flex w-full items-center gap-3 rounded-[12px] border border-[var(--border)] bg-white px-4 py-3 text-left transition-colors hover:bg-[var(--surface-hover)] sm:gap-4"
     >
       <span
         aria-hidden

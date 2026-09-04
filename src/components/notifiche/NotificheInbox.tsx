@@ -121,15 +121,7 @@ export function NotificheInbox() {
 
   return (
     <main className="mx-auto w-full max-w-[720px] pb-8">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-[26px] font-medium tracking-tight text-[var(--ink)] sm:text-[28px]">
-            Notifiche
-          </h1>
-          <p className="mt-1 text-sm text-[var(--ink-muted)]">
-            Solo i cambiamenti che meritano attenzione.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         {unread > 0 ? (
           <button
             type="button"
@@ -140,14 +132,14 @@ export function NotificheInbox() {
             Segna tutte come lette
           </button>
         ) : null}
-      </header>
+      </div>
 
       {loading ? (
-        <p className="mt-8 text-sm text-[var(--ink-muted)]">Caricamento…</p>
+        <p className="mt-6 text-sm text-[var(--ink-muted)]">Caricamento…</p>
       ) : error ? (
-        <p className="mt-8 text-sm text-[#7a3d58]">{error}</p>
+        <p className="mt-6 text-sm text-[#7a3d58]">{error}</p>
       ) : items.length === 0 ? (
-        <section className="aff-panel-white mt-6 px-5 py-8">
+        <section className="aff-panel-white mt-4 px-5 py-8">
           <p className="text-base font-medium text-[var(--ink)]">
             Nessuna notifica
           </p>
@@ -157,17 +149,17 @@ export function NotificheInbox() {
           </p>
         </section>
       ) : (
-        <ul className="mt-6 space-y-3">
+        <ul className="mt-4 space-y-3">
           {items.map((n) => (
             <li
               key={n.id}
-              className={`rounded-2xl border px-4 py-3.5 shadow-[var(--shadow-card)] ${severityClass(n.severity)} ${
-                n.isRead ? "opacity-75" : ""
+              className={`rounded-[12px] border px-4 py-3.5 ${severityClass(n.severity)} ${
+                n.isRead ? "opacity-80" : "shadow-[var(--shadow-card)]"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+                  <p className="text-[12px] font-medium text-[var(--ink-muted)]">
                     {etichettaSeverityUi(n.severity)}
                     {!n.isRead ? " · Nuova" : ""}
                   </p>
@@ -200,7 +192,7 @@ export function NotificheInbox() {
                     onClick={() => {
                       if (!n.isRead) void onMarkRead(n.id);
                     }}
-                    className="inline-flex rounded-full bg-[var(--ink)] px-3.5 py-1.5 text-xs font-medium text-white hover:opacity-90"
+                    className="inline-flex rounded-[10px] bg-[var(--ink)] px-3.5 py-1.5 text-xs font-medium text-white hover:opacity-90"
                   >
                     {n.ctaLabel}
                   </Link>

@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, ChevronDown, Menu, Plus, Search } from "lucide-react";
-import { useOnboardingCampagna } from "@/components/OnboardingCampagnaContext";
+import { usePathname } from "next/navigation";
+import { Bell, ChevronDown, Menu } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { fetchUnreadNotificationCount } from "@/lib/campaign-notifications/inbox-client";
 import { supabase } from "@/lib/supabase";
+
+const STROKE = 1.75;
 
 type Props = {
   onApriMenu: () => void;
@@ -19,6 +21,15 @@ function inizialiDaEmail(email: string | null): string {
   if (pulito.length >= 2) return pulito.slice(0, 2).toUpperCase();
   if (pulito.length === 1) return `${pulito}X`.toUpperCase();
   return "AF";
+}
+
+function nomeDaEmail(email: string | null): string | null {
+  if (!email) return null;
+  const locale = (email.split("@")[0] ?? "").trim();
+  if (!locale) return null;
+  const part = locale.split(/[._-]/)[0] ?? locale;
+  if (!part) return null;
+  return part.charAt(0).toUpperCase() + part.slice(1);
 }
 
 function badgeLabel(count: number): string {
@@ -45,10 +56,61 @@ async function triggerNativeEvaluateQuiet(): Promise<void> {
   }
 }
 
+function pageCopy(
+  pathname: string,
+  firstName: string | null,
+): { title: string; subtitle: string } {
+  if (pathname === "/home" || pathname === "/") {
+    return {
+      title: firstName ? `Buongiorno, ${firstName}` : "Buongiorno",
+      subtitle: "Vediamo cosa richiede attenzione oggi.",
+    };
+  }
+  if (pathname.startsWith("/risultati")) {
+    return {
+      title: "Risultati",
+      subtitle: "Monitora le campagne e individua cosa controllare.",
+    };
+  }
+  if (pathname.startsWith("/notifiche")) {
+    return {
+      title: "Notifiche",
+      subtitle: "Solo i cambiamenti che meritano attenzione.",
+    };
+  }
+  if (pathname.startsWith("/campagne")) {
+    return {
+      title: "Campagne",
+      subtitle: "Crea, organizza e apri le campagne dei tuoi clienti.",
+    };
+  }
+  if (pathname.startsWith("/clienti")) {
+    return {
+      title: "Clienti",
+      subtitle: "Gestisci i clienti e le loro campagne.",
+    };
+  }
+  if (pathname.startsWith("/impostazioni")) {
+    return {
+      title: "Impostazioni",
+      subtitle: "Connessioni e preferenze del workspace.",
+    };
+  }
+  return {
+    title: "Ally",
+    subtitle: "Workspace operativo per campagne Meta.",
+  };
+}
+
 export function BarraSuperiore({ onApriMenu }: Props) {
-  const { apriModaleCampagna } = useOnboardingCampagna();
+  const pathname = usePathname();
   const { email, user } = useAuth();
   const [unread, setUnread] = useState(0);
+  const firstName = useMemo(() => nomeDaEmail(email), [email]);
+  const copy = useMemo(
+    () => pageCopy(pathname, firstName),
+    [pathname, firstName],
+  );
 
   const refreshUnread = useCallback(async () => {
     if (!user?.id) {
@@ -60,7 +122,6 @@ export function BarraSuperiore({ onApriMenu }: Props) {
       const n = await fetchUnreadNotificationCount();
       setUnread(n);
     } catch {
-      // Table may not exist until migration; keep badge quiet.
       setUnread(0);
     }
   }, [user?.id]);
@@ -72,68 +133,61 @@ export function BarraSuperiore({ onApriMenu }: Props) {
   const badge = badgeLabel(unread);
 
   return (
-    <header className="flex h-[4.25rem] shrink-0 items-center gap-3 px-4 sm:px-2 lg:px-3">
-      <button
-        type="button"
-        aria-label="Apri menu"
-        className="rounded-2xl p-1.5 text-[var(--ink)] hover:bg-[var(--lavender-muted)] md:hidden"
-        onClick={onApriMenu}
-      >
-        <Menu className="h-5 w-5" strokeWidth={1.75} />
-      </button>
+    <header className="flex h-[74px] shrink-0 items-center justify-between gap-4 border-b border-[var(--border-header)] bg-white px-4 sm:px-6 lg:px-8">
+      <div className="flex min-w-0 items-center gap-3">
+        <button
+          type="button"
+          aria-label="Apri menu"
+          className="rounded-[8px] p-1.5 text-[var(--ink)] hover:bg-[var(--surface-hover)] md:hidden"
+          onClick={onApriMenu}
+        >
+          <Menu className="h-5 w-5" strokeWidth={STROKE} />
+        </button>
+        <div className="min-w-0">
+          <h1 className="truncate text-[20px] font-bold tracking-[-0.02em] text-[var(--ink)] sm:text-[22px]">
+            {copy.title}
+          </h1>
+          <p className="mt-0.5 max-w-xl truncate text-[12.5px] leading-snug text-[var(--ink-muted)] sm:text-[13px]">
+            {copy.subtitle}
+          </p>
+        </div>
+      </div>
 
-      <label className="relative min-w-0 flex-1">
-        <span className="sr-only">Cerca un cliente o una campagna</span>
-        <Search
-          className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ink-muted)]"
-          strokeWidth={1.75}
-          aria-hidden
-        />
-        <input
-          type="search"
-          placeholder="Cerca un cliente o una campagna"
-          className="w-full max-w-xl rounded-full border-0 bg-white py-2.5 pl-11 pr-4 text-sm text-[var(--ink)] shadow-[var(--shadow-card)] outline-none placeholder:text-[var(--ink-muted)] focus:ring-2 focus:ring-[var(--primary-soft)]"
-        />
-      </label>
-
-      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+      <div className="flex shrink-0 items-center gap-2.5">
         <Link
           href="/notifiche"
           aria-label={
-            unread > 0
-              ? `Notifiche, ${unread} non lette`
-              : "Notifiche"
+            unread > 0 ? `Notifiche, ${unread} non lette` : "Notifiche"
           }
-          className="relative rounded-full bg-white p-2 text-[var(--ink-muted)] shadow-[var(--shadow-card)] hover:text-[var(--ink)]"
+          className="aff-header-icon relative"
         >
-          <Bell className="h-5 w-5" strokeWidth={1.75} />
+          <Bell className="h-5 w-5" strokeWidth={STROKE} />
           {badge ? (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--ink)] px-1 text-[10px] font-medium text-white">
+            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--ally-violet)] px-1 text-[10px] font-semibold text-white">
               {badge}
             </span>
           ) : null}
         </Link>
 
-        <button
-          type="button"
-          onClick={apriModaleCampagna}
-          className="hidden items-center gap-1.5 rounded-full bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 sm:inline-flex"
-        >
-          <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
-          Crea nuova campagna
-        </button>
-
         <div
-          className="flex items-center gap-1 rounded-full"
+          className="flex items-center gap-2.5 rounded-[10px] border border-[var(--border)] bg-white py-1.5 pl-1.5 pr-2.5"
           title={email ?? undefined}
           aria-label={email ? `Account ${email}` : "Profilo utente"}
         >
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--primary-soft)] text-xs font-medium text-[var(--primary)] shadow-[var(--shadow-card)]">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--ally-violet-soft)] text-[11px] font-semibold text-[var(--ally-violet)]">
             {inizialiDaEmail(email)}
           </span>
+          <div className="hidden min-w-0 flex-col leading-tight md:flex">
+            <span className="max-w-[12rem] truncate text-[13px] font-semibold text-[var(--ink)]">
+              {firstName ?? "Account"}
+            </span>
+            <span className="max-w-[12rem] truncate text-[11px] text-[var(--ink-muted)]">
+              {email ?? ""}
+            </span>
+          </div>
           <ChevronDown
-            className="hidden h-4 w-4 text-[var(--ink-muted)] sm:block"
-            strokeWidth={1.75}
+            className="hidden h-4 w-4 text-[var(--ink-muted)] md:block"
+            strokeWidth={STROKE}
             aria-hidden
           />
         </div>

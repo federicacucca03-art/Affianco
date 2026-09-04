@@ -996,17 +996,14 @@ function RisultatiPage() {
   );
 
   return (
-    <main className="mx-auto w-full max-w-[1400px] px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
+    <main className="mx-auto w-full max-w-[1100px] pb-8">
       <header className="max-w-3xl">
-        <p className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
-          Control Room
-        </p>
-        <h1 className="mt-1 text-2xl font-medium tracking-tight text-[var(--ink)] sm:text-3xl">
+        <h1 className="text-xl font-semibold tracking-tight text-[var(--ink)] sm:text-2xl">
           {mostraOverview
-            ? "Control Room"
+            ? "Monitoraggio campagne"
             : "Controlla come sta andando la campagna"}
         </h1>
-        <p className="mt-2 text-sm leading-relaxed text-[var(--ink-muted)]">
+        <p className="mt-1.5 text-sm leading-relaxed text-[var(--ink-muted)]">
           {mostraOverview
             ? "Tutte le campagne con l’ultimo controllo. Stato economico, diagnosi e next action."
             : "Confronta i risultati reali con la soglia economica definita prima del lancio e capisci cosa fare dopo."}
@@ -1014,7 +1011,7 @@ function RisultatiPage() {
         {!mostraOverview ? (
           <Link
             href="/risultati"
-            className="mt-3 inline-block text-sm font-medium text-[var(--accent)]"
+            className="mt-3 inline-block text-sm font-medium text-[var(--primary)]"
           >
             ← Tutte le campagne
           </Link>
@@ -1945,7 +1942,7 @@ export default function RisultatiPageRoute() {
   return (
     <Suspense
       fallback={
-        <main className="mx-auto w-full max-w-[1400px] px-4 py-8">
+        <main className="mx-auto w-full max-w-[1100px] pb-8">
           <p className="text-sm text-[var(--ink-muted)]">Caricamento Control Room…</p>
         </main>
       }
