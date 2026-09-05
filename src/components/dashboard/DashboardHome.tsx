@@ -35,6 +35,7 @@ import {
 import { loadMetaMondayBundle } from "@/lib/meta/monday-meta-loader";
 import { nomeCampagnaCard } from "@/components/risultati/ControlRoomOverview";
 import { MondayControlRoomSection } from "@/components/dashboard/MondayControlRoomSection";
+import { AllyOggiBriefPanel } from "@/components/dashboard/AllyOggiBrief";
 import { AllyFeatureCard } from "@/components/shell/AllyFeatureCard";
 import { HomeSetupPanel } from "@/components/dashboard/HomeSetupPanel";
 import { useOnboardingCampagna } from "@/components/OnboardingCampagnaContext";
@@ -588,6 +589,13 @@ export function DashboardHome() {
                   showSetup || showWorkspaceConfig ? "mt-10" : "mt-16"
                 }
               >
+                <AllyOggiBriefPanel
+                  items={monday.items}
+                  enabled={isActiveWorkspace}
+                />
+              </div>
+
+              <div className="mt-6">
                 <MondayControlRoomSection summary={monday} />
               </div>
 
