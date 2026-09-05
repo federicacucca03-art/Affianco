@@ -24,6 +24,10 @@ export {
   assertAllyCopilotPayloadSafe,
 } from "@/lib/ally-copilot/build-context";
 export {
+  buildAllyCopilotConfigurationInventory,
+  summarizeLaunchReadinessForCopilot,
+} from "@/lib/ally-copilot/configuration-inventory";
+export {
   sanitizeAllyCopilotQuestion,
   sanitizeAllyCopilotHistory,
 } from "@/lib/ally-copilot/sanitize";

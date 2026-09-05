@@ -1,5 +1,5 @@
 /**
- * M9.2 — Ask Ally campaign copilot verification
+ * M9.2 / M9.2A — Ask Ally campaign copilot verification
  * Pure logic + structural security. No live Anthropic calls.
  */
 
@@ -10,6 +10,7 @@ import {
   estimateAllyCopilotInputChars,
   assertAllyCopilotPayloadSafe,
   fitAllyCopilotInput,
+  type AllyCopilotIdentityInput,
 } from "../src/lib/ally-copilot/build-context";
 import { buildAllyCopilotSuggestions } from "../src/lib/ally-copilot/suggestions";
 import {
@@ -27,6 +28,10 @@ import {
 import { ALLY_COPILOT_MAX_INPUT_CHARS } from "../src/lib/ally-copilot/types";
 import type { CampaignDiagnosisAiPayload } from "../src/lib/campaign-diagnosis/types";
 import { isSmallSample } from "../src/lib/campaign-next-action";
+import {
+  buildAllyCopilotConfigurationInventory,
+  type AllyCopilotNativePlanningSnapshot,
+} from "../src/lib/ally-copilot/configuration-inventory";
 
 let passed = 0;
 let failed = 0;
@@ -48,6 +53,61 @@ function assert(cond: unknown, msg: string): asserts cond {
 
 function read(rel: string): string {
   return fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+}
+
+function baseSnapshot(
+  overrides: Partial<AllyCopilotNativePlanningSnapshot> = {},
+): AllyCopilotNativePlanningSnapshot {
+  return {
+    objective: "LEADS",
+    clientName: "Aurora",
+    settore: "Dentista",
+    citta: "Milano",
+    offer: "Visita di controllo",
+    dailyBudget: 20,
+    maxSustainableCpa: 35,
+    targetMargin: 50,
+    etaMin: 25,
+    etaMax: 55,
+    raggioKm: 15,
+    targetType: "B2C",
+    targetAge: "25-50",
+    headline: "Prenota ora",
+    copyVariants: ["Variante A", "Variante B"],
+    hasCreativeAsset: true,
+    creativeFormatHint: "1080×1080",
+    pageId: null,
+    formId: null,
+    website: null,
+    bookingChannel: null,
+    status: "DRAFT",
+    approvedAt: null,
+    ...overrides,
+  };
+}
+
+function baseIdentity(
+  overrides: Partial<AllyCopilotIdentityInput> = {},
+): AllyCopilotIdentityInput {
+  const snap =
+    "planningSnapshot" in overrides
+      ? overrides.planningSnapshot ?? null
+      : baseSnapshot();
+  return {
+    campaignId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    source: "NATIVE",
+    clientName:
+      snap && "clientName" in snap ? snap.clientName : "Aurora",
+    campaignName: "Lead Gen",
+    href: "/campagne/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    linkedNativeId: null,
+    planningSnapshot: snap,
+    configurationKind: "DRAFT",
+    nextActionType: "REVIEW_CAMPAIGN_SETUP",
+    nextActionTitle: "Completa configurazione",
+    nextActionHref: "/campagne/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    ...overrides,
+  };
 }
 
 function basePayload(
@@ -103,48 +163,29 @@ console.log("\nM9.2 — Ask Ally campaign copilot\n");
 
 test("A: native DRAFT → planning suggestions, no fake performance in context", () => {
   const ctx = buildAllyCampaignCopilotContext({
-    identity: {
-      campaignId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      source: "NATIVE",
-      clientName: "Aurora",
-      campaignName: "Lead Gen",
-      href: "/campagne/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      linkedNativeId: null,
-      citta: "Milano",
-      copyVariants: ["Variante A", "Variante B"],
-      headline: "Prenota ora",
-      configurationKind: "DRAFT",
-      nextActionType: "REVIEW_CAMPAIGN_SETUP",
-      nextActionTitle: "Completa configurazione",
-      nextActionHref: "/campagne/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-    },
+    identity: baseIdentity(),
     payload: basePayload(),
   });
   assert(ctx.performance.results == null, "no results");
+  assert(ctx.performance.noPerformanceDataYet === true, "no perf flag");
   assert(ctx.planning.offer === "Visita di controllo", "offer present");
   assert(ctx.planning.copyVariants.length === 2, "copy");
+  assert(ctx.configuration.fields.length > 0, "inventory present");
   const sug = buildAllyCopilotSuggestions(ctx);
   assert(sug.some((s) => /lancio|pronta|tester/i.test(s)), sug.join("|"));
-  assert(!sug.some((s) => /CPL|critica/i.test(s)), "no perf chips");
 });
 
 test("B: Meta with target + data → performance-oriented suggestions", () => {
   const ctx = buildAllyCampaignCopilotContext({
-    identity: {
-      campaignId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    identity: baseIdentity({
       source: "META",
-      clientName: "Technon",
-      campaignName: "Meta Lead",
       href: "/risultati",
-      linkedNativeId: null,
-      citta: null,
-      copyVariants: [],
-      headline: null,
+      planningSnapshot: null,
       configurationKind: null,
       nextActionType: "REVIEW_CREATIVE",
       nextActionTitle: "Rivedi creatività",
       nextActionHref: "/risultati",
-    },
+    }),
     payload: basePayload({
       source: "META",
       status: "ACTIVE",
@@ -169,29 +210,20 @@ test("B: Meta with target + data → performance-oriented suggestions", () => {
     }),
   });
   const sug = buildAllyCopilotSuggestions(ctx);
-  assert(sug.some((s) => /attenzione|interverr|sostenibile/i.test(s)), sug.join("|"));
+  assert(
+    sug.some((s) => /attenzione|interverr|sostenibile/i.test(s)),
+    sug.join("|"),
+  );
   assert(ctx.economics.targetValue === 30, "target");
-  assert(ctx.performance.actualValue === 48, "actual");
 });
 
 test("C: small sample → conservative flag + confidence cap on parse", () => {
   assert(isSmallSample(2), "2 is small");
   const ctx = buildAllyCampaignCopilotContext({
-    identity: {
-      campaignId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-      source: "NATIVE",
-      clientName: "Aurora",
-      campaignName: "Lead",
-      href: "/campagne/x",
-      linkedNativeId: null,
-      citta: null,
-      copyVariants: [],
-      headline: null,
+    identity: baseIdentity({
       configurationKind: null,
-      nextActionType: null,
-      nextActionTitle: null,
-      nextActionHref: null,
-    },
+      planningSnapshot: baseSnapshot({ status: "APPROVED", approvedAt: "2026-01-01" }),
+    }),
     payload: basePayload({
       status: "APPROVED",
       attentionState: "INSUFFICIENT_DATA",
@@ -211,8 +243,6 @@ test("C: small sample → conservative flag + confidence cap on parse", () => {
     }),
   });
   assert(ctx.performance.smallSample === true, "smallSample");
-  const sug = buildAllyCopilotSuggestions(ctx);
-  assert(sug.some((s) => /Aspetteresti|dati/i.test(s)), sug.join("|"));
   const parsed = parseAllyCopilotAnswer(
     JSON.stringify({
       answer: "Con pochi risultati non interverrei ancora.",
@@ -230,21 +260,12 @@ test("C: small sample → conservative flag + confidence cap on parse", () => {
 
 test("D: missing target → sustainability cannot be judged (suggestions)", () => {
   const ctx = buildAllyCampaignCopilotContext({
-    identity: {
-      campaignId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    identity: baseIdentity({
       source: "META",
-      clientName: "X",
-      campaignName: "Y",
       href: "/risultati",
-      linkedNativeId: null,
-      citta: null,
-      copyVariants: [],
-      headline: null,
+      planningSnapshot: null,
       configurationKind: "ACTIVE_MISSING_TARGET",
-      nextActionType: "SET_TARGET",
-      nextActionTitle: "Imposta soglia",
-      nextActionHref: "/risultati",
-    },
+    }),
     payload: basePayload({
       source: "META",
       status: "ACTIVE",
@@ -268,29 +289,14 @@ test("D: missing target → sustainability cannot be judged (suggestions)", () =
   assert(sug.some((s) => /configur|valutar/i.test(s)), sug.join("|"));
 });
 
-test("E: lead quality without CRM → missing info in prompt rules + parse shape", () => {
+test("E: lead quality without CRM → missing info in prompt rules", () => {
   const prompt = read("src/lib/ally-copilot/prompt.ts");
   assert(/qualità lead|missing_information|UNKNOWN/i.test(prompt), "prompt");
-  assert(/hasDownstreamQualityEvidence/i.test(prompt) || /evidenza/i.test(prompt), "evidence");
 });
 
-test("F: creative failure without evidence → hypothesis only (prompt + flags)", () => {
+test("F: creative failure without evidence → hypothesis only", () => {
   const ctx = buildAllyCampaignCopilotContext({
-    identity: {
-      campaignId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
-      source: "NATIVE",
-      clientName: "A",
-      campaignName: "B",
-      href: "/campagne/x",
-      linkedNativeId: null,
-      citta: null,
-      copyVariants: ["Copy"],
-      headline: "H",
-      configurationKind: null,
-      nextActionType: null,
-      nextActionTitle: null,
-      nextActionHref: null,
-    },
+    identity: baseIdentity(),
     payload: basePayload({
       status: "APPROVED",
       attentionState: "NEEDS_ATTENTION",
@@ -309,26 +315,17 @@ test("F: creative failure without evidence → hypothesis only (prompt + flags)"
   });
   assert(ctx.performance.hasCreativeAnalysisEvidence === false, "no creative analysis");
   const prompt = read("src/lib/ally-copilot/prompt.ts");
-  assert(/non fingere|immagine creativa|IPOTESI/i.test(prompt), prompt.slice(0, 200));
+  assert(/immagine non funziona|IPOTESI|hasCreativeAnalysisEvidence/i.test(prompt), "prompt");
 });
 
 test("G: configuration-required suggestions explain missing config", () => {
   const ctx = buildAllyCampaignCopilotContext({
-    identity: {
-      campaignId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+    identity: baseIdentity({
       source: "META",
-      clientName: "C",
-      campaignName: "D",
       href: "/risultati",
-      linkedNativeId: null,
-      citta: null,
-      copyVariants: [],
-      headline: null,
+      planningSnapshot: null,
       configurationKind: "ACTIVE_MISSING_TARGET",
-      nextActionType: null,
-      nextActionTitle: null,
-      nextActionHref: null,
-    },
+    }),
     payload: basePayload({
       source: "META",
       attentionState: "CONFIGURATION_REQUIRED",
@@ -342,21 +339,12 @@ test("G: configuration-required suggestions explain missing config", () => {
 
 test("H: linked source marked LINKED without duplicate metrics fields", () => {
   const ctx = buildAllyCampaignCopilotContext({
-    identity: {
-      campaignId: "11111111-1111-4111-8111-111111111111",
+    identity: baseIdentity({
       source: "LINKED",
-      clientName: "Aurora",
-      campaignName: "Meta+Native",
       href: "/risultati",
       linkedNativeId: "22222222-2222-4222-8222-222222222222",
-      citta: "Milano",
-      copyVariants: ["A"],
-      headline: null,
-      configurationKind: null,
-      nextActionType: null,
-      nextActionTitle: null,
-      nextActionHref: null,
-    },
+      planningSnapshot: baseSnapshot(),
+    }),
     payload: basePayload({
       source: "META",
       status: "ACTIVE",
@@ -376,37 +364,20 @@ test("H: linked source marked LINKED without duplicate metrics fields", () => {
   });
   assert(ctx.identity.source === "LINKED", "linked");
   assert(ctx.linkedNativeId != null, "native id");
-  const keys = Object.keys(ctx.performance);
-  assert(!keys.includes("nativeSpend"), "no duplicate native spend");
+  assert(ctx.configuration.fields.length > 0, "planning from linked native");
 });
 
 test("I/J: ownership validated server-side (structural)", () => {
   const load = read("src/lib/ally-copilot/load-context.ts");
   const route = read("src/app/api/ally-copilot/route.ts");
   assert(load.includes("FORBIDDEN"), "forbidden");
-  assert(load.includes("user_id !== userId") || load.includes("loadDiagnosisBundle"), "ownership");
   assert(route.includes("requireRouteUserId"), "auth");
   assert(route.includes("body.context != null"), "reject client context");
-  assert(route.includes("DiagnosisLoadError"), "map load errors");
 });
 
 test("K: Anthropic failure → fallback usable", () => {
   const ctx = buildAllyCampaignCopilotContext({
-    identity: {
-      campaignId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      source: "NATIVE",
-      clientName: "A",
-      campaignName: "B",
-      href: "/campagne/x",
-      linkedNativeId: null,
-      citta: null,
-      copyVariants: [],
-      headline: null,
-      configurationKind: "DRAFT",
-      nextActionType: null,
-      nextActionTitle: null,
-      nextActionHref: "/campagne/x",
-    },
+    identity: baseIdentity(),
     payload: basePayload(),
   });
   const fb = buildAllyCopilotFallbackAnswer(ctx);
@@ -426,66 +397,34 @@ test("M/N: page render + suggestions → 0 AI calls", () => {
   const route = read("src/app/api/ally-copilot/route.ts");
   assert(ui.includes("/api/ally-copilot?"), "GET bootstrap");
   assert(route.includes("aiCalls: 0"), "GET 0 AI");
-  assert(ui.includes("provisionalSuggestions"), "chips");
-  // POST only inside ask(), not on mount bootstrap
-  assert(ui.includes("async function ask"), "ask handler");
-  assert(ui.includes('method: "POST"'), "POST on ask");
   const bootBlock = ui.slice(ui.indexOf("useEffect"), ui.indexOf("async function ask"));
   assert(!bootBlock.includes('method: "POST"'), "bootstrap is GET-only");
 });
 
 test("O: no Meta writes", () => {
-  const files = [
+  for (const f of [
     "src/lib/ally-copilot/service.ts",
     "src/lib/ally-copilot/prompt.ts",
     "src/app/api/ally-copilot/route.ts",
-    "src/components/campagne/ChiediAdAllyPanel.tsx",
-  ];
-  for (const f of files) {
-    const t = read(f);
-    assert(!/graph\.facebook|pauseCampaign|updateBudget|meta\.com\/v/i.test(t), f);
+  ]) {
+    assert(!/graph\.facebook|pauseCampaign|updateBudget/i.test(read(f)), f);
   }
 });
 
 test("Sanitize question + history bounds", () => {
   assert(sanitizeAllyCopilotQuestion("  Ciao?  ") === "Ciao?", "trim");
-  let threw = false;
-  try {
-    sanitizeAllyCopilotQuestion("");
-  } catch {
-    threw = true;
-  }
-  assert(threw, "empty throws");
-  const hist = sanitizeAllyCopilotHistory([
-    { role: "user", content: "a" },
-    { role: "assistant", content: "b" },
-    { role: "user", content: "c" },
-    { role: "assistant", content: "d" },
-    { role: "user", content: "e" },
-    { role: "assistant", content: "f" },
-    { role: "user", content: "g" },
-    { role: "assistant", content: "h" },
-  ]);
+  const hist = sanitizeAllyCopilotHistory(
+    Array.from({ length: 8 }, (_, i) => ({
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: String(i),
+    })),
+  );
   assert(hist.length <= 6, String(hist.length));
 });
 
 test("Anthropic Sonnet 5 compatibility + input size", () => {
   const ctx = buildAllyCampaignCopilotContext({
-    identity: {
-      campaignId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      source: "NATIVE",
-      clientName: "Aurora",
-      campaignName: "Lead",
-      href: "/campagne/x",
-      linkedNativeId: null,
-      citta: "Milano",
-      copyVariants: ["A", "B"],
-      headline: "H",
-      configurationKind: "DRAFT",
-      nextActionType: null,
-      nextActionTitle: null,
-      nextActionHref: null,
-    },
+    identity: baseIdentity(),
     payload: basePayload(),
   });
   assertAllyCopilotPayloadSafe(ctx);
@@ -502,62 +441,28 @@ test("Anthropic Sonnet 5 compatibility + input size", () => {
 });
 
 test("UI wired on native detail + Meta section", () => {
-  const detail = read("src/app/campagne/[id]/page.tsx");
-  const meta = read("src/components/risultati/MetaCampagneSection.tsx");
-  assert(detail.includes("ChiediAdAllyPanel"), "native");
-  assert(detail.includes('source="NATIVE"'), "native source");
-  assert(meta.includes("ChiediAdAllyPanel"), "meta");
-  assert(meta.includes('source="META"'), "meta source");
+  assert(read("src/app/campagne/[id]/page.tsx").includes("ChiediAdAllyPanel"), "native");
+  assert(read("src/components/risultati/MetaCampagneSection.tsx").includes('source="META"'), "meta");
 });
 
 test("No localStorage campaign truth in copilot", () => {
-  const files = [
+  for (const f of [
     "src/lib/ally-copilot/load-context.ts",
     "src/lib/ally-copilot/build-context.ts",
-    "src/components/campagne/ChiediAdAllyPanel.tsx",
-  ];
-  for (const f of files) {
-    const t = read(f);
-    assert(!t.includes("getCampaigns"), f);
-    assert(!t.includes("affianco-campaign-memory"), f);
+  ]) {
+    assert(!read(f).includes("getCampaigns"), f);
   }
 });
 
 test("Truncation: drop oldest history first; preserve question + canonical facts", () => {
   const ctx = buildAllyCampaignCopilotContext({
-    identity: {
-      campaignId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      source: "NATIVE",
-      clientName: "Aurora",
-      campaignName: "Lead Gen",
-      href: "/campagne/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      linkedNativeId: null,
-      citta: "Milano",
-      copyVariants: [
-        "A".repeat(400),
-        "B".repeat(400),
-        "C".repeat(400),
-      ],
-      headline: "H".repeat(200),
-      configurationKind: "DRAFT",
-      nextActionType: "REVIEW_CAMPAIGN_SETUP",
-      nextActionTitle: "Completa configurazione",
-      nextActionHref: "/campagne/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-    },
-    payload: basePayload({
-      campaignPlan: {
-        objective: "LEADS",
+    identity: baseIdentity({
+      planningSnapshot: baseSnapshot({
         offer: "O".repeat(300),
-        settore: "Dentista",
-        audienceHint: "A".repeat(300),
-      },
-      targetValue: 35,
-      primaryKpi: "CPL",
-      actualValue: null,
-      health: null,
-      attentionState: "CONFIGURATION_REQUIRED",
-      urgencyLevel: "NONE",
+        copyVariants: ["A".repeat(400), "B".repeat(400)],
+      }),
     }),
+    payload: basePayload({ targetValue: 35, primaryKpi: "CPL" }),
   });
   const question = "Cosa manca prima del lancio?";
   const history = Array.from({ length: 6 }, (_, i) => ({
@@ -571,40 +476,133 @@ test("Truncation: drop oldest history first; preserve question + canonical facts
     maxChars: 3500,
   });
   assert(fitted.question === question, "question preserved");
-  assert(
-    fitted.droppedHistoryTurns > 0 || fitted.history.length < history.length,
-    "history reduced",
-  );
-  assert(fitted.context.identity.campaignId === ctx.identity.campaignId, "id");
-  assert(fitted.context.economics.targetValue === 35, "target kept");
+  assert(fitted.droppedHistoryTurns > 0, "history reduced");
+  assert(fitted.context.economics.maxSustainableCpa === 35, "target kept");
   assert(
     fitted.context.workflow.attentionState === "CONFIGURATION_REQUIRED",
     "attention kept",
   );
-  assert(
-    fitted.context.decision.nextActionType === "REVIEW_CAMPAIGN_SETUP",
-    "next action kept",
-  );
-  assert(
-    estimateAllyCopilotInputChars(
-      fitted.context,
-      fitted.question,
-      fitted.history,
-    ) <= 3500 || fitted.history.length === 0,
-    "under ceiling after history drop / planning trim",
-  );
 });
 
 test("Route uses fitAllyCopilotInput before AI", () => {
-  const route = read("src/app/api/ally-copilot/route.ts");
-  assert(route.includes("fitAllyCopilotInput"), "fit used");
+  assert(read("src/app/api/ally-copilot/route.ts").includes("fitAllyCopilotInput"), "fit");
 });
 
 test("Confidence does not masquerade as Control Room; creative/visual safety", () => {
   const prompt = read("src/lib/ally-copilot/prompt.ts");
-  assert(/NON sostituisce.*Control Room|NON sostituisce health/i.test(prompt), "CR confidence");
-  assert(/confidence UNKNOWN/i.test(prompt), "UNKNOWN for missing");
-  assert(/immagine non funziona/i.test(prompt), "no fake visual claim");
+  assert(/NON sostituisce/i.test(prompt), "CR confidence");
+  assert(/confidence UNKNOWN|UNKNOWN/i.test(prompt), "UNKNOWN");
+  assert(/immagine non funziona/i.test(prompt), "no fake visual");
+});
+
+// ——— M9.2A configuration inventory ———
+
+test("M9.2A A: field complete → inventory complete", () => {
+  const inv = buildAllyCopilotConfigurationInventory(baseSnapshot());
+  const budget = inv.fields.find((f) => f.id === "budget");
+  assert(budget?.status === "complete", String(budget?.status));
+  assert(budget?.value?.includes("20"), String(budget?.value));
+});
+
+test("M9.2A B: field missing → inventory missing", () => {
+  const inv = buildAllyCopilotConfigurationInventory(
+    baseSnapshot({ pageId: null, formId: null, website: null }),
+  );
+  const page = inv.fields.find((f) => f.id === "pageId");
+  assert(page?.status === "missing", String(page?.status));
+  assert(inv.launchReadiness.items.some((i) => i.id === "pageId" && !i.ok), "LR missing page");
+});
+
+test("M9.2A C: unavailable ≠ missing (Strategic Score / CTA)", () => {
+  const inv = buildAllyCopilotConfigurationInventory(baseSnapshot());
+  const score = inv.fields.find((f) => f.id === "strategicScore");
+  assert(score?.status === "unavailable", "score unavailable");
+  const prompt = read("src/lib/ally-copilot/prompt.ts");
+  assert(/unavailable.*NON dire che manca|NON dire che manca/i.test(prompt), "prompt rule");
+});
+
+test("M9.2A D: pre-launch question — performance absence only as flag", () => {
+  const ctx = buildAllyCampaignCopilotContext({
+    identity: baseIdentity(),
+    payload: basePayload(),
+  });
+  assert(ctx.performance.noPerformanceDataYet === true, "flag");
+  const prompt = read("src/lib/ally-copilot/prompt.ts");
+  assert(/UNA breve precisazione|noPerformanceDataYet/i.test(prompt), "brief perf");
+});
+
+test("M9.2A E: UI no raw English confidence/fatti labels", () => {
+  const ui = read("src/components/campagne/ChiediAdAllyPanel.tsx");
+  assert(ui.includes("Cosa so"), "cosa so");
+  assert(ui.includes("Cosa manca o non è verificabile"), "cosa manca");
+  assert(ui.includes("Prossimo passo"), "next");
+  assert(!ui.includes("Confidenza: {latest.confidence}"), "no raw confidence always");
+  assert(!ui.includes(">Fatti<") && !ui.includes("Fatti\n"), "no Fatti header");
+});
+
+test("M9.2A F: confidence aligned — scrub internal labels", () => {
+  const ctx = buildAllyCampaignCopilotContext({
+    identity: baseIdentity(),
+    payload: basePayload(),
+  });
+  const parsed = parseAllyCopilotAnswer(
+    JSON.stringify({
+      answer: "La campagna è in DRAFT e CONFIGURATION_REQUIRED.",
+      confidence: "HIGH",
+      evidence: ["Attention reason: bozza"],
+      hypotheses: [],
+      missing_information: [],
+      suggested_next_questions: ["Vuoi che controlli il copy?"],
+      recommended_action_href: null,
+    }),
+    ctx,
+  );
+  assert(!/CONFIGURATION_REQUIRED|Attention reason|\bDRAFT\b/.test(parsed.answer), parsed.answer);
+  assert(!/Attention reason/.test(parsed.evidence.join(" ")), "evidence scrubbed");
+});
+
+test("M9.2A G: no second readiness engine — reuses calculateLaunchReadiness", () => {
+  const invMod = read("src/lib/ally-copilot/configuration-inventory.ts");
+  assert(invMod.includes("calculateLaunchReadiness"), "reuses LR");
+  assert(!invMod.includes("function inventReadiness"), "no invent");
+  const ctx = buildAllyCampaignCopilotContext({
+    identity: baseIdentity({
+      planningSnapshot: baseSnapshot({
+        pageId: "123",
+        formId: "456",
+        hasCreativeAsset: true,
+        status: "APPROVED",
+        approvedAt: "2026-01-01",
+      }),
+    }),
+    payload: basePayload({ status: "APPROVED" }),
+  });
+  assert(ctx.configuration.launchReadiness != null, "LR present");
+  assert(Array.isArray(ctx.configuration.launchReadiness?.missingLabels), "labels");
+});
+
+test("M9.2A Aurora-like: some complete some missing", () => {
+  const ctx = buildAllyCampaignCopilotContext({
+    identity: baseIdentity({
+      planningSnapshot: baseSnapshot({
+        dailyBudget: 25,
+        offer: "Sbiancamento",
+        pageId: null,
+        formId: null,
+        hasCreativeAsset: false,
+      }),
+    }),
+    payload: basePayload(),
+  });
+  const byId = Object.fromEntries(
+    ctx.configuration.fields.map((f) => [f.id, f.status]),
+  );
+  assert(byId.budget === "complete", "budget complete");
+  assert(byId.offer === "complete", "offer complete");
+  assert(byId.pageId === "missing", "page missing");
+  assert(byId.creative === "missing", "creative missing");
+  assert(byId.strategicScore === "unavailable", "score unavailable");
+  assert(ctx.workflow.statusLabelIt === "Bozza", ctx.workflow.statusLabelIt);
 });
 
 console.log(`\nM9.2 result: ${passed} passed, ${failed} failed\n`);

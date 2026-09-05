@@ -66,12 +66,28 @@ function safeHref(
 const PROHIBITED =
   /pausa(re)?\s+la\s+campagna|aumenta(re)?\s+il\s+budget|riduci\s+il\s+budget|pubblica\s+su\s+meta|scrivi\s+su\s+meta|access_token/i;
 
+function scrubInternalLabels(text: string): string {
+  return text
+    .replace(/\bCONFIGURATION_REQUIRED\b/g, "configurazione da completare")
+    .replace(/\bREVISION_REQUESTED\b/g, "revisione richiesta")
+    .replace(/\bINSUFFICIENT_DATA\b/g, "dati insufficienti")
+    .replace(/\bNEEDS_ATTENTION\b/g, "richiede attenzione")
+    .replace(/\bAttention reason\b/gi, "Motivo")
+    .replace(/\bDRAFT\b/g, "bozza")
+    .replace(/\bConfidence:\s*HIGH\b/gi, "")
+    .replace(/\bConfidence:\s*MEDIUM\b/gi, "")
+    .replace(/\bConfidence:\s*LOW\b/gi, "")
+    .replace(/\bConfidence:\s*UNKNOWN\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 export function parseAllyCopilotAnswer(
   raw: string,
   context: AllyCampaignCopilotContext,
 ): AllyCopilotAnswer {
   const parsed = extractJsonObject(raw) as Record<string, unknown>;
-  const answer =
+  let answer =
     typeof parsed.answer === "string" ? parsed.answer.trim() : "";
   if (!answer) {
     throw new Error("Risposta vuota");
@@ -79,21 +95,43 @@ export function parseAllyCopilotAnswer(
   if (PROHIBITED.test(answer)) {
     throw new Error("Risposta non consentita");
   }
+  answer = scrubInternalLabels(answer);
 
   let confidence = parseConfidence(parsed.confidence);
   if (context.performance.smallSample && confidence === "HIGH") {
+    confidence = "MEDIUM";
+  }
+  const unavailableCount = context.configuration.fields.filter(
+    (f) => f.status === "unavailable",
+  ).length;
+  const relevantMissing = context.configuration.fields.filter(
+    (f) => f.status === "missing",
+  ).length;
+  // Pre-launch style: do not allow HIGH if inventory is empty/thin.
+  if (
+    confidence === "HIGH" &&
+    context.configuration.fields.length === 0
+  ) {
+    confidence = "MEDIUM";
+  }
+  if (
+    confidence === "HIGH" &&
+    unavailableCount >= 2 &&
+    relevantMissing === 0 &&
+    context.performance.noPerformanceDataYet
+  ) {
     confidence = "MEDIUM";
   }
 
   return {
     answer: answer.slice(0, 1200),
     confidence,
-    evidence: asStringArray(parsed.evidence, 4),
-    hypotheses: asStringArray(parsed.hypotheses, 2),
+    evidence: asStringArray(parsed.evidence, 4).map(scrubInternalLabels),
+    hypotheses: asStringArray(parsed.hypotheses, 2).map(scrubInternalLabels),
     missingInformation: asStringArray(
       parsed.missing_information ?? parsed.missingInformation,
       4,
-    ),
+    ).map(scrubInternalLabels),
     suggestedNextQuestions: asStringArray(
       parsed.suggested_next_questions ?? parsed.suggestedNextQuestions,
       3,

@@ -1,6 +1,6 @@
 /**
- * M9.2 — server loader for Ask Ally context.
- * Ownership via diagnosis loaders. Enriches identity/planning safely.
+ * M9.2A — server loader for Ask Ally context.
+ * Ownership via diagnosis loaders. Full native planning + Launch Readiness inventory.
  */
 
 import "server-only";
@@ -19,6 +19,7 @@ import {
   type AllyCopilotIdentityInput,
 } from "@/lib/ally-copilot/build-context";
 import type { AllyCampaignCopilotContext } from "@/lib/ally-copilot/types";
+import type { AllyCopilotNativePlanningSnapshot } from "@/lib/ally-copilot/configuration-inventory";
 
 function admin() {
   try {
@@ -37,47 +38,133 @@ function textList(...vals: (string | null | undefined)[]): string[] {
     .filter(Boolean);
 }
 
-async function loadNativeIdentity(
+function numOrNull(v: unknown): number | null {
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function hasCreativeFromJson(raw: unknown): boolean {
+  if (!raw) return false;
+  const list = Array.isArray(raw) ? raw : [raw];
+  return list.some((item) => {
+    if (!item || typeof item !== "object") return false;
+    const o = item as { storagePath?: unknown; url?: unknown; width?: unknown };
+    return Boolean(o.storagePath || o.url || o.width);
+  });
+}
+
+function formatHintFromJson(raw: unknown): string | null {
+  if (!raw) return null;
+  const list = Array.isArray(raw) ? raw : [raw];
+  for (const item of list) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as { width?: unknown; height?: unknown };
+    const w = typeof o.width === "number" ? o.width : null;
+    const h = typeof o.height === "number" ? o.height : null;
+    if (w && h) return `${w}×${h}`;
+  }
+  return null;
+}
+
+type NativeRow = {
+  id: string;
+  user_id: string | null;
+  name: string | null;
+  objective: string | null;
+  status: string | null;
+  daily_budget: number | null;
+  max_sustainable_cpa: number | null;
+  target_margin: number | null;
+  front_end_offer: string | null;
+  settore: string | null;
+  citta: string | null;
+  raggio_km: number | null;
+  awareness_radius_km: number | null;
+  eta_min: number | null;
+  eta_max: number | null;
+  target_type: string | null;
+  target_age: string | null;
+  titolo_annuncio: string | null;
+  variante_a: string | null;
+  variante_b: string | null;
+  variante_c: string | null;
+  page_id: string | null;
+  form_id: string | null;
+  booking_channel: string | null;
+  approved_at: string | null;
+  creativita: unknown;
+  clients:
+    | { name: string; website?: string | null }
+    | { name: string; website?: string | null }[]
+    | null;
+};
+
+function snapshotFromNativeRow(row: NativeRow): {
+  clientName: string;
+  campaignName: string;
+  snapshot: AllyCopilotNativePlanningSnapshot;
+} {
+  const clientJoin = Array.isArray(row.clients) ? row.clients[0] : row.clients;
+  const clientName = clientJoin?.name?.trim() || "Cliente";
+  const copyVariants = textList(row.variante_a, row.variante_b, row.variante_c);
+  return {
+    clientName,
+    campaignName: row.name?.trim() || "Campagna",
+    snapshot: {
+      objective: row.objective,
+      clientName,
+      settore: row.settore?.trim() || null,
+      citta: row.citta?.trim() || null,
+      offer: row.front_end_offer?.trim() || null,
+      dailyBudget: numOrNull(row.daily_budget),
+      maxSustainableCpa: numOrNull(row.max_sustainable_cpa),
+      targetMargin: numOrNull(row.target_margin),
+      etaMin: numOrNull(row.eta_min),
+      etaMax: numOrNull(row.eta_max),
+      raggioKm: numOrNull(row.raggio_km) ?? numOrNull(row.awareness_radius_km),
+      targetType: row.target_type?.trim() || null,
+      targetAge: row.target_age?.trim() || null,
+      headline: row.titolo_annuncio?.trim() || null,
+      copyVariants,
+      hasCreativeAsset: hasCreativeFromJson(row.creativita),
+      creativeFormatHint: formatHintFromJson(row.creativita),
+      pageId: row.page_id?.trim() || null,
+      formId: row.form_id?.trim() || null,
+      website: clientJoin?.website?.trim() || null,
+      bookingChannel: row.booking_channel?.trim() || null,
+      status: row.status,
+      approvedAt: row.approved_at,
+    },
+  };
+}
+
+const NATIVE_SELECT =
+  "id, user_id, name, objective, status, daily_budget, max_sustainable_cpa, target_margin, front_end_offer, settore, citta, raggio_km, awareness_radius_km, eta_min, eta_max, target_type, target_age, titolo_annuncio, variante_a, variante_b, variante_c, page_id, form_id, booking_channel, approved_at, creativita, clients(name, website)";
+
+async function loadNativePlanning(
   userId: string,
   campaignId: string,
-): Promise<Omit<AllyCopilotIdentityInput, "nextActionType" | "nextActionTitle" | "nextActionHref" | "configurationKind"> & {
+): Promise<{
+  clientName: string;
+  campaignName: string;
+  snapshot: AllyCopilotNativePlanningSnapshot;
   configurationKind: string | null;
-  status: string | null;
-  attentionHints: {
-    attentionState: string;
-    urgencyLevel: string;
-    health: string | null;
-    trend: string;
-    resultsCount: number | null;
-  };
 }> {
   const { data, error } = await admin()
     .from("campaigns")
-    .select(
-      "id, user_id, name, status, citta, titolo_annuncio, variante_a, variante_b, variante_c, clients(name)",
-    )
+    .select(NATIVE_SELECT)
     .eq("id", campaignId)
     .maybeSingle();
   if (error) {
     throw new DiagnosisLoadError("CONFIG", "Lettura campagna non riuscita.");
   }
-  const row = data as {
-    id: string;
-    user_id: string | null;
-    name: string | null;
-    status: string | null;
-    citta: string | null;
-    titolo_annuncio: string | null;
-    variante_a: string | null;
-    variante_b: string | null;
-    variante_c: string | null;
-    clients: { name: string } | { name: string }[] | null;
-  } | null;
+  const row = data as NativeRow | null;
   if (!row) throw new DiagnosisLoadError("NOT_FOUND", "Campagna non trovata.");
   if (row.user_id !== userId) {
     throw new DiagnosisLoadError("FORBIDDEN", "Campagna non autorizzata.");
   }
-  const clientJoin = Array.isArray(row.clients) ? row.clients[0] : row.clients;
+  const mapped = snapshotFromNativeRow(row);
   const status = (row.status ?? "").toUpperCase();
   const configurationKind =
     status === "DRAFT" || !status
@@ -85,43 +172,21 @@ async function loadNativeIdentity(
       : status === "REVISION_REQUESTED"
         ? "REVISION"
         : null;
-
-  return {
-    campaignId: row.id,
-    source: "NATIVE",
-    clientName: clientJoin?.name?.trim() || "Cliente",
-    campaignName: row.name?.trim() || "Campagna",
-    href: `/campagne/${row.id}`,
-    linkedNativeId: null,
-    citta: row.citta?.trim() || null,
-    copyVariants: textList(row.variante_a, row.variante_b, row.variante_c),
-    headline: row.titolo_annuncio?.trim() || null,
-    configurationKind,
-    status: row.status,
-    attentionHints: {
-      attentionState: "CONFIGURATION_REQUIRED",
-      urgencyLevel: "NONE",
-      health: null,
-      trend: "INSUFFICIENT",
-      resultsCount: null,
-    },
-  };
+  return { ...mapped, configurationKind };
 }
 
-async function loadMetaIdentity(
+async function loadMetaShell(
   userId: string,
   metaCampaignUuid: string,
 ): Promise<{
   clientName: string;
   campaignName: string;
   linkedNativeId: string | null;
-  citta: string | null;
-  copyVariants: string[];
-  headline: string | null;
+  snapshot: AllyCopilotNativePlanningSnapshot | null;
 }> {
   const { data, error } = await admin()
     .from("meta_campaigns")
-    .select("id, user_id, name, affianco_campaign_id, clients(name)")
+    .select("id, user_id, name, affianco_campaign_id, clients(name, website)")
     .eq("id", metaCampaignUuid)
     .maybeSingle();
   if (error) {
@@ -132,43 +197,30 @@ async function loadMetaIdentity(
     user_id: string | null;
     name: string | null;
     affianco_campaign_id: string | null;
-    clients: { name: string } | { name: string }[] | null;
+    clients:
+      | { name: string; website?: string | null }
+      | { name: string; website?: string | null }[]
+      | null;
   } | null;
   if (!row) throw new DiagnosisLoadError("NOT_FOUND", "Campagna Meta non trovata.");
   if (row.user_id !== userId) {
     throw new DiagnosisLoadError("FORBIDDEN", "Campagna Meta non autorizzata.");
   }
   const clientJoin = Array.isArray(row.clients) ? row.clients[0] : row.clients;
-  let citta: string | null = null;
-  let copyVariants: string[] = [];
-  let headline: string | null = null;
+  let snapshot: AllyCopilotNativePlanningSnapshot | null = null;
   if (row.affianco_campaign_id && isUuid(row.affianco_campaign_id)) {
-    const { data: native } = await admin()
-      .from("campaigns")
-      .select("user_id, citta, titolo_annuncio, variante_a, variante_b, variante_c")
-      .eq("id", row.affianco_campaign_id)
-      .maybeSingle();
-    const n = native as {
-      user_id: string | null;
-      citta: string | null;
-      titolo_annuncio: string | null;
-      variante_a: string | null;
-      variante_b: string | null;
-      variante_c: string | null;
-    } | null;
-    if (n && n.user_id === userId) {
-      citta = n.citta?.trim() || null;
-      copyVariants = textList(n.variante_a, n.variante_b, n.variante_c);
-      headline = n.titolo_annuncio?.trim() || null;
+    try {
+      const native = await loadNativePlanning(userId, row.affianco_campaign_id);
+      snapshot = native.snapshot;
+    } catch {
+      snapshot = null;
     }
   }
   return {
     clientName: clientJoin?.name?.trim() || "Cliente",
     campaignName: row.name?.trim() || "Campagna Meta",
     linkedNativeId: row.affianco_campaign_id,
-    citta,
-    copyVariants,
-    headline,
+    snapshot,
   };
 }
 
@@ -186,7 +238,7 @@ export async function loadAllyCampaignCopilotContext(
 
   let identityBase: AllyCopilotIdentityInput;
   if (source === "NATIVE") {
-    const native = await loadNativeIdentity(userId, campaignId);
+    const native = await loadNativePlanning(userId, campaignId);
     const next = resolveNextAction({
       campaignId,
       source: "NATIVE",
@@ -196,8 +248,11 @@ export async function loadAllyCampaignCopilotContext(
       trend: payload.trend,
       healthAvailability: bundle.healthAvailability,
       configurationKind:
-        (native.configurationKind === "DRAFT" ? "DRAFT" : null) ??
-        (payload.attentionState === "CONFIGURATION_REQUIRED" ? "OTHER" : null),
+        native.configurationKind === "DRAFT"
+          ? "DRAFT"
+          : payload.attentionState === "CONFIGURATION_REQUIRED"
+            ? "OTHER"
+            : null,
       resultsCount: payload.metrics.results,
       rowHref: `/campagne/${campaignId}`,
       diagnosis: null,
@@ -209,9 +264,7 @@ export async function loadAllyCampaignCopilotContext(
       campaignName: native.campaignName,
       href: `/campagne/${campaignId}`,
       linkedNativeId: null,
-      citta: native.citta,
-      copyVariants: native.copyVariants,
-      headline: native.headline,
+      planningSnapshot: native.snapshot,
       configurationKind:
         native.configurationKind === "DRAFT"
           ? "DRAFT"
@@ -225,7 +278,7 @@ export async function loadAllyCampaignCopilotContext(
       nextActionHref: next.ctaHref,
     };
   } else {
-    const meta = await loadMetaIdentity(userId, campaignId);
+    const meta = await loadMetaShell(userId, campaignId);
     const linked = Boolean(meta.linkedNativeId);
     const next = resolveNextAction({
       campaignId,
@@ -252,9 +305,7 @@ export async function loadAllyCampaignCopilotContext(
       campaignName: meta.campaignName,
       href: "/risultati",
       linkedNativeId: meta.linkedNativeId,
-      citta: meta.citta,
-      copyVariants: meta.copyVariants,
-      headline: meta.headline,
+      planningSnapshot: meta.snapshot,
       configurationKind:
         payload.attentionState === "CONFIGURATION_REQUIRED"
           ? payload.targetValue == null

@@ -12,6 +12,15 @@ export type AllyCopilotHistoryTurn = {
   content: string;
 };
 
+export type AllyCopilotFieldStatus = "complete" | "missing" | "unavailable";
+
+export type AllyCopilotConfigField = {
+  id: string;
+  label: string;
+  status: AllyCopilotFieldStatus;
+  value: string | null;
+};
+
 /** Safe identity — names only, no emails / ids of other users. */
 export type AllyCopilotIdentity = {
   campaignId: string;
@@ -23,11 +32,15 @@ export type AllyCopilotIdentity = {
 };
 
 export type AllyCopilotWorkflow = {
+  /** Raw status for logic; prefer statusLabelIt in user-facing answers. */
   status: string | null;
+  statusLabelIt: string;
   attentionState: string;
+  attentionLabelIt: string;
   urgencyLevel: string;
   configurationKind: string | null;
-  attentionReason: string;
+  /** Italian human reason — never dump English enum names to the user. */
+  attentionReasonIt: string;
 };
 
 export type AllyCopilotPlanning = {
@@ -36,10 +49,18 @@ export type AllyCopilotPlanning = {
   audienceHint: string | null;
   offer: string | null;
   dailyBudget: number | null;
+  etaMin: number | null;
+  etaMax: number | null;
+  raggioKm: number | null;
+  targetType: string | null;
+  targetAge: string | null;
   copyVariants: string[];
   headline: string | null;
   creativeFormatHint: string | null;
   hasCreativeAsset: boolean;
+  hasPageId: boolean;
+  hasFormId: boolean;
+  hasWebsite: boolean;
 };
 
 export type AllyCopilotEconomics = {
@@ -70,12 +91,24 @@ export type AllyCopilotPerformance = {
     cpm: string | null;
     frequency: string | null;
   };
+  /** True when there is no meaningful performance snapshot yet. */
+  noPerformanceDataYet: boolean;
 };
 
 export type AllyCopilotDecision = {
   nextActionType: string | null;
   nextActionTitle: string | null;
   nextActionHref: string | null;
+};
+
+export type AllyCopilotConfiguration = {
+  fields: AllyCopilotConfigField[];
+  launchReadiness: {
+    isReady: boolean;
+    percentuale: number;
+    completeLabels: string[];
+    missingLabels: string[];
+  } | null;
 };
 
 /** Canonical compact context sent to the model (plus question + short history). */
@@ -86,6 +119,7 @@ export type AllyCampaignCopilotContext = {
   economics: AllyCopilotEconomics;
   performance: AllyCopilotPerformance;
   decision: AllyCopilotDecision;
+  configuration: AllyCopilotConfiguration;
   linkedNativeId: string | null;
 };
 

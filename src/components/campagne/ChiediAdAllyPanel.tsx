@@ -210,13 +210,13 @@ export function ChiediAdAllyPanel({
 
           {latest ? (
             <div className="mt-4 space-y-3 border-t border-[var(--border-soft)] pt-4">
-              <p className="text-[14px] leading-relaxed text-[var(--ink)]">
+              <p className="text-[14px] leading-relaxed text-[var(--ink)] whitespace-pre-line">
                 {latest.answer}
               </p>
               {latest.evidence.length > 0 ? (
                 <div>
-                  <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--ink-muted)]">
-                    Fatti
+                  <p className="text-[12px] font-semibold text-[var(--ink)]">
+                    Cosa so
                   </p>
                   <ul className="mt-1 space-y-1">
                     {latest.evidence.map((e) => (
@@ -230,27 +230,10 @@ export function ChiediAdAllyPanel({
                   </ul>
                 </div>
               ) : null}
-              {latest.hypotheses.length > 0 ? (
-                <div>
-                  <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--ink-muted)]">
-                    Ipotesi
-                  </p>
-                  <ul className="mt-1 space-y-1">
-                    {latest.hypotheses.map((h) => (
-                      <li
-                        key={h}
-                        className="text-[13px] leading-snug text-[var(--ink-muted)]"
-                      >
-                        {h}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
               {latest.missingInformation.length > 0 ? (
                 <div>
-                  <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--ink-muted)]">
-                    Dati mancanti
+                  <p className="text-[12px] font-semibold text-[var(--ink)]">
+                    Cosa manca o non è verificabile
                   </p>
                   <ul className="mt-1 space-y-1">
                     {latest.missingInformation.map((m) => (
@@ -264,18 +247,48 @@ export function ChiediAdAllyPanel({
                   </ul>
                 </div>
               ) : null}
-              {latest.recommendedActionHref ? (
-                <Link
-                  href={latest.recommendedActionHref}
-                  className="inline-block text-sm font-medium text-[var(--primary)] hover:opacity-80"
-                >
-                  Vai al prossimo passo
-                </Link>
+              {latest.hypotheses.length > 0 ? (
+                <div>
+                  <p className="text-[12px] font-semibold text-[var(--ink)]">
+                    Ipotesi (non provate)
+                  </p>
+                  <ul className="mt-1 space-y-1">
+                    {latest.hypotheses.map((h) => (
+                      <li
+                        key={h}
+                        className="text-[13px] leading-snug text-[var(--ink-muted)]"
+                      >
+                        {h}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : null}
-              <p className="text-[11px] text-[var(--ink-muted)]">
-                Confidenza: {latest.confidence}
-                {latest.fromAi ? "" : " · risposta di riserva"}
-              </p>
+              {latest.recommendedActionHref ? (
+                <div>
+                  <p className="text-[12px] font-semibold text-[var(--ink)]">
+                    Prossimo passo
+                  </p>
+                  <Link
+                    href={latest.recommendedActionHref}
+                    className="mt-1 inline-block text-sm font-medium text-[var(--primary)] hover:opacity-80"
+                  >
+                    Continua nella campagna
+                  </Link>
+                </div>
+              ) : null}
+              {latest.confidence === "UNKNOWN" ||
+              latest.confidence === "LOW" ? (
+                <p className="text-[11px] text-[var(--ink-muted)]">
+                  Affidabilità:{" "}
+                  {latest.confidence === "UNKNOWN" ? "non valutabile" : "bassa"}
+                  {!latest.fromAi ? " · risposta di riserva" : ""}
+                </p>
+              ) : !latest.fromAi ? (
+                <p className="text-[11px] text-[var(--ink-muted)]">
+                  Risposta di riserva
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>
