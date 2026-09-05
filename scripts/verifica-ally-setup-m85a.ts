@@ -885,7 +885,7 @@ assert(
     "Sidebar gates Importa da Meta CTA",
   );
   assert(
-    /startMetaImportHref|preferredClientIdFromPathname/.test(sidebar),
+    /startMetaImportFlow|preferredClientIdFromPathname/.test(sidebar),
     "Sidebar Import uses safe client-scoped import flow",
   );
 
@@ -1095,12 +1095,12 @@ assert(
     "utf8",
   );
   assert(
-    /startMetaImportHref|ensureMetaImportClient/.test(homeSrc),
+    /startMetaImportFlow|ensureMetaImportClient/.test(homeSrc),
     "Home Import auto-provisions canonical client",
   );
   assert(
-    /startMetaImportHref|focus=meta/.test(homeSrc),
-    "Home Import Meta preserves client context with focus=meta",
+    /startMetaImportFlow|applyMetaImportStart/.test(homeSrc),
+    "Home Import starts OAuth or Meta panel without client form",
   );
 
   const importHelper = readFileSync("./src/lib/meta-import-client.ts", "utf8");
@@ -1111,6 +1111,42 @@ assert(
   assert(
     /Cliente Meta/.test(importHelper),
     "Import uses placeholder display name before Meta account",
+  );
+  assert(
+    /startMetaImportFlow/.test(importHelper),
+    "Canonical startMetaImportFlow present",
+  );
+  assert(
+    /Never pick an arbitrary|never pick an arbitrary|Never pick an arbitrary named/i.test(
+      importHelper,
+    ) || !/\.order\("created_at"[\s\S]*maybeSingle/.test(importHelper),
+    "Generic Import does not pick arbitrary first client",
+  );
+
+  const settingsMeta = readFileSync(
+    "./src/components/impostazioni/PannelloIntegrazioneMeta.tsx",
+    "utf8",
+  );
+  assert(
+    /Importa campagne da Meta/.test(settingsMeta),
+    "Settings Meta title is import-first",
+  );
+  assert(/Collega Meta/.test(settingsMeta), "Settings primary Collega Meta");
+  assert(
+    !/Continua su cliente/.test(settingsMeta),
+    "Settings Continua su cliente removed",
+  );
+  assert(
+    !/Apri il cliente/.test(settingsMeta),
+    "Settings Apri il cliente copy removed",
+  );
+  assert(
+    !/Aggiungi prima un cliente/.test(settingsMeta),
+    "Settings no manual client prerequisite",
+  );
+  assert(
+    /startMetaImportFlow/.test(settingsMeta),
+    "Settings uses canonical zero-client import flow",
   );
 
   const accountsLib = readFileSync(

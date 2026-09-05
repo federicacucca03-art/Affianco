@@ -20,8 +20,10 @@ import { useAllySetupNav } from "@/components/shell/AllySetupNavProvider";
 import type { AllyNavItemId } from "@/lib/ally-nav";
 import { allyNavItemVisible } from "@/lib/ally-nav";
 import {
+  applyMetaImportStart,
   preferredClientIdFromPathname,
-  startMetaImportHref,
+  readBearerToken,
+  startMetaImportFlow,
 } from "@/lib/meta-import-client";
 
 const STROKE = 1.75;
@@ -91,10 +93,12 @@ export function SecondarySidebar({ aperta, onChiudi }: Props) {
     if (importBusy) return;
     setImportBusy(true);
     try {
+      const token = await readBearerToken();
+      if (!token) return;
       const preferred = await preferredClientIdFromPathname(pathname);
-      const href = await startMetaImportHref(preferred);
+      const result = await startMetaImportFlow(preferred, token);
       onChiudi();
-      router.push(href);
+      applyMetaImportStart(result, (href) => router.push(href));
     } finally {
       setImportBusy(false);
     }

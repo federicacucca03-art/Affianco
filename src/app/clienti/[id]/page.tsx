@@ -14,6 +14,12 @@ import {
   readSetupPathPreference,
   writeSetupPathPreference,
 } from "@/lib/ally-setup";
+import {
+  applyMetaImportStart,
+  isMetaImportPlaceholderName,
+  readBearerToken,
+  startMetaImportFlow,
+} from "@/lib/meta-import-client";
 import { salvaBozzaOnboarding } from "@/data/clienti-store";
 import { nomeCampagnaContatti } from "@/data/defaults-contatti";
 
@@ -176,11 +182,23 @@ function DettaglioClienteInner() {
     router.push(`/campagne/nuova/richieste-contatto?${paramsQs.toString()}`);
   }
 
-  function chooseMeta() {
+  async function chooseMeta() {
     writeSetupPathPreference("meta");
-    document
-      .getElementById("meta-client-panel")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const token = await readBearerToken();
+    if (!token || !locale) {
+      document
+        .getElementById("meta-client-panel")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    try {
+      const result = await startMetaImportFlow(locale.id, token);
+      applyMetaImportStart(result, (href) => router.push(href));
+    } catch {
+      document
+        .getElementById("meta-client-panel")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
 
   if (locale === undefined) {
@@ -206,13 +224,16 @@ function DettaglioClienteInner() {
   }
 
   const showStartCards = !hasCampaigns && !focusMeta;
+  const displayName = isMetaImportPlaceholderName(locale.nome)
+    ? "Import da Meta"
+    : locale.nome;
 
   return (
     <main className="aff-page aff-page--narrow">
       <Link href="/clienti" className="aff-btn-tertiary min-h-8 px-0">
         Clienti
       </Link>
-      <h1 className="aff-page-title mt-3">{locale.nome}</h1>
+      <h1 className="aff-page-title mt-3">{displayName}</h1>
       <p className="aff-page-subtitle">
         {[locale.settore, locale.citta].filter(Boolean).join(" · ")}
       </p>
@@ -232,8 +253,8 @@ function DettaglioClienteInner() {
 
       {focusMeta && !hasCampaigns ? (
         <p className="mt-8 text-sm leading-relaxed text-[var(--ink-muted)]">
-          Continua con Meta per questo cliente: collega l&apos;account, scegli
-          l&apos;account pubblicitario e importa le campagne.
+          Collega Meta, scegli l&apos;account pubblicitario e importa le
+          campagne.
         </p>
       ) : null}
 

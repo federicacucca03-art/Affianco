@@ -1,7 +1,7 @@
 /**
- * M8.5B — import-first Meta onboarding helpers (client-side).
+ * M8.5B / M8.5C.1 — import-first Meta helpers (client-side).
  * Creates a real owner-scoped clients row before OAuth (Option A).
- * No local-only / fake clients.
+ * No local-only / fake clients. No arbitrary client pick for generic Import.
  */
 
 import { trovaOCreaCliente } from "@/lib/campagne-db";
@@ -13,7 +13,9 @@ import { supabase } from "@/lib/supabase";
 /** Temporary display name until Meta ad-account name is known. */
 export const META_IMPORT_CLIENT_PLACEHOLDER = "Cliente Meta";
 
-export function isMetaImportPlaceholderName(name: string | null | undefined): boolean {
+export function isMetaImportPlaceholderName(
+  name: string | null | undefined,
+): boolean {
   const n = (name ?? "").trim();
   return n === META_IMPORT_CLIENT_PLACEHOLDER;
 }
@@ -46,8 +48,10 @@ export async function ensureMetaImportClient(): Promise<{
 }
 
 /**
- * Resolve client for workspace "Importa da Meta" without fabricating business data.
- * Prefer an unambiguous route client, else an existing owned client, else placeholder.
+ * Resolve client for Meta Import.
+ * - Explicit preferred id → use it (client context).
+ * - Otherwise → reuse/create provisional import client only.
+ * Never pick an arbitrary named Ally client for generic Import.
  */
 export async function resolveMetaImportClientId(
   preferredClientId?: string | null,
@@ -57,31 +61,98 @@ export async function resolveMetaImportClientId(
     return preferred;
   }
 
-  try {
-    const { data, error } = await supabase
-      .from("clients")
-      .select("id")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (!error && data && typeof (data as { id: string }).id === "string") {
-      return (data as { id: string }).id;
-    }
-  } catch {
-    /* fall through */
-  }
-
-  const created = await ensureMetaImportClient();
-  return created.id;
+  const provisional = await ensureMetaImportClient();
+  return provisional.id;
 }
 
-/** Build the safe client-scoped Meta import href and mark Import branch intent. */
+/** Build the client Meta panel href and mark Import branch intent. */
 export async function startMetaImportHref(
   preferredClientId?: string | null,
 ): Promise<string> {
   writeSetupPathPreference("meta");
   const id = await resolveMetaImportClientId(preferredClientId);
   return `/clienti/${encodeURIComponent(id)}?focus=meta`;
+}
+
+export type MetaImportStartResult =
+  | { mode: "oauth"; authorizationUrl: string; clientId: string }
+  | { mode: "panel"; href: string; clientId: string };
+
+/**
+ * Canonical Import start: provision if needed, then OAuth or Meta panel.
+ * Zero Ally clients is supported — no manual client form.
+ */
+export async function startMetaImportFlow(
+  preferredClientId: string | null | undefined,
+  bearerToken: string,
+): Promise<MetaImportStartResult> {
+  writeSetupPathPreference("meta");
+  const clientId = await resolveMetaImportClientId(preferredClientId);
+  const auth = { Authorization: `Bearer ${bearerToken}` };
+
+  let connected = false;
+  try {
+    const connRes = await fetch(
+      `/api/meta/connection?clientId=${encodeURIComponent(clientId)}`,
+      { headers: auth },
+    );
+    if (connRes.ok) {
+      const conn = (await connRes.json()) as { connected?: boolean };
+      connected = conn.connected === true;
+    }
+  } catch {
+    connected = false;
+  }
+
+  if (connected) {
+    return {
+      mode: "panel",
+      href: `/clienti/${encodeURIComponent(clientId)}?focus=meta`,
+      clientId,
+    };
+  }
+
+  const oauthRes = await fetch("/api/meta/oauth/start", {
+    method: "POST",
+    headers: {
+      ...auth,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ clientId }),
+  });
+  const oauth = (await oauthRes.json()) as {
+    authorizationUrl?: string;
+    error?: string;
+  };
+  if (!oauthRes.ok || !oauth.authorizationUrl) {
+    throw new Error(oauth.error || "Collegamento Meta non riuscito.");
+  }
+  return {
+    mode: "oauth",
+    authorizationUrl: oauth.authorizationUrl,
+    clientId,
+  };
+}
+
+/** Apply startMetaImportFlow result (OAuth redirect or in-app navigation). */
+export function applyMetaImportStart(
+  result: MetaImportStartResult,
+  navigate: (href: string) => void,
+): void {
+  if (result.mode === "oauth") {
+    window.location.assign(result.authorizationUrl);
+    return;
+  }
+  navigate(result.href);
+}
+
+export async function readBearerToken(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Extract client id from /clienti/{uuid} when present. */

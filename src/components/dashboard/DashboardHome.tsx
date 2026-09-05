@@ -54,7 +54,9 @@ import {
 import { loadAllySetupSignals } from "@/lib/ally-setup-loader";
 import { notifyAllySetupChanged } from "@/lib/ally-setup-shell-loader";
 import {
-  startMetaImportHref,
+  applyMetaImportStart,
+  readBearerToken,
+  startMetaImportFlow,
 } from "@/lib/meta-import-client";
 
 const MAX_REVISIONI = 3;
@@ -318,33 +320,32 @@ export function DashboardHome() {
     setImportBusy(true);
     setErrore(null);
     try {
-      const preferred =
-        setupSignals?.hasDbClient && setupSignals.primaryClientId
-          ? setupSignals.primaryClientId
-          : null;
-      const href = await startMetaImportHref(preferred);
-      if (!preferred) {
-        setSetupSignals((prev) =>
-          prev
-            ? {
-                ...prev,
-                hasClient: true,
-                hasDbClient: true,
-                pathPreference: "meta",
-              }
-            : prev,
-        );
-      } else {
-        setSetupSignals((prev) =>
-          prev ? { ...prev, pathPreference: "meta" } : prev,
-        );
+      const token = await readBearerToken();
+      if (!token) {
+        setErrore("Sessione assente. Accedi di nuovo.");
+        return;
       }
-      router.push(href);
+      /* Home Import is always generic — provisional client, never an arbitrary pick. */
+      const result = await startMetaImportFlow(null, token);
+      setSetupSignals((prev) =>
+        prev
+          ? {
+              ...prev,
+              hasClient: true,
+              hasDbClient: true,
+              primaryClientId: result.clientId,
+              pathPreference: "meta",
+            }
+          : prev,
+      );
+      applyMetaImportStart(result, (href) => router.push(href));
     } catch (e) {
       logErroreSupabaseDev("dashboard_home_meta_import_client", e);
       setErrore(
         messaggioErroreSupabase(e, "generico") ||
-          "Impossibile preparare il collegamento Meta.",
+          (e instanceof Error
+            ? e.message
+            : "Impossibile preparare il collegamento Meta."),
       );
       writeSetupPathPreference(null);
     } finally {
