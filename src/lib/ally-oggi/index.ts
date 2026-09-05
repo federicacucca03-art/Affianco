@@ -1,5 +1,5 @@
 /**
- * M9.1 — Ally oggi public barrel (client-safe exports).
+ * M9.1B — Ally oggi public barrel (client-safe exports).
  */
 
 export {
@@ -12,11 +12,17 @@ export {
   sanitizeAllyOggiBriefContext,
   shouldGenerateAllyOggiBrief,
 } from "@/lib/ally-oggi/sanitize-context";
+export {
+  buildAllyOggiWorkspaceSummary,
+  countWorkspaceCampaigns,
+  isPerformanceEligibleAttentionItem,
+} from "@/lib/ally-oggi/workspace-summary";
 export type {
   AllyOggiBrief,
   AllyOggiBriefContext,
   AllyOggiBriefItem,
   AllyOggiCampaignFact,
+  AllyOggiWorkspaceSummary,
 } from "@/lib/ally-oggi/types";
 export {
   ALLY_OGGI_MAX_CAMPAIGNS_IN_PROMPT,

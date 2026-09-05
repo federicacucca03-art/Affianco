@@ -1,5 +1,6 @@
 /**
- * M9.1 — build compact Ally oggi context from Control Room items.
+ * M9.1B — build compact Ally oggi context.
+ * Workspace aggregates + bounded Control Room performance facts.
  * Pure. No AI. No secrets.
  */
 
@@ -8,11 +9,17 @@ import {
   buildMondayControlRoom,
   type ControlRoomAttentionItem,
 } from "@/lib/monday-control-room";
+import type { Campagna } from "@/types/campagne";
 import {
   ALLY_OGGI_MAX_CAMPAIGNS_IN_PROMPT,
+  emptyAllyOggiWorkspaceSummary,
   type AllyOggiBriefContext,
   type AllyOggiCampaignFact,
 } from "@/lib/ally-oggi/types";
+import {
+  buildAllyOggiWorkspaceSummary,
+  isPerformanceEligibleAttentionItem,
+} from "@/lib/ally-oggi/workspace-summary";
 
 const STALE_META_MS = 48 * 60 * 60 * 1000;
 
@@ -66,29 +73,103 @@ function toFact(
   };
 }
 
+export type BuildAllyOggiBriefContextInput = {
+  attentionItems: readonly ControlRoomAttentionItem[];
+  nativeCampaigns: readonly Pick<Campagna, "id" | "status">[];
+  metaItems: readonly ControlRoomAttentionItem[];
+  linkedNativeIds: ReadonlySet<string>;
+  nowMs?: number;
+};
+
+function isBriefContextInput(
+  input: BuildAllyOggiBriefContextInput | readonly ControlRoomAttentionItem[],
+): input is BuildAllyOggiBriefContextInput {
+  return (
+    Boolean(input) &&
+    !Array.isArray(input) &&
+    typeof input === "object" &&
+    "attentionItems" in input
+  );
+}
+
 /**
- * Build AI-safe brief context from attention items (already ownership-scoped).
- *
- * Truncation rule: sort via canonical `buildMondayControlRoom` /
- * `sortAttentionItems` (urgency → attention → freshness → name) FIRST,
- * then take the top N. Never truncate by load/query order.
+ * Truncation: Control Room sort first, then take top N *performance-eligible* facts.
+ * Workspace aggregates always cover the full inventory (after link dedupe).
  */
 export function buildAllyOggiBriefContext(
-  items: readonly ControlRoomAttentionItem[],
-  nowMs = Date.now(),
+  input: BuildAllyOggiBriefContextInput | readonly ControlRoomAttentionItem[],
+  nowMsArg?: number,
 ): AllyOggiBriefContext {
-  const monday = buildMondayControlRoom([...items]);
-  const visible = monday.items;
-  const staleMetaCount = visible.filter((i) =>
+  // Back-compat: tests that pass only attention items get derived workspace.
+  if (!isBriefContextInput(input)) {
+    const items = input;
+    const nowMs = nowMsArg ?? Date.now();
+    const monday = buildMondayControlRoom([...items]);
+    const workspace = emptyAllyOggiWorkspaceSummary();
+    workspace.totalWorkspaceCampaigns = monday.items.length;
+    workspace.configurationRequiredCampaigns =
+      monday.counts.CONFIGURATION_REQUIRED;
+    workspace.insufficientDataCampaigns = monday.counts.INSUFFICIENT_DATA;
+    workspace.historicalCampaigns = monday.counts.HISTORICAL;
+    workspace.monitorableCampaigns = monday.items.filter((item) => {
+      if (!isPerformanceEligibleAttentionItem(item)) return false;
+      if (item.attentionState === "HISTORICAL") return false;
+      if (item.attentionState === "CONFIGURATION_REQUIRED") return false;
+      return true;
+    }).length;
+    workspace.nativeCampaigns = monday.items.filter(
+      (i) => i.source === "NATIVE",
+    ).length;
+    workspace.metaCampaigns = monday.items.filter(
+      (i) => i.source === "META",
+    ).length;
+
+    const staleMetaCount = monday.items.filter((i) =>
+      isStaleMetaInsights(i, nowMs),
+    ).length;
+    const campaigns = monday.items
+      .filter(isPerformanceEligibleAttentionItem)
+      .slice(0, ALLY_OGGI_MAX_CAMPAIGNS_IN_PROMPT)
+      .map((i) => toFact(i, nowMs));
+
+    return {
+      workspace,
+      totalMonitored: monday.items.length,
+      counts: {
+        critical: monday.counts.CRITICAL,
+        needsAttention: monday.counts.NEEDS_ATTENTION,
+        monitor: monday.counts.MONITOR,
+        stable: monday.counts.STABLE,
+        configurationRequired: monday.counts.CONFIGURATION_REQUIRED,
+        insufficientData: monday.counts.INSUFFICIENT_DATA,
+        historical: monday.counts.HISTORICAL,
+      },
+      staleMetaCount,
+      campaigns,
+    };
+  }
+
+  const nowMs = input.nowMs ?? Date.now();
+  const monday = buildMondayControlRoom([...input.attentionItems]);
+  const workspace = buildAllyOggiWorkspaceSummary({
+    nativeCampaigns: input.nativeCampaigns,
+    metaItems: input.metaItems,
+    linkedNativeIds: input.linkedNativeIds,
+    attentionItems: input.attentionItems,
+  });
+
+  const staleMetaCount = monday.items.filter((i) =>
     isStaleMetaInsights(i, nowMs),
   ).length;
 
-  const campaigns = visible
+  const campaigns = monday.items
+    .filter(isPerformanceEligibleAttentionItem)
     .slice(0, ALLY_OGGI_MAX_CAMPAIGNS_IN_PROMPT)
     .map((i) => toFact(i, nowMs));
 
   return {
-    totalMonitored: visible.length,
+    workspace,
+    totalMonitored: monday.items.length,
     counts: {
       critical: monday.counts.CRITICAL,
       needsAttention: monday.counts.NEEDS_ATTENTION,

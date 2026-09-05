@@ -1,12 +1,13 @@
 /**
- * M9.1 — validate client-submitted brief context (structure only).
- * Strips unknown fields. Rejects oversized / secret-like keys.
+ * M9.1B — validate client-submitted brief context (structure only).
  */
 
 import {
   ALLY_OGGI_MAX_CAMPAIGNS_IN_PROMPT,
+  emptyAllyOggiWorkspaceSummary,
   type AllyOggiBriefContext,
   type AllyOggiCampaignFact,
+  type AllyOggiWorkspaceSummary,
 } from "@/lib/ally-oggi/types";
 
 const FORBIDDEN_KEY_RE =
@@ -33,6 +34,31 @@ function assertNoForbiddenKeys(obj: unknown, path: string): void {
       throw new Error(`Campo non consentito: ${path}.${key}`);
     }
   }
+}
+
+function nonNegInt(v: unknown): number {
+  return Math.max(0, Math.floor(numOrNull(v) ?? 0));
+}
+
+function parseWorkspace(raw: unknown): AllyOggiWorkspaceSummary {
+  const empty = emptyAllyOggiWorkspaceSummary();
+  if (!raw || typeof raw !== "object") return empty;
+  assertNoForbiddenKeys(raw, "workspace");
+  const o = raw as Record<string, unknown>;
+  return {
+    totalWorkspaceCampaigns: nonNegInt(o.totalWorkspaceCampaigns),
+    nativeCampaigns: nonNegInt(o.nativeCampaigns),
+    metaCampaigns: nonNegInt(o.metaCampaigns),
+    draftCampaigns: nonNegInt(o.draftCampaigns),
+    revisionRequestedCampaigns: nonNegInt(o.revisionRequestedCampaigns),
+    approvedCampaigns: nonNegInt(o.approvedCampaigns),
+    monitorableCampaigns: nonNegInt(o.monitorableCampaigns),
+    configurationRequiredCampaigns: nonNegInt(
+      o.configurationRequiredCampaigns,
+    ),
+    insufficientDataCampaigns: nonNegInt(o.insufficientDataCampaigns),
+    historicalCampaigns: nonNegInt(o.historicalCampaigns),
+  };
 }
 
 function parseFact(raw: unknown): AllyOggiCampaignFact | null {
@@ -106,38 +132,38 @@ export function sanitizeAllyOggiBriefContext(
     if (fact) campaigns.push(fact);
   }
 
+  const workspace = parseWorkspace(o.workspace);
   const totalMonitored = numOrNull(o.totalMonitored) ?? campaigns.length;
   if (totalMonitored < 0 || totalMonitored > 500) {
     throw new Error("totalMonitored non valido.");
   }
+  if (workspace.totalWorkspaceCampaigns > 500) {
+    throw new Error("totalWorkspaceCampaigns non valido.");
+  }
 
   return {
+    workspace,
     totalMonitored,
     counts: {
-      critical: Math.max(0, Math.floor(numOrNull(c.critical) ?? 0)),
-      needsAttention: Math.max(0, Math.floor(numOrNull(c.needsAttention) ?? 0)),
-      monitor: Math.max(0, Math.floor(numOrNull(c.monitor) ?? 0)),
-      stable: Math.max(0, Math.floor(numOrNull(c.stable) ?? 0)),
-      configurationRequired: Math.max(
-        0,
-        Math.floor(numOrNull(c.configurationRequired) ?? 0),
-      ),
-      insufficientData: Math.max(
-        0,
-        Math.floor(numOrNull(c.insufficientData) ?? 0),
-      ),
-      historical: Math.max(0, Math.floor(numOrNull(c.historical) ?? 0)),
+      critical: nonNegInt(c.critical),
+      needsAttention: nonNegInt(c.needsAttention),
+      monitor: nonNegInt(c.monitor),
+      stable: nonNegInt(c.stable),
+      configurationRequired: nonNegInt(c.configurationRequired),
+      insufficientData: nonNegInt(c.insufficientData),
+      historical: nonNegInt(c.historical),
     },
-    staleMetaCount: Math.max(0, Math.floor(numOrNull(o.staleMetaCount) ?? 0)),
+    staleMetaCount: nonNegInt(o.staleMetaCount),
     campaigns,
   };
 }
 
-/** True when AI brief is allowed (workspace with campaigns). */
+/** True when AI brief is allowed (active workspace with campaigns). */
 export function shouldGenerateAllyOggiBrief(input: {
   isFirstRunOnboarding: boolean;
-  totalMonitored: number;
+  totalWorkspaceCampaigns: number;
+  totalMonitored?: number;
 }): boolean {
   if (input.isFirstRunOnboarding) return false;
-  return input.totalMonitored > 0;
+  return input.totalWorkspaceCampaigns > 0;
 }

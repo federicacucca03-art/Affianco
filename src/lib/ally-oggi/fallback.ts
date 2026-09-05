@@ -1,5 +1,6 @@
 /**
- * M9.1 — deterministic Ally oggi fallback (no AI).
+ * M9.1B — deterministic Ally oggi fallback (no AI).
+ * Communicates workspace awareness + performance/config notes.
  */
 
 import {
@@ -59,7 +60,7 @@ function configSentence(f: AllyOggiCampaignFact): string {
     case "RESULT_MAPPING":
       return "Serve indicare quale risultato monitorare.";
     case "ACTIVE_MISSING_RESULTS":
-      return "Servono i primi risultati per valutarla.";
+      return "È approvata ma non ancora valutabile: mancano i risultati.";
     case "DRAFT":
       return "Campagna ancora in bozza: completa la configurazione.";
     default:
@@ -67,9 +68,14 @@ function configSentence(f: AllyOggiCampaignFact): string {
   }
 }
 
+function pluralCampagne(n: number): string {
+  return n === 1 ? "1 campagna" : `${n} campagne`;
+}
+
 export function buildAllyOggiFallback(
   context: AllyOggiBriefContext,
 ): AllyOggiBrief {
+  const ws = context.workspace;
   const priorityFacts = context.campaigns.filter(
     (c) =>
       c.attentionState === "CRITICAL" ||
@@ -95,41 +101,56 @@ export function buildAllyOggiFallback(
     .map((f) => itemFromFact(f, configSentence(f)));
 
   const parts: string[] = [];
-  const attn =
-    context.counts.critical + context.counts.needsAttention;
-  if (attn === 1) {
-    parts.push("1 campagna richiede attenzione");
-  } else if (attn > 1) {
-    parts.push(`${attn} campagne richiedono attenzione`);
+  if (ws.draftCampaigns === 1) parts.push("1 da completare");
+  else if (ws.draftCampaigns > 1) parts.push(`${ws.draftCampaigns} da completare`);
+
+  if (ws.revisionRequestedCampaigns === 1) parts.push("1 in revisione");
+  else if (ws.revisionRequestedCampaigns > 1) {
+    parts.push(`${ws.revisionRequestedCampaigns} in revisione`);
   }
-  const monitor =
-    context.counts.monitor + context.counts.insufficientData;
-  if (monitor === 1) {
-    parts.push("1 da monitorare");
-  } else if (monitor > 1) {
-    parts.push(`${monitor} da monitorare`);
-  }
-  if (context.counts.configurationRequired === 1) {
+
+  if (ws.configurationRequiredCampaigns === 1) {
     parts.push("1 da configurare");
-  } else if (context.counts.configurationRequired > 1) {
-    parts.push(
-      `${context.counts.configurationRequired} da configurare`,
-    );
+  } else if (ws.configurationRequiredCampaigns > 1) {
+    parts.push(`${ws.configurationRequiredCampaigns} da configurare`);
   }
+
+  if (ws.insufficientDataCampaigns === 1) {
+    parts.push("1 con dati insufficienti");
+  } else if (ws.insufficientDataCampaigns > 1) {
+    parts.push(`${ws.insufficientDataCampaigns} con dati insufficienti`);
+  }
+
+  if (ws.monitorableCampaigns === 1) parts.push("1 monitorabile");
+  else if (ws.monitorableCampaigns > 1) {
+    parts.push(`${ws.monitorableCampaigns} monitorabili`);
+  }
+
+  const perfAttn = priorityFacts.length;
 
   const headline =
-    attn > 0
+    perfAttn > 0
       ? "Ecco cosa richiederebbe attenzione oggi."
-      : context.counts.configurationRequired > 0
-        ? "Nessuna criticità operativa, ma c’è da configurare."
-        : "Non vedo criticità operative oggi.";
+      : ws.revisionRequestedCampaigns > 0 || ws.draftCampaigns > 0
+        ? "Nessuna urgenza di performance; c’è lavoro di workflow."
+        : ws.configurationRequiredCampaigns > 0
+          ? "Nessuna criticità di performance, ma c’è da configurare."
+          : "Non vedo criticità operative oggi.";
 
-  const summary =
-    context.totalMonitored === 0
-      ? "Non ci sono ancora campagne da sintetizzare."
-      : parts.length > 0
-        ? `Ho controllato ${context.totalMonitored} campagne. ${parts.join(" · ")}.`
-        : `Ho controllato ${context.totalMonitored} campagne. Tutto stabile per ora.`;
+  let summary: string;
+  if (ws.totalWorkspaceCampaigns === 0) {
+    summary = "Non ci sono ancora campagne nel workspace.";
+  } else {
+    const head = `Hai ${pluralCampagne(ws.totalWorkspaceCampaigns)} nel workspace.`;
+    const detail = parts.length > 0 ? ` ${parts.join(" · ")}.` : "";
+    const noPerf =
+      perfAttn === 0 &&
+      context.counts.critical === 0 &&
+      priorityFacts.length === 0
+        ? " Oggi non vedo urgenze di performance."
+        : "";
+    summary = `${head}${detail}${noPerf}`.replace(/\s+/g, " ").trim();
+  }
 
   return {
     headline,
@@ -138,7 +159,10 @@ export function buildAllyOggiFallback(
     watchItems,
     configurationItems,
     closingNote:
-      attn === 0 && context.counts.configurationRequired === 0
+      perfAttn === 0 &&
+      ws.configurationRequiredCampaigns === 0 &&
+      ws.draftCampaigns === 0 &&
+      ws.revisionRequestedCampaigns === 0
         ? "Puoi riprendere dalle campagne in monitoraggio quando vuoi."
         : null,
     fromAi: false,

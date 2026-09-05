@@ -4,7 +4,7 @@
 
 import type { AllyOggiBrief, AllyOggiBriefContext } from "@/lib/ally-oggi/types";
 
-const PREFIX = "affianco-ally-oggi-v1:";
+const PREFIX = "affianco-ally-oggi-v2:";
 
 export function allyOggiCacheFingerprint(context: AllyOggiBriefContext): string {
   const tip = context.campaigns
@@ -24,7 +24,14 @@ export function allyOggiCacheFingerprint(context: AllyOggiBriefContext): string 
         ].join(":"),
     )
     .join("|");
+  const ws = context.workspace;
   return [
+    ws.totalWorkspaceCampaigns,
+    ws.draftCampaigns,
+    ws.revisionRequestedCampaigns,
+    ws.approvedCampaigns,
+    ws.monitorableCampaigns,
+    ws.configurationRequiredCampaigns,
     context.totalMonitored,
     context.counts.critical,
     context.counts.needsAttention,

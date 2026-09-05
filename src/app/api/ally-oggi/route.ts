@@ -54,6 +54,7 @@ export async function POST(request: Request) {
   if (
     !shouldGenerateAllyOggiBrief({
       isFirstRunOnboarding: isFirstRun,
+      totalWorkspaceCampaigns: context.workspace.totalWorkspaceCampaigns,
       totalMonitored: context.totalMonitored,
     })
   ) {

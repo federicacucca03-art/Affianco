@@ -10,6 +10,7 @@ import {
   type AllyOggiBrief,
 } from "@/lib/ally-oggi";
 import type { ControlRoomAttentionItem } from "@/lib/monday-control-room";
+import type { Campagna } from "@/types/campagne";
 import { readBearerToken } from "@/lib/meta-import-client";
 import {
   allyOggiCacheFingerprint,
@@ -18,15 +19,30 @@ import {
 } from "@/lib/ally-oggi/session-cache";
 
 type Props = {
-  items: readonly ControlRoomAttentionItem[];
+  attentionItems: readonly ControlRoomAttentionItem[];
+  nativeCampaigns: readonly Pick<Campagna, "id" | "status">[];
+  metaItems: readonly ControlRoomAttentionItem[];
+  linkedNativeIds: ReadonlySet<string>;
   enabled: boolean;
 };
 
-export function AllyOggiBriefPanel({ items, enabled }: Props) {
+export function AllyOggiBriefPanel({
+  attentionItems,
+  nativeCampaigns,
+  metaItems,
+  linkedNativeIds,
+  enabled,
+}: Props) {
   const { user } = useAuth();
   const context = useMemo(
-    () => buildAllyOggiBriefContext(items),
-    [items],
+    () =>
+      buildAllyOggiBriefContext({
+        attentionItems,
+        nativeCampaigns,
+        metaItems,
+        linkedNativeIds,
+      }),
+    [attentionItems, nativeCampaigns, metaItems, linkedNativeIds],
   );
   const fingerprint = useMemo(
     () => allyOggiCacheFingerprint(context),
@@ -40,8 +56,10 @@ export function AllyOggiBriefPanel({ items, enabled }: Props) {
   const [brief, setBrief] = useState<AllyOggiBrief | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const hasWorkspace = context.workspace.totalWorkspaceCampaigns > 0;
+
   useEffect(() => {
-    if (!enabled || !user?.id || context.totalMonitored === 0) {
+    if (!enabled || !user?.id || !hasWorkspace) {
       setBrief(null);
       return;
     }
@@ -51,15 +69,15 @@ export function AllyOggiBriefPanel({ items, enabled }: Props) {
     } else {
       setBrief(null);
     }
-  }, [enabled, user?.id, fingerprint, context.totalMonitored]);
+  }, [enabled, user?.id, fingerprint, hasWorkspace]);
 
-  if (!enabled || context.totalMonitored === 0) return null;
+  if (!enabled || !hasWorkspace) return null;
 
   const display = brief ?? fallback;
   const primaryHref =
     display.priorityItems[0]?.recommendedHref ??
     display.configurationItems[0]?.recommendedHref ??
-    "/risultati";
+    "/campagne";
 
   async function loadBrief(force: boolean) {
     if (!user?.id || loading) return;

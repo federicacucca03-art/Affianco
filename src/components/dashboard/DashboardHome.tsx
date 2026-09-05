@@ -255,7 +255,7 @@ export function DashboardHome() {
     return m;
   }, [checksTrend]);
 
-  const monday = useMemo(() => {
+  const mondayBundle = useMemo(() => {
     const nativeItems = campagne
       .filter((c) => c.id)
       .map((campagna) =>
@@ -269,8 +269,12 @@ export function DashboardHome() {
       [...nativeItems, ...metaItems],
       linkedNativeIds,
     );
-    return buildMondayControlRoom(merged);
+    return {
+      merged,
+      summary: buildMondayControlRoom(merged),
+    };
   }, [campagne, ultimi, checksByCampaign, metaItems, linkedNativeIds]);
+  const monday = mondayBundle.summary;
 
   const revisioni = useMemo(
     () => campagneInRevisione(campagne),
@@ -590,7 +594,10 @@ export function DashboardHome() {
                 }
               >
                 <AllyOggiBriefPanel
-                  items={monday.items}
+                  attentionItems={mondayBundle.merged}
+                  nativeCampaigns={campagne}
+                  metaItems={metaItems}
+                  linkedNativeIds={linkedNativeIds}
                   enabled={isActiveWorkspace}
                 />
               </div>
