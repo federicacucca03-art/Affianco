@@ -20,6 +20,7 @@ import { hrefModificaConfigurazione } from "@/data/percorsi-nuova-campagna";
 import { PannelloAssetStrategia } from "@/components/campagne/PannelloAssetStrategia";
 import { PannelloDiagnosiPerformance } from "@/components/campagne/PannelloDiagnosiPerformance";
 import { DiarioBordo } from "@/components/campagne/DiarioBordo";
+import { ChiediAdAllyPanel } from "@/components/campagne/ChiediAdAllyPanel";
 import { etichettaHealth } from "@/lib/control-room";
 import { StatoChip, chipDaHealth } from "@/components/nuova-contatti/StatoChip";
 import {
@@ -430,6 +431,14 @@ export default function DettaglioCampagnaPage() {
       ) : (
         <PannelloDiagnosiPerformance campagna={campagna} />
       )}
+
+      <div className="mt-6">
+        <ChiediAdAllyPanel
+          campaignId={campagna.id}
+          source="NATIVE"
+          statusHint={campagna.status}
+        />
+      </div>
 
       <DiarioBordo
         campaignId={campagna.id}

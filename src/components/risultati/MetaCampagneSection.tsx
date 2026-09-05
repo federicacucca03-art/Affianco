@@ -30,6 +30,7 @@ import {
 } from "@/lib/meta/meta-campaign-monitoring-row";
 import type { LinkedAffiancoCampaignSnapshot } from "@/lib/meta/campaign-link-compatibility";
 import type { ResultMappingConfidence } from "@/lib/meta/insight-actions";
+import { ChiediAdAllyPanel } from "@/components/campagne/ChiediAdAllyPanel";
 
 // ------------------------------------------------------------------
 // Sub-component: target setter
@@ -546,6 +547,14 @@ function MetaCampaignCard({
           }}
         />
       )}
+
+      <div className="mt-2">
+        <ChiediAdAllyPanel
+          campaignId={row.id}
+          source="META"
+          statusHint={row.effectiveStatus}
+        />
+      </div>
     </div>
   );
 }
