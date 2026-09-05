@@ -39,7 +39,7 @@ export function CopyRecommendationCard({
       className="rounded-lg border border-[var(--accent-muted)] bg-[var(--accent-soft)] px-4 py-3"
     >
       <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--accent)]">
-        Affianco consiglia
+        Ally consiglia
       </p>
       <p className="mt-1 text-base font-medium leading-snug text-[var(--ink)]">
         {recommendation.title}

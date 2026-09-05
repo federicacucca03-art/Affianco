@@ -180,9 +180,9 @@ mark(
     negC.some(
       (i) =>
         i.id === "step1-brief-corto" &&
-        i.title === "Il brief può guidare meglio Affianco.",
+        i.title === "Il brief può guidare meglio Ally.",
     ),
-  "C: brief corto/incompleto + Il brief può guidare meglio Affianco.",
+  "C: brief corto/incompleto + Il brief può guidare meglio Ally.",
 );
 
 const negD = generaGuidanceStep1({

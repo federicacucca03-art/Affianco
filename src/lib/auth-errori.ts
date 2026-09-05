@@ -78,7 +78,7 @@ export function messaggioErroreAuth(
 
 export function logErroreAuthDev(operazione: string, error: unknown): void {
   if (process.env.NODE_ENV === "production") return;
-  console.error("[Affianco][Auth]", {
+  console.error("[Ally][Auth]", {
     operazione,
     messaggio: testoErrore(error).slice(0, 200),
   });

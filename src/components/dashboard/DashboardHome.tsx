@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Bell,
   LayoutDashboard,
@@ -45,11 +45,14 @@ import {
 } from "@/lib/supabase-errori";
 import {
   buildAllySetupGuidance,
+  readSetupPathPreference,
   writeSetupPathPreference,
   type AllySetupGuidance,
   type AllySetupSignals,
 } from "@/lib/ally-setup";
 import { loadAllySetupSignals } from "@/lib/ally-setup-loader";
+import { notifyAllySetupChanged } from "@/lib/ally-setup-shell-loader";
+import { ensureMetaImportClient } from "@/lib/meta-import-client";
 
 const MAX_REVISIONI = 3;
 const TREND_CHECK_DAYS = 30;
@@ -90,6 +93,7 @@ export function DashboardHome() {
   const { apriModaleCampagna } = useOnboardingCampagna();
   const { user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const searchRef = useRef<HTMLInputElement>(null);
   const [campagne, setCampagne] = useState<Campagna[]>([]);
   const [ultimi, setUltimi] = useState<Map<string, CampaignCheck>>(new Map());
@@ -106,6 +110,35 @@ export function DashboardHome() {
     null,
   );
   const [showFirstClientForm, setShowFirstClientForm] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+
+  /*
+   * Layer A branch intent from URL only on Home:
+   * ?setup=import|plan → explicit branch; bare /home → NONE (never inherit Meta/draft).
+   */
+  useEffect(() => {
+    const setup = searchParams.get("setup");
+    if (setup === "import") {
+      writeSetupPathPreference("meta");
+      setSetupSignals((prev) =>
+        prev ? { ...prev, pathPreference: "meta" } : prev,
+      );
+      return;
+    }
+    if (setup === "plan") {
+      writeSetupPathPreference("native");
+      setSetupSignals((prev) =>
+        prev ? { ...prev, pathPreference: "native" } : prev,
+      );
+      setShowFirstClientForm(true);
+      return;
+    }
+    writeSetupPathPreference(null);
+    setSetupSignals((prev) =>
+      prev ? { ...prev, pathPreference: null } : prev,
+    );
+    setShowFirstClientForm(false);
+  }, [searchParams]);
 
   const carica = useCallback(async () => {
     setCaricamento(true);
@@ -177,7 +210,15 @@ export function DashboardHome() {
         hasMetaCampaign: nextMeta.length > 0,
         attentionItems: merged,
       });
-      setSetupSignals(signals);
+      /*
+       * Home derivation uses URL branch only. Do not wipe sessionStorage here —
+       * chooseMeta may have just written "meta" before navigating to the client.
+       */
+      const setup = searchParams.get("setup");
+      const pathPreference =
+        setup === "import" ? "meta" : setup === "plan" ? "native" : null;
+      setSetupSignals({ ...signals, pathPreference });
+      notifyAllySetupChanged();
     } catch (e) {
       logErroreSupabaseDev("dashboard_home", e);
       setErrore(messaggioErroreSupabase(e, "lista"));
@@ -188,10 +229,11 @@ export function DashboardHome() {
       setMetaItems([]);
       setLinkedNativeIds(new Set());
       setSetupSignals(null);
+      notifyAllySetupChanged();
     } finally {
       setCaricamento(false);
     }
-  }, [user?.id]);
+  }, [user?.id, searchParams]);
 
   useEffect(() => {
     void carica();
@@ -242,6 +284,7 @@ export function DashboardHome() {
   const showSetup = Boolean(guidance && !isActiveWorkspace);
   const showControlRoom = Boolean(
     guidance?.showControlRoom &&
+      guidance.phase !== "CHOOSE_START_PATH" &&
       (campagne.length > 0 || metaItems.length > 0),
   );
 
@@ -257,19 +300,67 @@ export function DashboardHome() {
       .slice(0, 5);
   }, [campagne, query]);
 
-  function chooseMeta() {
+  async function chooseMeta() {
+    if (importBusy) return;
     writeSetupPathPreference("meta");
-    const id = setupSignals?.primaryClientId;
-    if (id) {
-      router.push(`/clienti/${encodeURIComponent(id)}`);
-      return;
+    setImportBusy(true);
+    setErrore(null);
+    try {
+      let id =
+        setupSignals?.hasDbClient && setupSignals.primaryClientId
+          ? setupSignals.primaryClientId
+          : null;
+      if (!id) {
+        const client = await ensureMetaImportClient();
+        id = client.id;
+        setSetupSignals((prev) =>
+          prev
+            ? {
+                ...prev,
+                hasClient: true,
+                hasDbClient: true,
+                primaryClientId: client.id,
+                primaryClientName: client.name,
+                pathPreference: "meta",
+              }
+            : prev,
+        );
+      } else {
+        setSetupSignals((prev) =>
+          prev ? { ...prev, pathPreference: "meta" } : prev,
+        );
+      }
+      router.push(`/clienti/${encodeURIComponent(id)}?focus=meta`);
+    } catch (e) {
+      logErroreSupabaseDev("dashboard_home_meta_import_client", e);
+      setErrore(
+        messaggioErroreSupabase(e, "generico") ||
+          "Impossibile preparare il collegamento Meta.",
+      );
+      writeSetupPathPreference(null);
+    } finally {
+      setImportBusy(false);
     }
-    router.push("/clienti");
   }
 
   function chooseNative() {
     writeSetupPathPreference("native");
+    if (!setupSignals?.hasClient) {
+      setSetupSignals((prev) =>
+        prev ? { ...prev, pathPreference: "native" } : prev,
+      );
+      router.replace("/home?setup=plan");
+      setShowFirstClientForm(true);
+      return;
+    }
     apriModaleCampagna();
+  }
+
+  function chooseContinueDraft() {
+    const href = guidance?.resumeDraftHref;
+    if (!href) return;
+    writeSetupPathPreference("native");
+    router.push(href);
   }
 
   function onPrimaryClick() {
@@ -284,6 +375,9 @@ export function DashboardHome() {
 
   async function onCreateClientDone(client: { id: string; name: string }) {
     setShowFirstClientForm(false);
+    const preferNative =
+      setupSignals?.pathPreference === "native" ||
+      readSetupPathPreference() === "native";
     setSetupSignals((prev) =>
       prev
         ? {
@@ -296,6 +390,9 @@ export function DashboardHome() {
         : prev,
     );
     await carica();
+    if (preferNative) {
+      apriModaleCampagna();
+    }
   }
 
   const heroForSetup = Boolean(guidance && !isActiveWorkspace);
@@ -459,8 +556,9 @@ export function DashboardHome() {
               showForm={showFirstClientForm}
               onShowForm={() => setShowFirstClientForm(true)}
               onCreateClientDone={(c) => void onCreateClientDone(c)}
-              onChooseMeta={chooseMeta}
+              onChooseMeta={() => void chooseMeta()}
               onChooseNative={chooseNative}
+              onContinueDraft={chooseContinueDraft}
               onPrimaryClick={onPrimaryClick}
             />
           ) : null}

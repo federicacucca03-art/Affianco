@@ -207,7 +207,7 @@ export function PannelloPerche({
         <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]">
           {isPercorsoRetargeting ? (
             <>
-              💡 Affianco prepara struttura, messaggio ed economia del recupero.
+              💡 Ally prepara struttura, messaggio ed economia del recupero.
               Seleziona l&apos;audience di retargeting in Ads Manager prima
               della pubblicazione.
             </>
@@ -446,7 +446,7 @@ export function PannelloPerche({
                   maxCpl > 0 ? (
                     <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
                       Il calcolo applica il buffer operativo previsto dal
-                      modello Affianco (×0,6). Non è un benchmark Meta.
+                      modello Ally (×0,6). Non è un benchmark Meta.
                     </p>
                   ) : null}
                   {numericScontrino > 0 && maxCpl > 0 ? (

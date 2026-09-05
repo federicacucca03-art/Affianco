@@ -15,7 +15,7 @@ export function LandingSostenibilita() {
             descrizione={
               <>
                 Un CPL non è buono o cattivo in assoluto. Dipende dal valore
-                economico del cliente. Affianco calcola una{" "}
+                economico del cliente. Ally calcola una{" "}
                 <strong className="font-medium text-[var(--ink)]">
                   soglia economica di riferimento
                 </strong>{" "}

@@ -53,9 +53,13 @@ export default function ClientiPage() {
       targetType: cliente.targetType,
       targetAge: cliente.targetAge,
     });
-    router.push(
-      `/campagne?clienteId=${encodeURIComponent(cliente.id)}`,
-    );
+    const paramsQs = new URLSearchParams({
+      nomeCliente: cliente.nome,
+      settore: cliente.settore ?? "",
+      citta: cliente.citta ?? "",
+      clienteId: cliente.id,
+    });
+    router.push(`/campagne/nuova/richieste-contatto?${paramsQs.toString()}`);
   }
 
   return (

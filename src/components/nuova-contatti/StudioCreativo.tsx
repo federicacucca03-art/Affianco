@@ -1034,7 +1034,7 @@ export function StudioCreativo({
       ? "Prepariamo la creatività"
       : "Prepara le creatività";
     const sottotitoloStep = percorsoBookings
-      ? "Carica ciò che vuoi usare nella campagna. Affianco ti aiuta a controllare formato e coerenza con una campagna di prenotazione."
+      ? "Carica ciò che vuoi usare nella campagna. Ally ti aiuta a controllare formato e coerenza con una campagna di prenotazione."
       : "Carica gli asset finali, verifica formato e controlla l'anteprima mobile prima dell'export.";
     const badgeNicchia = percorsoBookings
       ? "Prenotazioni"

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { PannelloAccountMetaCliente } from "@/components/clienti/PannelloAccountMetaCliente";
 import { StartPathCards } from "@/components/dashboard/FirstClientForm";
@@ -10,43 +10,97 @@ import { AllyPanel } from "@/components/shell/AllyPanel";
 import { supabase } from "@/lib/supabase";
 import type { Cliente } from "@/types/clienti";
 import { getCampaigns, getClientById } from "@/utils/clientStorage";
-import { writeSetupPathPreference } from "@/lib/ally-setup";
+import {
+  readSetupPathPreference,
+  writeSetupPathPreference,
+} from "@/lib/ally-setup";
 import { salvaBozzaOnboarding } from "@/data/clienti-store";
 import { nomeCampagnaContatti } from "@/data/defaults-contatti";
-import { useOnboardingCampagna } from "@/components/OnboardingCampagnaContext";
 
 function normalizzaNome(nome: string): string {
   return nome.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-export default function DettaglioClientePage() {
+function isLikelyUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
+/**
+ * Resolve the canonical DB client id for Meta (client-scoped).
+ * Prefer exact id match — first-client onboarding already persists a real
+ * `clients` row; do not require a native campaign or name-only matching.
+ */
+async function resolveDbClientId(
+  routeId: string,
+  localName: string | null,
+): Promise<string | null> {
+  if (isLikelyUuid(routeId)) {
+    const { data, error } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("id", routeId)
+      .maybeSingle();
+    if (!error && data && typeof (data as { id: string }).id === "string") {
+      return (data as { id: string }).id;
+    }
+  }
+
+  if (localName) {
+    const { data } = await supabase.from("clients").select("id, name");
+    const lista = (data ?? []) as { id: string; name: string }[];
+    const match = lista.find(
+      (c) => normalizzaNome(c.name) === normalizzaNome(localName),
+    );
+    if (match?.id) return match.id;
+  }
+
+  return null;
+}
+
+function DettaglioClienteInner() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { apriModaleCampagna } = useOnboardingCampagna();
+  const searchParams = useSearchParams();
   const [locale, setLocale] = useState<Cliente | null | undefined>(undefined);
   const [dbClientId, setDbClientId] = useState<string | null>(null);
   const [hasCampaigns, setHasCampaigns] = useState(false);
   const [hasMetaRows, setHasMetaRows] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+
+  const focusMeta =
+    searchParams.get("focus") === "meta" ||
+    readSetupPathPreference() === "meta";
+
+  useEffect(() => {
+    if (searchParams.get("focus") === "meta") {
+      writeSetupPathPreference("meta");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const id = params.id;
     void (async () => {
+      setResolveError(null);
       const trovato = id ? getClientById(id) : null;
       let resolved: Cliente | null = trovato;
       let dbId: string | null = null;
 
-      if (trovato) {
-        setLocale(trovato);
-        const { data } = await supabase.from("clients").select("id, name");
-        const lista = (data ?? []) as { id: string; name: string }[];
-        const match = lista.find(
-          (c) => normalizzaNome(c.name) === normalizzaNome(trovato.nome),
-        );
-        dbId = match?.id ?? null;
-        setDbClientId(dbId);
-      } else if (!id) {
+      if (!id) {
         setLocale(null);
         return;
+      }
+
+      if (trovato) {
+        setLocale(trovato);
+        dbId = await resolveDbClientId(id, trovato.nome);
+        setDbClientId(dbId);
+        if (!dbId) {
+          setResolveError(
+            "Non riesco a verificare questo cliente sul server. Ricarica la pagina oppure torna a Home e riprova.",
+          );
+        }
       } else {
         const { data } = await supabase
           .from("clients")
@@ -56,6 +110,7 @@ export default function DettaglioClientePage() {
         const row = data as { id: string; name: string } | null;
         if (!row) {
           setLocale(null);
+          setDbClientId(null);
           return;
         }
         resolved = {
@@ -88,6 +143,16 @@ export default function DettaglioClientePage() {
     })();
   }, [params.id]);
 
+  useEffect(() => {
+    if (!focusMeta) return;
+    const t = window.setTimeout(() => {
+      document
+        .getElementById("meta-client-panel")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [focusMeta, dbClientId]);
+
   function planNative() {
     if (!locale) return;
     writeSetupPathPreference("native");
@@ -102,14 +167,20 @@ export default function DettaglioClientePage() {
       targetType: locale.targetType,
       targetAge: locale.targetAge,
     });
-    apriModaleCampagna();
-    router.push("/campagne");
+    const paramsQs = new URLSearchParams({
+      nomeCliente: locale.nome,
+      settore: locale.settore ?? "",
+      citta: locale.citta ?? "",
+      clienteId: locale.id,
+    });
+    router.push(`/campagne/nuova/richieste-contatto?${paramsQs.toString()}`);
   }
 
   function chooseMeta() {
     writeSetupPathPreference("meta");
-    const el = document.getElementById("meta-client-panel");
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document
+      .getElementById("meta-client-panel")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   if (locale === undefined) {
@@ -134,6 +205,8 @@ export default function DettaglioClientePage() {
     );
   }
 
+  const showStartCards = !hasCampaigns && !focusMeta;
+
   return (
     <main className="aff-page aff-page--narrow">
       <Link href="/clienti" className="aff-btn-tertiary min-h-8 px-0">
@@ -144,7 +217,7 @@ export default function DettaglioClientePage() {
         {[locale.settore, locale.citta].filter(Boolean).join(" · ")}
       </p>
 
-      {!hasCampaigns ? (
+      {showStartCards ? (
         <AllyPanel className="mt-8 px-5 py-5 sm:px-6">
           <p className="aff-eyebrow">Come vuoi iniziare?</p>
           <p className="mt-2 text-sm leading-relaxed text-[var(--ink-muted)]">
@@ -157,11 +230,22 @@ export default function DettaglioClientePage() {
         </AllyPanel>
       ) : null}
 
+      {focusMeta && !hasCampaigns ? (
+        <p className="mt-8 text-sm leading-relaxed text-[var(--ink-muted)]">
+          Continua con Meta per questo cliente: collega l&apos;account, scegli
+          l&apos;account pubblicitario e importa le campagne.
+        </p>
+      ) : null}
+
+      {resolveError ? (
+        <p className="mt-6 text-sm aff-text-danger" role="alert">
+          {resolveError}
+        </p>
+      ) : null}
+
       <div id="meta-client-panel">
         <Suspense
-          fallback={
-            <p className="mt-8 aff-muted">Caricamento…</p>
-          }
+          fallback={<p className="mt-8 aff-muted">Caricamento…</p>}
         >
           <PannelloAccountMetaCliente clientId={dbClientId} />
         </Suspense>
@@ -179,5 +263,19 @@ export default function DettaglioClientePage() {
         </p>
       ) : null}
     </main>
+  );
+}
+
+export default function DettaglioClientePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="aff-page aff-page--narrow">
+          <p className="text-sm text-[var(--ink-muted)]">Caricamento…</p>
+        </main>
+      }
+    >
+      <DettaglioClienteInner />
+    </Suspense>
   );
 }

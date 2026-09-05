@@ -11,7 +11,7 @@ const PASSI = [
     n: "02",
     titolo: "Fai i conti prima di spendere",
     testo:
-      "Inserisci valore medio, margine e tasso di chiusura. Affianco calcola il CPL target e le soglie economiche della campagna.",
+      "Inserisci valore medio, margine e tasso di chiusura. Ally calcola il CPL target e le soglie economiche della campagna.",
   },
   {
     n: "03",

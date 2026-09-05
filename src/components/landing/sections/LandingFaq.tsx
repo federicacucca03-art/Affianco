@@ -5,8 +5,8 @@ import { LandingSectionHeader } from "@/components/landing/LandingSectionHeader"
 
 const FAQ = [
   {
-    q: "Affianco sostituisce Meta Ads Manager?",
-    a: "No. Affianco organizza il lavoro operativo prima, durante e dopo la campagna. Meta Ads Manager resta lo strumento di pubblicazione e gestione delle inserzioni.",
+    q: "Ally sostituisce Meta Ads Manager?",
+    a: "No. Ally organizza il lavoro operativo prima, durante e dopo la campagna. Meta Ads Manager resta lo strumento di pubblicazione e gestione delle inserzioni.",
   },
   {
     q: "Il cliente deve creare un account?",
@@ -18,11 +18,11 @@ const FAQ = [
   },
   {
     q: "Posso riusare profili e storico clienti?",
-    a: "Sì. Affianco conserva nome, settore, brief e campagne passate, così non riparti da zero ad ogni progetto.",
+    a: "Sì. Ally conserva nome, settore, brief e campagne passate, così non riparti da zero ad ogni progetto.",
   },
   {
     q: "Come funziona la diagnosi post-lancio?",
-    a: "Carichi uno screenshot o i dati da Ads Manager: Affianco confronta CPL reale e soglia definita, e ti indica cosa richiede attenzione e cosa fare.",
+    a: "Carichi uno screenshot o i dati da Ads Manager: Ally confronta CPL reale e soglia definita, e ti indica cosa richiede attenzione e cosa fare.",
   },
 ];
 

@@ -33,7 +33,7 @@ export const WIZARD_CONFIG: Record<WizardStep1Slug, WizardStep1Texts> = {
   "richieste-contatto": {
     stepTitle: "Partiamo dal cliente",
     stepSubtitle:
-      "Raccontami chi è il cliente e cosa vuole ottenere. Affianco organizza il resto.",
+      "Raccontami chi è il cliente e cosa vuole ottenere. Ally organizza il resto.",
     briefIntro:
       "Raccontami il cliente come lo racconteresti a un collega.",
     clientLabel: "Nome cliente",

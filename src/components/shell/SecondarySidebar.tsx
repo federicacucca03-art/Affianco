@@ -14,21 +14,50 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useOnboardingCampagna } from "@/components/OnboardingCampagnaContext";
+import { useAllySetupNav } from "@/components/shell/AllySetupNavProvider";
+import type { AllyNavItemId } from "@/lib/ally-nav";
+import { allyNavItemVisible } from "@/lib/ally-nav";
 
 const STROKE = 1.75;
 
 type VoceNav = {
-  etichetta: string;
+  id: AllyNavItemId;
+  etichettaActive: string;
   href: string;
   icona: LucideIcon;
 };
 
 const vociPrimarie: VoceNav[] = [
-  { etichetta: "Control Room", href: "/home", icona: Home },
-  { etichetta: "Campagne", href: "/campagne", icona: LayoutGrid },
-  { etichetta: "Risultati", href: "/risultati", icona: TrendingUp },
-  { etichetta: "Notifiche", href: "/notifiche", icona: Bell },
-  { etichetta: "Clienti", href: "/clienti", icona: Briefcase },
+  {
+    id: "home",
+    etichettaActive: "Control Room",
+    href: "/home",
+    icona: Home,
+  },
+  {
+    id: "campagne",
+    etichettaActive: "Campagne",
+    href: "/campagne",
+    icona: LayoutGrid,
+  },
+  {
+    id: "risultati",
+    etichettaActive: "Risultati",
+    href: "/risultati",
+    icona: TrendingUp,
+  },
+  {
+    id: "notifiche",
+    etichettaActive: "Notifiche",
+    href: "/notifiche",
+    icona: Bell,
+  },
+  {
+    id: "clienti",
+    etichettaActive: "Clienti",
+    href: "/clienti",
+    icona: Briefcase,
+  },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -41,10 +70,13 @@ type Props = {
   onChiudi: () => void;
 };
 
-/** Labeled secondary sidebar — M8.2 reference match */
+/** Labeled secondary sidebar — M8.2 + M8.5A.6 progressive disclosure */
 export function SecondarySidebar({ aperta, onChiudi }: Props) {
   const pathname = usePathname();
   const { apriModaleCampagna } = useOnboardingCampagna();
+  const { nav } = useAllySetupNav();
+
+  const visible = vociPrimarie.filter((v) => allyNavItemVisible(nav, v.id));
 
   return (
     <>
@@ -75,56 +107,78 @@ export function SecondarySidebar({ aperta, onChiudi }: Props) {
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            apriModaleCampagna();
-            onChiudi();
-          }}
-          className="mt-2 inline-flex h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-[var(--border)] bg-white px-3.5 text-[13.5px] font-semibold text-[var(--ink)] hover:bg-[var(--surface-hover)] md:mt-0"
-        >
-          <Plus className="h-[18px] w-[18px]" strokeWidth={STROKE} aria-hidden />
-          Nuova campagna
-        </button>
+        {nav.showNewCampaignCta ? (
+          <button
+            type="button"
+            onClick={() => {
+              apriModaleCampagna();
+              onChiudi();
+            }}
+            className="mt-2 inline-flex h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-[var(--border)] bg-white px-3.5 text-[13.5px] font-semibold text-[var(--ink)] hover:bg-[var(--surface-hover)] md:mt-0"
+          >
+            <Plus
+              className="h-[18px] w-[18px]"
+              strokeWidth={STROKE}
+              aria-hidden
+            />
+            Nuova campagna
+          </button>
+        ) : null}
 
-        <nav className="mt-5 flex flex-col gap-0.5">
+        <nav
+          className={`flex flex-col gap-0.5 ${
+            nav.showNewCampaignCta ? "mt-5" : "mt-2 md:mt-0"
+          }`}
+        >
           <p className="mb-1.5 px-2 text-[11px] font-medium text-[var(--ink-muted)]">
             Navigazione
           </p>
-          {vociPrimarie.map((voce) => {
+          {visible.map((voce) => {
             const Icona = voce.icona;
             const attiva = isActive(pathname, voce.href);
+            const label =
+              voce.id === "home" ? nav.homeLabel : voce.etichettaActive;
+            const quiet =
+              nav.isSetupIncomplete && voce.id === "campagne" && !attiva;
             return (
               <Link
                 key={voce.href}
                 href={voce.href}
                 onClick={onChiudi}
-                className="aff-nav-item"
+                className={`aff-nav-item${quiet ? " aff-nav-item--quiet" : ""}`}
                 aria-current={attiva ? "page" : undefined}
               >
-                <Icona className="h-[18px] w-[18px] shrink-0" strokeWidth={STROKE} />
-                <span>{voce.etichetta}</span>
+                <Icona
+                  className="h-[18px] w-[18px] shrink-0"
+                  strokeWidth={STROKE}
+                />
+                <span>{label}</span>
               </Link>
             );
           })}
         </nav>
 
-        <div className="mt-6 border-t border-[var(--border)] pt-4">
-          <p className="mb-1.5 px-2 text-[11px] font-medium text-[var(--ink-muted)]">
-            Connessioni
-          </p>
-          <Link
-            href="/impostazioni/integrazioni"
-            onClick={onChiudi}
-            className="aff-nav-item"
-            aria-current={
-              pathname.startsWith("/impostazioni") ? "page" : undefined
-            }
-          >
-            <Settings className="h-[18px] w-[18px] shrink-0" strokeWidth={STROKE} />
-            <span>Meta</span>
-          </Link>
-        </div>
+        {nav.showMeta ? (
+          <div className="mt-6 border-t border-[var(--border)] pt-4">
+            <p className="mb-1.5 px-2 text-[11px] font-medium text-[var(--ink-muted)]">
+              Connessioni
+            </p>
+            <Link
+              href="/impostazioni/integrazioni"
+              onClick={onChiudi}
+              className="aff-nav-item"
+              aria-current={
+                pathname.startsWith("/impostazioni") ? "page" : undefined
+              }
+            >
+              <Settings
+                className="h-[18px] w-[18px] shrink-0"
+                strokeWidth={STROKE}
+              />
+              <span>Meta</span>
+            </Link>
+          </div>
+        ) : null}
       </aside>
     </>
   );

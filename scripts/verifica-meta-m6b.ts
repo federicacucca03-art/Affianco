@@ -48,7 +48,7 @@ function campagna(overrides: Partial<Campagna> = {}): Campagna {
     stato: "Attiva",
     giudizio: "Va bene",
     objective: "LEADS",
-    nomeCampagna: "Lead Gen Affianco",
+    nomeCampagna: "Lead Gen Ally",
     status: "ACTIVE",
     ...overrides,
   };

@@ -13,21 +13,50 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useAllyLogout } from "@/components/auth/useAllyLogout";
+import { useAllySetupNav } from "@/components/shell/AllySetupNavProvider";
+import type { AllyNavItemId } from "@/lib/ally-nav";
+import { allyNavItemVisible } from "@/lib/ally-nav";
 
 const STROKE = 1.75;
 
 type VoceNav = {
-  etichetta: string;
+  id: AllyNavItemId;
+  etichettaActive: string;
   href: string;
   icona: LucideIcon;
 };
 
 const voci: VoceNav[] = [
-  { etichetta: "Control Room", href: "/home", icona: Home },
-  { etichetta: "Campagne", href: "/campagne", icona: LayoutGrid },
-  { etichetta: "Risultati", href: "/risultati", icona: TrendingUp },
-  { etichetta: "Notifiche", href: "/notifiche", icona: Bell },
-  { etichetta: "Clienti", href: "/clienti", icona: Briefcase },
+  {
+    id: "home",
+    etichettaActive: "Control Room",
+    href: "/home",
+    icona: Home,
+  },
+  {
+    id: "campagne",
+    etichettaActive: "Campagne",
+    href: "/campagne",
+    icona: LayoutGrid,
+  },
+  {
+    id: "risultati",
+    etichettaActive: "Risultati",
+    href: "/risultati",
+    icona: TrendingUp,
+  },
+  {
+    id: "notifiche",
+    etichettaActive: "Notifiche",
+    href: "/notifiche",
+    icona: Bell,
+  },
+  {
+    id: "clienti",
+    etichettaActive: "Clienti",
+    href: "/clienti",
+    icona: Briefcase,
+  },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -35,10 +64,13 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-/** Compact left icon rail — M8.2 reference match */
+/** Compact left icon rail — M8.2 + M8.5A.6 progressive disclosure */
 export function IconRail() {
   const pathname = usePathname();
   const { esci, logoutErrore, logoutInCorso, email } = useAllyLogout();
+  const { nav } = useAllySetupNav();
+
+  const visible = voci.filter((v) => allyNavItemVisible(nav, v.id));
 
   return (
     <aside
@@ -57,20 +89,26 @@ export function IconRail() {
       <div className="my-5 h-px w-7 bg-[var(--border)]" aria-hidden />
 
       <nav className="flex flex-1 flex-col items-center gap-3">
-        {voci.map((voce) => {
+        {visible.map((voce) => {
           const Icona = voce.icona;
           const attiva = isActive(pathname, voce.href);
+          const label =
+            voce.id === "home" ? nav.homeLabel : voce.etichettaActive;
           return (
             <Link
               key={voce.href}
               href={voce.href}
-              className="aff-rail-btn"
-              title={voce.etichetta}
-              aria-label={voce.etichetta}
+              className={`aff-rail-btn${
+                nav.isSetupIncomplete && voce.id === "campagne" && !attiva
+                  ? " aff-rail-btn--quiet"
+                  : ""
+              }`}
+              title={label}
+              aria-label={label}
               aria-current={attiva ? "page" : undefined}
             >
               <Icona className="h-5 w-5" strokeWidth={STROKE} />
-              <span className="sr-only">{voce.etichetta}</span>
+              <span className="sr-only">{label}</span>
             </Link>
           );
         })}
@@ -78,18 +116,20 @@ export function IconRail() {
 
       <div className="mt-auto flex flex-col items-center gap-3 pb-1">
         <div className="mb-1 h-px w-7 bg-[var(--border)]" aria-hidden />
-        <Link
-          href="/impostazioni/integrazioni"
-          title="Impostazioni"
-          aria-label="Impostazioni"
-          aria-current={
-            pathname.startsWith("/impostazioni") ? "page" : undefined
-          }
-          className="aff-rail-btn"
-        >
-          <Settings className="h-5 w-5" strokeWidth={STROKE} />
-          <span className="sr-only">Impostazioni</span>
-        </Link>
+        {nav.showMeta ? (
+          <Link
+            href="/impostazioni/integrazioni"
+            title="Meta"
+            aria-label="Meta"
+            aria-current={
+              pathname.startsWith("/impostazioni") ? "page" : undefined
+            }
+            className="aff-rail-btn"
+          >
+            <Settings className="h-5 w-5" strokeWidth={STROKE} />
+            <span className="sr-only">Meta</span>
+          </Link>
+        ) : null}
         <button
           type="button"
           onClick={() => void esci()}

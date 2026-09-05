@@ -24,6 +24,7 @@ export type AllySetupSignals = {
   /** Prefer DB UUID for Meta deep-links. */
   primaryClientId: string | null;
   primaryClientName: string | null;
+  /** Any native campaign row (including DRAFT). */
   hasNativeCampaign: boolean;
   hasMetaCampaign: boolean;
   /** Any ACTIVE meta_connections row for this user. */
@@ -34,6 +35,8 @@ export type AllySetupSignals = {
   pathPreference: AllySetupPathPreference;
   attentionItems: readonly ControlRoomAttentionItem[];
 };
+
+export type AllyStartPathMode = "plan_new" | "continue_draft";
 
 export type AllyChecklistStepId =
   | "client"
@@ -69,8 +72,12 @@ export type AllySetupGuidance = {
   secondaryLabel: string | null;
   secondaryHref: string | null;
   secondaryAction: "open_campaign_modal" | "navigate" | null;
-  /** Equal-weight Meta / Plan cards for CHOOSE_START_PATH. */
+  /** Equal-weight Meta / Plan-or-Continue cards for CHOOSE_START_PATH. */
   startPathCards: boolean;
+  /** Which second card to show on the start-choice screen. */
+  startPathMode: AllyStartPathMode | null;
+  /** Exact draft to resume — never invent a new campaign. */
+  resumeDraftHref: string | null;
   showControlRoom: boolean;
   /** Quick feature cards — only ACTIVE_WORKSPACE. */
   showQuickActions: boolean;
@@ -87,12 +94,15 @@ export type AllySetupGuidance = {
 };
 
 /**
- * Priority when several incomplete conditions exist:
- * 1. NO_CLIENT (no client AND no campaign)
- * 2. Meta connect / import / choose-start (only while no campaign yet)
- * 3. MONITORING_CONFIGURATION (target → result → results → draft → other)
- * 4. READY_FOR_FIRST_CONTROL (configured, waiting on data)
- * 5. ACTIVE_WORKSPACE (any evaluable attention row)
+ * Two layers (never mix):
+ * A. Branch intent (`pathPreference`): null | meta | native — only from explicit user choice
+ * B. Product readiness: client / Meta / campaigns / monitoring
+ *
+ * Priority when incomplete:
+ * 1. Launchable campaign → monitoring / ready / active (Layer B wins)
+ * 2. Explicit Plan without client → NO_CLIENT
+ * 3. Explicit Import → Meta connect / import phases
+ * 4. Else → CHOOSE_START_PATH (never infer branch from Meta/draft/client alone)
  */
 const EVALUABLE: ReadonlySet<ControlRoomAttentionItem["attentionState"]> =
   new Set([
@@ -112,8 +122,45 @@ const CONFIG_KINDS = new Set<
   "OTHER",
 ]);
 
+/**
+ * Canonical resumable native draft — matches Control Room DRAFT classification.
+ * Does not include APPROVED / ACTIVE / Meta / historical.
+ */
+export function isResumableNativeDraftItem(
+  item: ControlRoomAttentionItem,
+): boolean {
+  if (item.source !== "NATIVE" || item.suppressedByLink) return false;
+  if (item.configurationKind === "DRAFT") return true;
+  const st = (item.campaignStatus ?? "").trim().toUpperCase();
+  return st === "DRAFT" || st === "";
+}
+
+/**
+ * Prefer the first matching draft in attention order.
+ * Home builds native items from campaigns ordered by created_at DESC.
+ */
+export function pickResumableNativeDraftId(
+  items: readonly ControlRoomAttentionItem[],
+): string | null {
+  for (const item of items) {
+    if (isResumableNativeDraftItem(item)) return item.campaignId;
+  }
+  return null;
+}
+
+/** Launchable / monitorable campaign — drafts alone do not count. */
+export function hasLaunchableCampaign(signals: AllySetupSignals): boolean {
+  if (signals.hasMetaCampaign) return true;
+  return signals.attentionItems.some(
+    (i) =>
+      i.source === "NATIVE" &&
+      !i.suppressedByLink &&
+      !isResumableNativeDraftItem(i),
+  );
+}
+
 export function hasCampaignAvailable(signals: AllySetupSignals): boolean {
-  return signals.hasNativeCampaign || signals.hasMetaCampaign;
+  return hasLaunchableCampaign(signals);
 }
 
 function pickConfigItem(
@@ -185,51 +232,55 @@ export function deriveAllySetupPhase(
   const campaignOk = hasCampaignAvailable(signals);
 
   // Existing users with campaigns skip first-client even if client list is empty.
-  if (!signals.hasClient && !campaignOk) {
+  if (campaignOk) {
+    const items = signals.attentionItems.filter((i) => !i.suppressedByLink);
+    const hasEvaluable = items.some((i) => EVALUABLE.has(i.attentionState));
+    if (hasEvaluable) {
+      return "ACTIVE_WORKSPACE";
+    }
+    const configItem = pickConfigItem(items);
+    if (configItem) {
+      return "MONITORING_CONFIGURATION_REQUIRED";
+    }
+    return "READY_FOR_FIRST_CONTROL";
+  }
+
+  /* Layer A — only after explicit card click (or ?setup= / focus=meta). */
+  if (signals.pathPreference === "native" && !signals.hasClient) {
     return "NO_CLIENT";
   }
 
-  if (!campaignOk) {
-    if (signals.hasMetaConnection && !signals.hasMetaAdAccount) {
+  if (signals.pathPreference === "meta") {
+    if (!signals.hasMetaConnection) {
       return "META_CONNECTION_REQUIRED";
     }
-    if (signals.hasMetaConnection && signals.hasMetaAdAccount) {
-      return "META_IMPORT_REQUIRED";
-    }
-    if (signals.pathPreference === "meta" && signals.hasDbClient) {
-      return signals.hasMetaConnection
-        ? "META_IMPORT_REQUIRED"
-        : "META_CONNECTION_REQUIRED";
-    }
-    return "CHOOSE_START_PATH";
+    /* Connected: account picker and/or campaign import (same phase, copy varies). */
+    return "META_IMPORT_REQUIRED";
   }
 
-  const items = signals.attentionItems.filter((i) => !i.suppressedByLink);
-  const hasEvaluable = items.some((i) => EVALUABLE.has(i.attentionState));
-  if (hasEvaluable) {
-    return "ACTIVE_WORKSPACE";
-  }
-
-  const configItem = pickConfigItem(items);
-  if (configItem) {
-    return "MONITORING_CONFIGURATION_REQUIRED";
-  }
-
-  return "READY_FOR_FIRST_CONTROL";
+  /* Neutral entry: never auto-enter Meta or Plan from connection/draft/client. */
+  return "CHOOSE_START_PATH";
 }
 
-function clientHref(signals: AllySetupSignals): string {
+function clientHref(
+  signals: AllySetupSignals,
+  opts?: { focusMeta?: boolean },
+): string {
+  const q = opts?.focusMeta ? "?focus=meta" : "";
   if (signals.primaryClientId) {
-    return `/clienti/${encodeURIComponent(signals.primaryClientId)}`;
+    return `/clienti/${encodeURIComponent(signals.primaryClientId)}${q}`;
   }
-  return "/clienti";
+  return `/clienti${q}`;
 }
 
 function buildChecklist(
   phase: AllySetupPhase,
   signals: AllySetupSignals,
 ): AllyChecklistStep[] {
-  const campaignOk = hasCampaignAvailable(signals);
+  const campaignOk =
+    signals.hasNativeCampaign ||
+    signals.hasMetaCampaign ||
+    hasLaunchableCampaign(signals);
   const clientDone = signals.hasClient || campaignOk;
   const monitoringDone =
     phase === "READY_FOR_FIRST_CONTROL" || phase === "ACTIVE_WORKSPACE";
@@ -265,6 +316,7 @@ export function buildAllySetupGuidance(
   const completedCount = checklist.filter((s) => s.done).length;
   const totalCount = checklist.length;
   const clientLink = clientHref(signals);
+  const clientMetaLink = clientHref(signals, { focusMeta: true });
   const configItem = pickConfigItem(
     signals.attentionItems.filter((i) => !i.suppressedByLink),
   );
@@ -273,8 +325,16 @@ export function buildAllySetupGuidance(
     checklist,
     completedCount,
     totalCount,
-    checklistVisible: phase !== "ACTIVE_WORKSPACE",
+    /*
+     * M8.5A.8 — checklist stays off during first-value setup.
+     * Central CTAs already name the next action; a 1/4 progress panel
+     * only previews future steps and competes with the primary choice.
+     * AllySetupChecklist remains for optional later reuse.
+     */
+    checklistVisible: false,
     startPathCards: false,
+    startPathMode: null as AllyStartPathMode | null,
+    resumeDraftHref: null as string | null,
     showControlRoom: false,
     showQuickActions: false,
     showHeroTools: false,
@@ -291,63 +351,82 @@ export function buildAllySetupGuidance(
       return {
         ...base,
         phase,
-        heroTitle: "Iniziamo dal tuo primo cliente.",
+        heroTitle: "Aggiungi il cliente da pianificare.",
         heroSubtitle:
-          "Aggiungi il cliente che vuoi gestire e ti guiderò passo passo.",
+          "Per costruire una nuova campagna partiamo dal cliente.",
         eyebrow: "",
         title: "",
         bodyLines: [],
         panelOmitsHeading: true,
-        primaryLabel: "Aggiungi il primo cliente",
+        primaryLabel: "Aggiungi il cliente",
         primaryHref: null,
         primaryAction: "create_client",
       };
 
-    case "CHOOSE_START_PATH":
+    case "CHOOSE_START_PATH": {
+      const draftId = pickResumableNativeDraftId(signals.attentionItems);
+      const hasDraft = Boolean(draftId);
       return {
         ...base,
         phase,
-        heroTitle: "Come vuoi iniziare?",
-        heroSubtitle:
-          "Importa le campagne che gestisci già oppure pianificane una nuova.",
+        heroTitle: hasDraft ? "Come vuoi continuare?" : "Come vuoi iniziare?",
+        heroSubtitle: hasDraft
+          ? "Riprendi la bozza oppure importa le campagne che gestisci già su Meta."
+          : "Importa le campagne che gestisci già oppure pianificane una nuova.",
         eyebrow: "",
         title: "",
-        bodyLines: ["Scegli il modo più comodo per iniziare."],
+        bodyLines: hasDraft
+          ? ["Scegli se riprendere la bozza o importare da Meta."]
+          : ["Scegli il modo più comodo per iniziare."],
         panelOmitsHeading: true,
         primaryLabel: "Importa da Meta",
         primaryHref: clientLink,
         primaryAction: "navigate",
-        secondaryLabel: "Pianifica una campagna",
-        secondaryHref: "/campagne",
-        secondaryAction: "open_campaign_modal",
+        secondaryLabel: hasDraft
+          ? "Continua la campagna in bozza"
+          : "Pianifica una campagna",
+        secondaryHref: hasDraft
+          ? `/campagne/${encodeURIComponent(draftId!)}`
+          : "/campagne",
+        secondaryAction: hasDraft ? "navigate" : "open_campaign_modal",
         startPathCards: true,
+        /* Draft changes the second card only — never auto-enters a branch. */
+        startPathMode: hasDraft ? "continue_draft" : "plan_new",
+        resumeDraftHref: hasDraft
+          ? `/campagne/${encodeURIComponent(draftId!)}`
+          : null,
+        showControlRoom: false,
       };
+    }
 
     case "META_CONNECTION_REQUIRED":
       return {
         ...base,
         phase,
-        heroTitle: "Collega Meta per continuare.",
+        heroTitle: "Collega Meta",
         heroSubtitle:
-          "Così Ally può importare le campagne che stai già gestendo.",
+          "Collega l'account da cui vuoi importare le campagne.",
         eyebrow: "PROSSIMO PASSO",
         title: "Collega Meta",
         bodyLines: ["Poi scegli l'account e importa le campagne."],
         primaryLabel: "Collega Meta",
-        primaryHref: clientLink,
+        primaryHref: clientMetaLink,
         primaryAction: "navigate",
-        secondaryLabel: "Preferisco pianificare",
-        secondaryHref: "/campagne",
-        secondaryAction: "open_campaign_modal",
+        secondaryLabel: "Torna alla scelta",
+        secondaryHref: "/home",
+        secondaryAction: "navigate",
       };
 
     case "META_IMPORT_REQUIRED":
       return {
         ...base,
         phase,
-        heroTitle: "Importa le tue campagne.",
-        heroSubtitle:
-          "Scegli le campagne Meta che vuoi portare dentro Ally.",
+        heroTitle: signals.hasMetaAdAccount
+          ? "Importa le tue campagne."
+          : "Scegli l'account pubblicitario",
+        heroSubtitle: signals.hasMetaAdAccount
+          ? "Scegli le campagne Meta che vuoi portare dentro Ally."
+          : "Scegli l'account da cui vuoi importare le campagne.",
         eyebrow: "PROSSIMO PASSO",
         title: signals.hasMetaAdAccount
           ? "Importa le campagne"
@@ -358,11 +437,11 @@ export function buildAllySetupGuidance(
         primaryLabel: signals.hasMetaAdAccount
           ? "Importa campagne"
           : "Scegli account",
-        primaryHref: clientLink,
+        primaryHref: clientMetaLink,
         primaryAction: "navigate",
-        secondaryLabel: "Preferisco pianificare",
-        secondaryHref: "/campagne",
-        secondaryAction: "open_campaign_modal",
+        secondaryLabel: "Torna alla scelta",
+        secondaryHref: "/home",
+        secondaryAction: "navigate",
       };
 
     case "MONITORING_CONFIGURATION_REQUIRED": {
@@ -456,9 +535,14 @@ export function writeSetupPathPreference(path: AllySetupPathPreference): void {
   try {
     if (!path) {
       window.sessionStorage.removeItem(SETUP_PATH_STORAGE_KEY);
-      return;
+    } else {
+      window.sessionStorage.setItem(SETUP_PATH_STORAGE_KEY, path);
     }
-    window.sessionStorage.setItem(SETUP_PATH_STORAGE_KEY, path);
+  } catch {
+    // ignore
+  }
+  try {
+    window.dispatchEvent(new Event("ally-setup-changed"));
   } catch {
     // ignore
   }

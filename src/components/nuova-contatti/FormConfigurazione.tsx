@@ -1374,7 +1374,7 @@ export function FormConfigurazione({
           {isPercorsoRetargeting ? (
             <Passo1Sezione titolo="B · Recupero">
               <p className="text-sm leading-relaxed text-[var(--ink)]">
-                Affianco prepara struttura, messaggio ed economia della
+                Ally prepara struttura, messaggio ed economia della
                 campagna. Il pubblico di retargeting va collegato in Meta Ads
                 Manager prima della pubblicazione.
               </p>
@@ -1939,7 +1939,7 @@ export function FormConfigurazione({
               />
             </Campo>
             <p className="-mt-2 text-xs text-[var(--ink-muted)]">
-              Lo usiamo per organizzare la campagna in Affianco — puoi
+              Lo usiamo per organizzare la campagna in Ally — puoi
               lasciarlo com&apos;è se va bene.
             </p>
 
@@ -2924,7 +2924,7 @@ export function FormConfigurazione({
                   </p>
                   <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
                     Il calcolo applica il buffer operativo previsto dal modello
-                    Affianco (×0,6). Non è un benchmark Meta.
+                    Ally (×0,6). Non è un benchmark Meta.
                   </p>
                   <p className="mt-3 border-t border-[var(--border)] pt-3 text-xs leading-relaxed text-[var(--ink)]">
                     Valore netto:{" "}
@@ -3252,7 +3252,7 @@ export function FormConfigurazione({
                     <li>Eventuali esclusioni</li>
                   </ul>
                   <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
-                    Affianco non configura automaticamente questi elementi
+                    Ally non configura automaticamente questi elementi
                     nell&apos;export.
                   </p>
                 </div>
@@ -3348,12 +3348,12 @@ export function FormConfigurazione({
               Troviamo il messaggio
             </h2>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-[var(--ink-muted)]">
-              Affianco controlla che il messaggio sia chiaro, leggibile su
+              Ally controlla che il messaggio sia chiaro, leggibile su
               mobile e coerente con l&apos;offerta.
             </p>
             {copyInPreparazione ? (
               <p className="mt-3 text-xs text-[var(--ink-muted)]">
-                Affianco sta preparando una bozza di partenza — rivedi e
+                Ally sta preparando una bozza di partenza — rivedi e
                 correggi prima del lancio.
               </p>
             ) : copyPreparazioneNota ? (
@@ -3373,7 +3373,7 @@ export function FormConfigurazione({
               Rendiamo facile prenotare
             </h2>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-[var(--ink-muted)]">
-              Affianco controlla che l&apos;annuncio abbia un motivo chiaro per
+              Ally controlla che l&apos;annuncio abbia un motivo chiaro per
               prenotare ora e un invito coerente con il canale scelto.
             </p>
             <p className="mt-3 text-xs text-[var(--ink-muted)]">
@@ -3516,7 +3516,7 @@ export function FormConfigurazione({
             })}
           </div>
           <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
-            Seleziona il tono: Affianco adatterà le varianti mantenendo
+            Seleziona il tono: Ally adatterà le varianti mantenendo
             invariati offerta e contenuti.
           </p>
         </div>
@@ -3556,7 +3556,7 @@ export function FormConfigurazione({
               isPercorsoRetargeting ||
               isPercorsoAwareness
                 ? "Usata per il lancio"
-                : "Consigliato da Affianco per il lancio"}
+                : "Consigliato da Ally per il lancio"}
             </span>
             {isPercorsoLeads ? (
               <BadgeCopyVariant
@@ -3763,7 +3763,7 @@ export function FormConfigurazione({
             : "2. Esporta per Meta Ads Manager"}
         </h2>
         <p className="mt-1 text-xs text-[var(--ink-muted)]">
-          Affianco prepara una bozza strutturata da completare in Ads Manager:
+          Ally prepara una bozza strutturata da completare in Ads Manager:
           riduci il lavoro di ricopiare struttura e copy.
         </p>
         {isPercorsoInstore ? (

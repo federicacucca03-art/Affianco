@@ -3,9 +3,9 @@ import { PaginaLegale } from "@/components/legal/PaginaLegale";
 import { LEGAL_CONTACT_EMAIL } from "@/lib/legal-config";
 
 export const metadata: Metadata = {
-  title: "Eliminazione dati — Affianco",
+  title: "Eliminazione dati — Ally",
   description:
-    "Come richiedere la cancellazione dell'account Affianco e cosa succederà, in futuro, se disconnetti Meta.",
+    "Come richiedere la cancellazione dell'account Ally e cosa succederà, in futuro, se disconnetti Meta.",
 };
 
 export default function PaginaEliminazioneDati() {
@@ -17,29 +17,29 @@ export default function PaginaEliminazioneDati() {
       <p>
         Qui distinguiamo due cose diverse: (A) una futura disconnessione
         dell&apos;integrazione Meta, e (B) la richiesta di cancellare
-        l&apos;account Affianco e i dati del workspace.
+        l&apos;account Ally e i dati del workspace.
       </p>
 
       <h2>A. Integrazione Meta (futura)</h2>
       <p>
         Oggi non esiste un collegamento OAuth a Meta né un archivio di token
-        Marketing API in Affianco.
+        Marketing API in Ally.
       </p>
       <p>
         Quando la connessione Meta sarà disponibile, disconnetterla
         rimuoverà o revocherà le credenziali di connessione memorizzate,
         secondo il comportamento dell&apos;integrazione. Disconnettere
-        Meta non equivale a cancellare l&apos;account Affianco: clienti,
+        Meta non equivale a cancellare l&apos;account Ally: clienti,
         campagne e materiali che hai creato o importato nel workspace
         restano tuoi finché non chiedi la cancellazione dell&apos;account
         o non li elimini tu dalle funzioni di prodotto, se disponibili.
       </p>
 
-      <h2>B. Account e dati Affianco (oggi)</h2>
+      <h2>B. Account e dati Ally (oggi)</h2>
       <p>
         Non c&apos;è ancora un flusso self-service per cancellare
         l&apos;intero account dall&apos;interfaccia. Per chiedere la
-        cancellazione dei dati associati al tuo utente Affianco (account,
+        cancellazione dei dati associati al tuo utente Ally (account,
         clienti, campagne, creatività caricate, import di risultati),
         scrivi a:{" "}
         <a
@@ -51,7 +51,7 @@ export default function PaginaEliminazioneDati() {
         .
       </p>
       <p>
-        Indica l&apos;email dell&apos;account Affianco e che chiedi la
+        Indica l&apos;email dell&apos;account Ally e che chiedi la
         cancellazione.
       </p>
 
@@ -59,7 +59,7 @@ export default function PaginaEliminazioneDati() {
       <p>
         Logout (Esci) chiude la sessione: non cancella l&apos;account.
         L&apos;export CSV verso Ads Manager non crea un collegamento API e
-        non implica una revoca di permessi Meta da parte di Affianco.
+        non implica una revoca di permessi Meta da parte di Ally.
       </p>
     </PaginaLegale>
   );

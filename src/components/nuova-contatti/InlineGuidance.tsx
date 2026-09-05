@@ -141,7 +141,7 @@ export function InlineGuidance({
       <p
         className={`text-[12px] font-medium ${stile.label}`}
       >
-        Affianco suggerisce
+        Ally suggerisce
       </p>
       <p className="mt-1 text-sm font-medium leading-snug text-[var(--ink)]">
         {titolo}

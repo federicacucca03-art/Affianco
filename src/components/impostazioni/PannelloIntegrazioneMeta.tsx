@@ -92,7 +92,7 @@ export function PannelloIntegrazioneMeta() {
               <Link
                 href={
                   primaryClientId
-                    ? `/clienti/${encodeURIComponent(primaryClientId)}`
+                    ? `/clienti/${encodeURIComponent(primaryClientId)}?focus=meta`
                     : "/clienti"
                 }
                 className="aff-btn-primary"

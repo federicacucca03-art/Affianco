@@ -175,7 +175,7 @@ export function logErroreSupabaseDev(
   if (process.env.NODE_ENV === "production") return;
   const categoria = classificaErroreSupabase(error);
   const messaggio = testoErrore(error);
-  console.error("[Affianco][Supabase]", {
+  console.error("[Ally][Supabase]", {
     operazione,
     categoria,
     messaggio: messaggio.slice(0, 200),

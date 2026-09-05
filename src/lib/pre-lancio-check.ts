@@ -2223,7 +2223,7 @@ export function calcolaDiagnosiPreLancioRetargeting(
   const istruzioniMeta: PreLancioIstruzioniMeta = {
     titolo: "DA COMPLETARE IN META",
     microcopy:
-      "Affianco non configura automaticamente questi elementi nell'export.",
+      "Ally non configura automaticamente questi elementi nell'export.",
     voci: [
       "Collega la Custom Audience nell'Ad Set.",
       "Definisci la finestra temporale del pubblico.",
@@ -2428,7 +2428,7 @@ export function calcolaDiagnosiPreLancioAwareness(
         id: "cpm",
         titolo: "CPM di riferimento",
         severita: "info",
-        motivazione: `Il modello usa un CPM di riferimento di ${cpm} € per calcolare le stime di esposizione. È un parametro del modello Affianco, non una previsione del CPM Meta.`,
+        motivazione: `Il modello usa un CPM di riferimento di ${cpm} € per calcolare le stime di esposizione. È un parametro del modello Ally, non una previsione del CPM Meta.`,
       }),
     );
   } else {
@@ -2516,7 +2516,7 @@ export function calcolaDiagnosiPreLancioAwareness(
   const istruzioniMeta: PreLancioIstruzioniMeta = {
     titolo: "DA VERIFICARE IN META",
     microcopy:
-      "Affianco prepara la struttura della campagna, ma questi elementi vanno verificati direttamente in Meta Ads Manager.",
+      "Ally prepara la struttura della campagna, ma questi elementi vanno verificati direttamente in Meta Ads Manager.",
     voci: [
       "Controlla città e raggio dopo l'import",
       "Verifica la destinazione / link, se presente",

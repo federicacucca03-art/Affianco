@@ -155,7 +155,7 @@ export function etichettaAttentionState(state: AttentionState): string {
 }
 
 export function etichettaAttentionSource(source: AttentionSource): string {
-  return source === "META" ? "Meta" : "Affianco";
+  return source === "META" ? "Meta" : "Ally";
 }
 
 export function etichettaUrgencyLevel(level: UrgencyLevel): string | null {
@@ -709,7 +709,7 @@ export function buildMetaAttentionItem(input: {
 }
 
 /**
- * Caller passes native Affianco ids that have ≥1 ACTIVE linked Meta row.
+ * Caller passes native Ally ids that have ≥1 ACTIVE linked Meta row.
  * Those native rows stay in the dataset but are hidden from Monday lists
  * (no silent metric merge).
  */

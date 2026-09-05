@@ -77,6 +77,9 @@ export function metaOAuthReturnUrl(
     ? new URL(`${META_CLIENTI_PATH}/${cid}`, origin)
     : new URL(META_CLIENTI_PATH, origin);
   dest.searchParams.set("meta", result);
+  if (cid && isUuid(cid)) {
+    dest.searchParams.set("focus", "meta");
+  }
   return dest.toString();
 }
 

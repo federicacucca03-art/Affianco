@@ -26,7 +26,7 @@ export function LandingDifferenziazione() {
     <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
       <LandingSectionHeader
         eyebrow="Posizionamento"
-        titolo="Affianco non sostituisce Meta Ads Manager."
+        titolo="Ally non sostituisce Meta Ads Manager."
         descrizione="Organizza tutto il lavoro che succede prima, durante e dopo la campagna."
       />
 

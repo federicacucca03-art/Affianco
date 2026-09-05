@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Download, PenLine } from "lucide-react";
+import { Download, FilePenLine, PenLine } from "lucide-react";
 import { AllyFeatureCard } from "@/components/shell/AllyFeatureCard";
 import { AllyPanel } from "@/components/shell/AllyPanel";
 import { trovaOCreaCliente } from "@/lib/campagne-db";
@@ -10,6 +10,8 @@ import {
   logErroreSupabaseDev,
   messaggioErroreSupabase,
 } from "@/lib/supabase-errori";
+import { notifyAllySetupChanged } from "@/lib/ally-setup-shell-loader";
+import type { AllyStartPathMode } from "@/lib/ally-setup";
 
 type Props = {
   onCreated: (client: { id: string; name: string }) => void;
@@ -43,6 +45,7 @@ export function FirstClientForm({
         citta: "",
       });
       onCreated({ id: row.id, name: row.name });
+      notifyAllySetupChanged();
       setNome("");
     } catch (err) {
       logErroreSupabaseDev("first_client_form", err);
@@ -102,10 +105,19 @@ export function FirstClientForm({
 type StartPathProps = {
   onMeta: () => void;
   onNative: () => void;
+  onContinueDraft?: () => void;
+  mode?: AllyStartPathMode;
 };
 
 /** Same AllyFeatureCard + tones as /campagne objective cards. */
-export function StartPathCards({ onMeta, onNative }: StartPathProps) {
+export function StartPathCards({
+  onMeta,
+  onNative,
+  onContinueDraft,
+  mode = "plan_new",
+}: StartPathProps) {
+  const continueDraft = mode === "continue_draft";
+
   return (
     <div className="mx-auto grid w-full max-w-[820px] grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
       <AllyFeatureCard
@@ -115,13 +127,23 @@ export function StartPathCards({ onMeta, onNative }: StartPathProps) {
         body="Porta in Ally le campagne che stai già gestendo."
         onClick={onMeta}
       />
-      <AllyFeatureCard
-        tone={3}
-        icon={PenLine}
-        title="Pianifica una nuova campagna"
-        body="Costruisci una nuova campagna partendo dall'obiettivo del cliente."
-        onClick={onNative}
-      />
+      {continueDraft ? (
+        <AllyFeatureCard
+          tone={3}
+          icon={FilePenLine}
+          title="Continua la campagna in bozza"
+          body="Riprendi la pianificazione dove l'avevi lasciata."
+          onClick={onContinueDraft ?? onNative}
+        />
+      ) : (
+        <AllyFeatureCard
+          tone={3}
+          icon={PenLine}
+          title="Pianifica una nuova campagna"
+          body="Costruisci una nuova campagna partendo dall'obiettivo del cliente."
+          onClick={onNative}
+        />
+      )}
     </div>
   );
 }

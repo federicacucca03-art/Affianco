@@ -106,6 +106,24 @@ export async function getClientMetaAccount(
   return toMapping(data as MappingRow);
 }
 
+export async function findClientIdByMetaAdAccount(
+  userId: string,
+  metaAdAccountId: string,
+): Promise<string | null> {
+  const uid = userId.trim();
+  const aid = metaAdAccountId.trim();
+  if (!uid || !aid) return null;
+  const { data, error } = await adminClient()
+    .from("client_ad_accounts")
+    .select("client_id")
+    .eq("user_id", uid)
+    .eq("meta_ad_account_id", aid)
+    .maybeSingle();
+  if (error || !data) return null;
+  const id = (data as { client_id: string }).client_id;
+  return typeof id === "string" && isUuid(id) ? id : null;
+}
+
 export async function setClientMetaAccount(
   userId: string,
   clientId: string,
@@ -122,6 +140,14 @@ export async function setClientMetaAccount(
     throw new MetaError(
       "META_CONNECTION_INVALID",
       "Account pubblicitario non disponibile.",
+    );
+  }
+
+  const already = await findClientIdByMetaAdAccount(userId, account.id);
+  if (already && already !== clientId) {
+    throw new MetaError(
+      "META_CONNECTION_INVALID",
+      "Questo account Meta è già collegato a un altro cliente Ally.",
     );
   }
 
@@ -150,6 +176,23 @@ export async function setClientMetaAccount(
       "Salvataggio collegamento non riuscito.",
     );
   }
+
+  /* Import-first: upgrade placeholder client name from Meta account display. */
+  const display = (account.name ?? "").trim();
+  if (display) {
+    const owned = await assertClientOwnedByUser(userId, clientId);
+    if (
+      owned.name === "Cliente Meta" ||
+      owned.name.trim() === ""
+    ) {
+      await adminClient()
+        .from("clients")
+        .update({ name: display.slice(0, 120) })
+        .eq("id", clientId)
+        .eq("user_id", userId);
+    }
+  }
+
   return toMapping(data as MappingRow);
 }
 

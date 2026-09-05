@@ -48,7 +48,7 @@ function campagna(overrides: Partial<Campagna> = {}): Campagna {
     stato: "Attiva",
     giudizio: "Va bene",
     objective: "LEADS",
-    nomeCampagna: "Lead Gen Affianco",
+    nomeCampagna: "Lead Gen Ally",
     status: "ACTIVE",
     ...overrides,
   };
@@ -317,7 +317,7 @@ test("Q: source badge preserved", () => {
   const lib = read("./src/lib/monday-control-room.ts");
   assert(lib.includes('"META"'), "META source");
   assert(lib.includes('"NATIVE"'), "NATIVE source");
-  assert(lib.includes('? "Meta" : "Affianco"'), "source labels");
+  assert(lib.includes('? "Meta" : "Ally"'), "source labels");
 });
 
 test("R: client name present", () => {

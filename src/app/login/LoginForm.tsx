@@ -151,7 +151,7 @@ export function LoginForm() {
       </div>
 
       <h1 className="text-xl font-medium tracking-tight text-[var(--ink)]">
-        {tab === "login" ? "Accedi ad Affianco" : "Crea il tuo account"}
+        {tab === "login" ? "Accedi ad Ally" : "Crea il tuo account"}
       </h1>
       <p className="mt-2 text-sm text-[var(--ink-muted)]">
         {tab === "login"

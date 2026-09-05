@@ -91,7 +91,7 @@ const briefB = guidanceInlineBrief(itemsB);
 mark(
   "BRIEF INLINE",
   briefB?.id === "step1-brief-corto" &&
-    briefB.title === "Il brief può guidare meglio Affianco.",
+    briefB.title === "Il brief può guidare meglio Ally.",
   "brief corto → item sotto Brief",
 );
 const occorrenzeBriefInline = srcForm.split(

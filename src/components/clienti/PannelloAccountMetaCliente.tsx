@@ -315,13 +315,36 @@ export function PannelloAccountMetaCliente({
         },
         body: JSON.stringify({ clientId, metaAdAccountId: selezionato }),
       });
-      const data = (await res.json()) as { mapping?: Mapping; error?: string };
+      const data = (await res.json()) as {
+        mapping?: Mapping;
+        error?: string;
+        code?: string;
+        existingClientId?: string;
+      };
+      if (
+        res.status === 409 &&
+        data.code === "META_ACCOUNT_ALREADY_MAPPED" &&
+        data.existingClientId
+      ) {
+        setFeedback(
+          "Questo account era già collegato a un altro cliente. Ti porto lì.",
+        );
+        router.replace(
+          `/clienti/${encodeURIComponent(data.existingClientId)}?focus=meta`,
+        );
+        return;
+      }
       if (!res.ok || !data.mapping) {
         setErrore("Collegamento account non riuscito.");
         return;
       }
       setMapping(data.mapping);
       setAperto(false);
+      if (data.mapping.metaAdAccountName) {
+        setFeedback(
+          `Cliente aggiornato: ${data.mapping.metaAdAccountName}. Ora puoi importare le campagne.`,
+        );
+      }
     } catch {
       setErrore("Collegamento account non riuscito.");
     } finally {
@@ -456,8 +479,9 @@ export function PannelloAccountMetaCliente({
       <section className="aff-panel-white mt-8 p-5">
         <h2 className="text-base font-medium text-[var(--ink)]">Meta Ads</h2>
         <p className="mt-2 text-sm text-[var(--ink-muted)]">
-          Questo cliente non è ancora salvato nel profilo Affianco. Crea una
-          campagna per poterlo collegare a un account pubblicitario Meta.
+          Non riesco a collegare Meta a questo cliente. Ricarica la pagina
+          oppure torna a Home e riprova — non serve creare una campagna Ally
+          per collegare Meta.
         </p>
       </section>
     );
@@ -483,38 +507,55 @@ export function PannelloAccountMetaCliente({
       ) : null}
 
       {notConnected ? (
-        <p className="mt-3 text-sm text-[var(--ink-muted)]">
-          Nessuna connessione Meta per questo cliente.
-        </p>
+        <>
+          <p className="mt-3 text-[15px] font-semibold text-[var(--ink)]">
+            Collega Meta
+          </p>
+          <p className="mt-1.5 text-sm text-[var(--ink-muted)]">
+            Collega l&apos;account Meta da cui vuoi importare le campagne di
+            questo cliente.
+          </p>
+        </>
       ) : null}
 
       {connectedNoAccount ? (
-        <p className="mt-3 text-sm text-[var(--ink-muted)]">
-          Meta collegato. Seleziona l&apos;account pubblicitario.
-        </p>
+        <>
+          <p className="mt-3 text-[15px] font-semibold text-[var(--ink)]">
+            Scegli l&apos;account pubblicitario
+          </p>
+          <p className="mt-1.5 text-sm text-[var(--ink-muted)]">
+            Seleziona l&apos;account Meta che contiene le campagne di questo
+            cliente.
+          </p>
+        </>
       ) : null}
 
-      {mapped ? (
-        <dl className="mt-3 space-y-1 text-sm text-[var(--ink-muted)]">
-          <div>
-            <dt className="inline text-[var(--ink)]">Account: </dt>
-            <dd className="inline">
-              {mapping?.metaAdAccountName || mapping?.metaAdAccountId}
-            </dd>
-          </div>
-          <div>
-            <dt className="inline text-[var(--ink)]">ID: </dt>
-            <dd className="inline">
-              {mapping?.metaAccountId || mapping?.metaAdAccountId}
-            </dd>
-          </div>
-          {mapping?.currency ? (
+      {mapped && !caricamento ? (
+        <>
+          <p className="mt-3 text-[15px] font-semibold text-[var(--ink)]">
+            Importa campagne
+          </p>
+          <dl className="mt-2 space-y-1 text-sm text-[var(--ink-muted)]">
             <div>
-              <dt className="inline text-[var(--ink)]">Valuta: </dt>
-              <dd className="inline">{mapping.currency}</dd>
+              <dt className="inline text-[var(--ink)]">Account: </dt>
+              <dd className="inline">
+                {mapping?.metaAdAccountName || mapping?.metaAdAccountId}
+              </dd>
             </div>
-          ) : null}
-        </dl>
+            <div>
+              <dt className="inline text-[var(--ink)]">ID: </dt>
+              <dd className="inline">
+                {mapping?.metaAccountId || mapping?.metaAdAccountId}
+              </dd>
+            </div>
+            {mapping?.currency ? (
+              <div>
+                <dt className="inline text-[var(--ink)]">Valuta: </dt>
+                <dd className="inline">{mapping.currency}</dd>
+              </div>
+            ) : null}
+          </dl>
+        </>
       ) : null}
 
       {feedback ? (
@@ -548,7 +589,7 @@ export function PannelloAccountMetaCliente({
               disabled={busy}
               className="aff-btn-primary"
             >
-              {mapped ? "Cambia account" : "Seleziona account"}
+              {mapped ? "Cambia account" : "Scegli account pubblicitario"}
             </button>
           ) : null}
           {mapped ? (
@@ -558,7 +599,7 @@ export function PannelloAccountMetaCliente({
               disabled={busy}
               className="aff-btn-primary"
             >
-              Importa campagne Meta
+              Importa campagne
             </button>
           ) : null}
           {connected ? (

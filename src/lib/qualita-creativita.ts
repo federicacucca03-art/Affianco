@@ -94,7 +94,7 @@ export function haRatioNonIdeale(
 
 /**
  * Ratio e landscape restano diagnosi del checker/dropzone (Step 4).
- * Affianco mostra solo la prossima azione, senza ripetere lo stesso warning.
+ * Ally mostra solo la prossima azione, senza ripetere lo stesso warning.
  */
 export function generaGuidanceCreativita(
   input: QualitaCreativitaInput,

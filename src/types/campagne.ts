@@ -171,9 +171,9 @@ export type Campagna = {
   iniziali: string;
   stato: string;
   giudizio: Giudizio;
-  /** Obiettivo Meta / Affianco (LEADS | BOOKINGS | ECOMMERCE | IN_STORE | RETARGETING | AWARENESS). */
+  /** Obiettivo Meta / Ally (LEADS | BOOKINGS | ECOMMERCE | IN_STORE | RETARGETING | AWARENESS). */
   objective?: CampagnaObjective;
-  /** Nome campagna Meta / Affianco. */
+  /** Nome campagna Meta / Ally. */
   nomeCampagna?: string;
   settore?: string;
   citta?: string;

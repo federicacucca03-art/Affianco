@@ -23,7 +23,7 @@ export function LandingHero() {
             Tutto il lavoro dietro le tue campagne. In un unico posto.
           </h1>
           <p className="landing-fade-up landing-delay-2 mt-5 max-w-md text-base leading-relaxed text-[var(--ink-muted)]">
-            Affianco ti aiuta a gestire le campagne Meta dei tuoi clienti dalla
+            Ally ti aiuta a gestire le campagne Meta dei tuoi clienti dalla
             pianificazione al monitoraggio: fai i conti prima di spendere,
             prepari la campagna, raccogli l&apos;approvazione del cliente e
             controlli i risultati.
@@ -36,7 +36,7 @@ export function LandingHero() {
               href="/login"
               className="inline-flex items-center gap-2 rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white hover:opacity-90"
             >
-              Inizia con Affianco
+              Inizia con Ally
               <ArrowRight className="h-4 w-4" strokeWidth={2} />
             </Link>
             <a

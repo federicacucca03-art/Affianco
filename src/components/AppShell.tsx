@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { BarraSuperiore } from "@/components/BarraSuperiore";
 import { OnboardingCampagnaProvider } from "@/components/OnboardingCampagnaContext";
+import { AllySetupNavProvider } from "@/components/shell/AllySetupNavProvider";
 import { IconRail } from "@/components/shell/IconRail";
 import { SecondarySidebar } from "@/components/shell/SecondarySidebar";
 
@@ -50,23 +51,25 @@ export function AppShell({ children }: Props) {
 
   return (
     <OnboardingCampagnaProvider>
-      <div className="aff-app-shell flex">
-        <IconRail />
-        <SecondarySidebar
-          aperta={menuAperto}
-          onChiudi={() => setMenuAperto(false)}
-        />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <BarraSuperiore onApriMenu={() => setMenuAperto(true)} />
-          <div
-            className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${canvasClass(mode)}`}
-          >
-            <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
-              {children}
+      <AllySetupNavProvider>
+        <div className="aff-app-shell flex">
+          <IconRail />
+          <SecondarySidebar
+            aperta={menuAperto}
+            onChiudi={() => setMenuAperto(false)}
+          />
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <BarraSuperiore onApriMenu={() => setMenuAperto(true)} />
+            <div
+              className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${canvasClass(mode)}`}
+            >
+              <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
+                {children}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </AllySetupNavProvider>
     </OnboardingCampagnaProvider>
   );
 }

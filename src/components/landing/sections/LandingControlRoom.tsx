@@ -10,7 +10,7 @@ export function LandingControlRoom() {
           <LandingSectionHeader
             eyebrow="Control room"
             titolo="Ogni lunedì sai dove guardare."
-            descrizione="Affianco organizza i clienti in base allo stato delle campagne, così capisci subito dove intervenire. Cosa sta succedendo, perché, e cosa fare — senza aprire cinque strumenti diversi."
+            descrizione="Ally organizza i clienti in base allo stato delle campagne, così capisci subito dove intervenire. Cosa sta succedendo, perché, e cosa fare — senza aprire cinque strumenti diversi."
           />
         </div>
       </div>

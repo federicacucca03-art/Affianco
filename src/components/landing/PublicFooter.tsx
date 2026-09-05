@@ -12,7 +12,7 @@ export function PublicFooter() {
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 text-sm text-[var(--ink-muted)] sm:px-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm font-medium uppercase tracking-[0.12em] text-[var(--ink)]">
-            Affianco
+            Ally
           </p>
           <p className="max-w-xl">
             Il posto in cui un professionista gestisce tutto il lavoro dietro le

@@ -1581,7 +1581,7 @@ function RisultatiPage() {
                   {importTab === "csv" ? (
                     <div className="mt-4">
                       <p className="text-sm text-[var(--ink-muted)]">
-                        Carica un export .csv di Ads Manager. Affianco legge le
+                        Carica un export .csv di Ads Manager. Ally legge le
                         metriche senza AI.
                       </p>
                       <div
@@ -1670,7 +1670,7 @@ function RisultatiPage() {
                 <div className="mt-4">
                   <p className="text-sm text-[var(--ink-muted)]">
                     Non vuoi compilare i KPI? Carica uno screenshot di Ads
-                    Manager e Affianco prova a leggerli per te.
+                    Manager e Ally prova a leggerli per te.
                   </p>
                   <div
                     role="button"
@@ -1759,7 +1759,7 @@ function RisultatiPage() {
                     <p className="mt-3 text-xs text-[var(--ink-muted)]">
                       KPI letti e copiati nei campi. Puoi correggerli nella
                       modalità «Inserisci KPI». Lo stato economico resta
-                      calcolato dalle regole Affianco, non dall&apos;AI.
+                      calcolato dalle regole Ally, non dall&apos;AI.
                     </p>
                   ) : null}
                 </div>

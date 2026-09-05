@@ -2,7 +2,7 @@
  * Identità legale mostrata sulle pagine pubbliche.
  * Unica fonte: non duplicare questi valori nelle pagine.
  */
-export const LEGAL_PRODUCT_NAME = "Affianco";
+export const LEGAL_PRODUCT_NAME = "Ally";
 
 export const LEGAL_SITE_URL = "https://affianco.vercel.app";
 

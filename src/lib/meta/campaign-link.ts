@@ -69,7 +69,7 @@ async function assertNativeCampaignOwned(
   if (!isUuid(affiancoCampaignId)) {
     throw new MetaError(
       "META_CONNECTION_INVALID",
-      "ID campagna Affianco non valido.",
+      "ID campagna Ally non valido.",
     );
   }
   const { data, error } = await adminClient()
@@ -80,7 +80,7 @@ async function assertNativeCampaignOwned(
   if (error) {
     throw new MetaError(
       "META_CONNECTION_INVALID",
-      "Lettura campagna Affianco non riuscita.",
+      "Lettura campagna Ally non riuscita.",
     );
   }
   const row = data as {
@@ -102,7 +102,7 @@ async function assertNativeCampaignOwned(
   ) {
     throw new MetaError(
       "META_CONNECTION_INVALID",
-      "Campagna Affianco non trovata per questo cliente.",
+      "Campagna Ally non trovata per questo cliente.",
     );
   }
   return { id: row.id, name: row.name };
@@ -121,7 +121,7 @@ async function listNativeCampaignOptions(
   if (error) {
     throw new MetaError(
       "META_CONNECTION_INVALID",
-      "Lettura campagne Affianco non riuscita.",
+      "Lettura campagne Ally non riuscita.",
     );
   }
   return ((data ?? []) as {

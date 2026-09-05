@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Bell, Menu } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { ProfileMenu } from "@/components/shell/ProfileMenu";
+import { useAllySetupNav } from "@/components/shell/AllySetupNavProvider";
 import { fetchUnreadNotificationCount } from "@/lib/campaign-notifications/inbox-client";
 import { supabase } from "@/lib/supabase";
 
@@ -97,6 +98,7 @@ function pageCopy(
 export function BarraSuperiore({ onApriMenu }: Props) {
   const pathname = usePathname();
   const { email, user } = useAuth();
+  const { nav } = useAllySetupNav();
   const [unread, setUnread] = useState(0);
   const firstName = useMemo(() => nomeDaEmail(email), [email]);
   const copy = useMemo(
@@ -105,7 +107,7 @@ export function BarraSuperiore({ onApriMenu }: Props) {
   );
 
   const refreshUnread = useCallback(async () => {
-    if (!user?.id) {
+    if (!user?.id || !nav.showNotifiche) {
       setUnread(0);
       return;
     }
@@ -116,7 +118,7 @@ export function BarraSuperiore({ onApriMenu }: Props) {
     } catch {
       setUnread(0);
     }
-  }, [user?.id]);
+  }, [user?.id, nav.showNotifiche]);
 
   useEffect(() => {
     void refreshUnread();
@@ -146,20 +148,22 @@ export function BarraSuperiore({ onApriMenu }: Props) {
       </div>
 
       <div className="flex shrink-0 items-center gap-2.5">
-        <Link
-          href="/notifiche"
-          aria-label={
-            unread > 0 ? `Notifiche, ${unread} non lette` : "Notifiche"
-          }
-          className="aff-header-icon relative"
-        >
-          <Bell className="h-5 w-5" strokeWidth={STROKE} />
-          {badge ? (
-            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--ally-violet)] px-1 text-[10px] font-semibold text-white">
-              {badge}
-            </span>
-          ) : null}
-        </Link>
+        {nav.showNotifiche ? (
+          <Link
+            href="/notifiche"
+            aria-label={
+              unread > 0 ? `Notifiche, ${unread} non lette` : "Notifiche"
+            }
+            className="aff-header-icon relative"
+          >
+            <Bell className="h-5 w-5" strokeWidth={STROKE} />
+            {badge ? (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--ally-violet)] px-1 text-[10px] font-semibold text-white">
+                {badge}
+              </span>
+            ) : null}
+          </Link>
+        ) : null}
 
         <ProfileMenu />
       </div>

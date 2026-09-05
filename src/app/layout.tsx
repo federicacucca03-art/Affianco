@@ -10,9 +10,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Affianco — Gestisci le campagne Meta dei tuoi clienti",
+  title: "Ally — Gestisci le campagne Meta dei tuoi clienti",
   description:
-    "Affianco organizza strategia, sostenibilità economica, approvazione, lancio e monitoraggio delle campagne Meta in un unico flusso per freelance e piccole agenzie.",
+    "Ally organizza strategia, sostenibilità economica, approvazione, lancio e monitoraggio delle campagne Meta in un unico flusso per freelance e piccole agenzie.",
 };
 
 export default function RootLayout({

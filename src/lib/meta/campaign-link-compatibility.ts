@@ -1,5 +1,5 @@
 /**
- * M5C — explicit Meta ↔ Affianco link: KPI compatibility + target precedence.
+ * M5C — explicit Meta ↔ Ally link: KPI compatibility + target precedence.
  * Pure. No DB writes. No Meta API. No native check history writes.
  */
 

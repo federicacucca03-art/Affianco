@@ -297,7 +297,7 @@ export function generaGuidanceStep1(
     items.push({
       id: "step1-brief-corto",
       level: "SUGGESTION",
-      title: "Il brief può guidare meglio Affianco.",
+      title: "Il brief può guidare meglio Ally.",
       description:
         "Aggiungi target, obiettivo e tono della comunicazione.",
       actionLabel: "Completa il brief",
@@ -346,7 +346,7 @@ export function generaGuidanceTargeting(
       level: "SUGGESTION",
       title: "Manca la zona della campagna.",
       description:
-        "Indica una città per aiutare Affianco a impostare correttamente il pubblico locale.",
+        "Indica una città per aiutare Ally a impostare correttamente il pubblico locale.",
       field: "citta",
       step: 1,
     });
@@ -640,7 +640,7 @@ export function copyHeaderStep6(
   return {
     titolo: "Configurazione da completare",
     sottotitolo:
-      "Completa gli elementi indicati da Affianco prima di andare live.",
+      "Completa gli elementi indicati da Ally prima di andare live.",
   };
 }
 
@@ -655,9 +655,9 @@ export function etichettaStepperStep6(
 export const LABEL_EXPORT_PRONTA = "Esporta per Meta Ads";
 export const LABEL_EXPORT_BOZZA = "Esporta per Meta Ads";
 export const MICROCOPY_EXPORT_PRONTA =
-  "Affianco prepara una bozza strutturata da completare in Ads Manager.";
+  "Ally prepara una bozza strutturata da completare in Ads Manager.";
 export const MICROCOPY_EXPORT_BOZZA =
-  "Affianco prepara una bozza strutturata da completare in Ads Manager.";
+  "Ally prepara una bozza strutturata da completare in Ads Manager.";
 export const MICROCOPY_EXPORT_PAGE_FORM =
   "Page ID e Form ID dovranno essere completati in Meta Ads Manager prima di andare live.";
 export const MICROCOPY_EXPORT_PAGE =

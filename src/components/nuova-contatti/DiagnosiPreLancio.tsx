@@ -35,7 +35,7 @@ function sottotitoloSeverita(severita: PreLancioSeverita): string {
     case "ok":
       return "Nessuna azione necessaria";
     case "consiglio":
-      return "Puoi procedere, ma Affianco suggerisce una modifica";
+      return "Puoi procedere, ma Ally suggerisce una modifica";
     case "errore":
       return "Consigliamo di risolvere questo punto prima del lancio";
     default:
@@ -339,7 +339,7 @@ export function DiagnosiPreLancio({ diagnosi, onAzioneRapida }: Props) {
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-[var(--ink-muted)]">
             {diagnosi.objective === "BOOKINGS"
-              ? "Affianco controlla che la campagna sia pronta per generare prenotazioni."
+              ? "Ally controlla che la campagna sia pronta per generare prenotazioni."
               : diagnosi.objective === "ECOMMERCE"
                 ? "Verifica che economia, messaggio, destinazione e creatività siano coerenti prima di esportare la campagna."
                 : diagnosi.objective === "IN_STORE"
@@ -348,7 +348,7 @@ export function DiagnosiPreLancio({ diagnosi, onAzioneRapida }: Props) {
                     ? "Verifica che messaggio, destinazione, creatività ed economia siano coerenti prima di portare la campagna su Meta."
                     : diagnosi.objective === "AWARENESS"
                       ? "Verifica che messaggio, area, budget e destinazione siano coerenti prima di esportare la campagna."
-                : "Affianco ha controllato la campagna prima dell'esportazione su Meta."}
+                : "Ally ha controllato la campagna prima dell'esportazione su Meta."}
           </p>
         </header>
       ) : (

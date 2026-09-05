@@ -17,7 +17,7 @@ export function PaginaLegale({ titolo, aggiornamento, children }: Props) {
             href="/"
             className="text-sm font-medium uppercase tracking-[0.12em] text-[var(--ink)]"
           >
-            Affianco
+            Ally
           </Link>
           <Link
             href="/login"

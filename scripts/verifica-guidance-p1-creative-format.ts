@@ -105,7 +105,7 @@ mark(
     gRatio[0].title === "Ti manca una versione verticale." &&
     !idsDi(gRatio).includes(ID_CREATIVE_RATIO_NON_IDEALE) &&
     !testiGuidance(gRatio).includes("può essere adattato meglio"),
-  "CASE 1: Affianco mostra SOLO manca 9:16, non il ratio del checker",
+  "CASE 1: Ally mostra SOLO manca 9:16, non il ratio del checker",
 );
 
 console.log("\n=== 9:16 GUIDANCE ===");
@@ -188,7 +188,7 @@ const gLandscapeCon916 = generaGuidanceCreativita({
 mark(
   "LANDSCAPE",
   gLandscapeCon916.length === 0,
-  "landscape + 9:16: checker copre l'orizzontale, Affianco tace",
+  "landscape + 9:16: checker copre l'orizzontale, Ally tace",
 );
 
 console.log("\n=== REGRESSIONS ===");
@@ -233,7 +233,7 @@ const studio = src("src/components/nuova-contatti/StudioCreativo.tsx");
 mark(
   "REGRESSIONS",
   (studio.match(/<AffiancoSuggerisce/g) ?? []).length === 1,
-  "una sola card Affianco",
+  "una sola card Ally",
 );
 const videoComeStories = generaGuidanceCreativita({
   creativita: [asset(1080, 1080, { isVideo: true })],

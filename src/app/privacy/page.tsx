@@ -9,9 +9,9 @@ import {
 } from "@/lib/legal-config";
 
 export const metadata: Metadata = {
-  title: "Privacy — Affianco",
+  title: "Privacy — Ally",
   description:
-    "Informazioni sul trattamento dei dati in Affianco: account, campagne, creatività, funzioni AI e futura integrazione Meta.",
+    "Informazioni sul trattamento dei dati in Ally: account, campagne, creatività, funzioni AI e futura integrazione Meta.",
 };
 
 export default function PaginaPrivacy() {
@@ -21,7 +21,7 @@ export default function PaginaPrivacy() {
       aggiornamento="Testo riferito al prodotto attuale. Non descrive un collegamento Meta già attivo."
     >
       <p>
-        Affianco è un software di supporto al lavoro sulle campagne
+        Ally è un software di supporto al lavoro sulle campagne
         pubblicitarie. Questa pagina spiega quali dati trattiamo per erogare il
         servizio oggi, in modo proporzionato alle funzioni che usi.
       </p>
@@ -47,7 +47,7 @@ export default function PaginaPrivacy() {
 
       <h2>Principio di minimizzazione</h2>
       <p>
-        Affianco tratta i dati necessari a fornire le funzioni che richiedi
+        Ally tratta i dati necessari a fornire le funzioni che richiedi
         (account, pianificazione campagne, clienti, creatività, analisi e
         export). Non dichiariamo di raccogliere dati che il prodotto non usa.
       </p>
@@ -56,7 +56,7 @@ export default function PaginaPrivacy() {
       <ul>
         <li>
           <strong>Account e autenticazione.</strong> Email e credenziali gestite
-          tramite il servizio di autenticazione (Supabase). Affianco non chiede
+          tramite il servizio di autenticazione (Supabase). Ally non chiede
           la password del tuo account Meta.
         </li>
         <li>
@@ -91,13 +91,13 @@ export default function PaginaPrivacy() {
 
       <h2>Quando l&apos;integrazione Meta sarà attivata</h2>
       <p>
-        Oggi Affianco non collega l&apos;account pubblicitario Meta e non
+        Oggi Ally non collega l&apos;account pubblicitario Meta e non
         memorizza token di accesso Marketing API. L&apos;export CSV è uno
         strumento di bozza da completare in Ads Manager.
       </p>
       <p>
         Quando l&apos;integrazione Meta sarà attivata, il collegamento sarà
-        volontario (un&apos;azione esplicita dell&apos;utente). Affianco
+        volontario (un&apos;azione esplicita dell&apos;utente). Ally
         richiederà solo i dati necessari alla funzione prevista: selezione
         dell&apos;account pubblicitario e importazione di struttura campagne e
         metriche in lettura. Non raccoglieremo la password dell&apos;account
@@ -108,7 +108,7 @@ export default function PaginaPrivacy() {
 
       <h2>Finalità</h2>
       <p>
-        I dati servono a farti usare Affianco: autenticarti, salvare il lavoro
+        I dati servono a farti usare Ally: autenticarti, salvare il lavoro
         su clienti e campagne, mostrare creatività, calcolare indicatori a
         partire da ciò che carichi, e — se le attivi — eseguire le funzioni AI.
       </p>

@@ -87,10 +87,10 @@ export const COPY_STATO_EXPORT: Record<MetaExportReadiness, string> = {
 };
 
 export const COPY_SPIEGAZIONE_EXPORT =
-  "Affianco prepara una bozza strutturata da completare in Ads Manager.";
+  "Ally prepara una bozza strutturata da completare in Ads Manager.";
 
 export const COPY_PROMESSA_EXPORT =
-  "Affianco prepara struttura, copy, budget e impostazioni base. Ads Manager resta il punto di pubblicazione.";
+  "Ally prepara struttura, copy, budget e impostazioni base. Ads Manager resta il punto di pubblicazione.";
 
 export const NOTE_PUBBLICO_EXPORT =
   "Le impostazioni avanzate del pubblico vanno verificate in Ads Manager.";

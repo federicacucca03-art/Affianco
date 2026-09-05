@@ -215,7 +215,7 @@ function LinkPicker({
 
   async function handleConfirm() {
     if (!selected) {
-      setError("Seleziona una campagna Affianco.");
+      setError("Seleziona una campagna Ally.");
       return;
     }
     setSaving(true);
@@ -233,7 +233,7 @@ function LinkPicker({
 
   return (
     <div className="mt-3 rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--ally-surface)] px-4 py-4 text-sm shadow-[var(--shadow-soft)]">
-      <p className="font-medium text-[var(--ink)]">Collega campagna Affianco</p>
+      <p className="font-medium text-[var(--ink)]">Collega campagna Ally</p>
       <p className="mt-1 text-xs text-[var(--ink-muted)]">
         Solo campagne di questo cliente. Il collegamento è esplicito: nessun
         abbinamento automatico.
@@ -242,7 +242,7 @@ function LinkPicker({
         <p className="mt-3 text-xs text-[var(--ink-muted)]">Caricamento…</p>
       ) : options.length === 0 ? (
         <p className="mt-3 text-xs text-[var(--ink-muted)]">
-          Nessuna campagna Affianco per questo cliente. Puoi continuare il
+          Nessuna campagna Ally per questo cliente. Puoi continuare il
           monitoraggio solo con un target Meta.
         </p>
       ) : (
@@ -324,7 +324,7 @@ function MetaCampaignCard({
       <span className="text-xs text-[var(--ink-muted)]">
         Target {kpiLabel(row.primaryKpi)}
         {row.targetValue != null ? ` ${formatEuro(row.targetValue)}` : ""}
-        {row.targetSource === "LINKED_AFFIANCO" ? " · Affianco" : ""}
+        {row.targetSource === "LINKED_AFFIANCO" ? " · Ally" : ""}
       </span>
     ) : (
       <span className="aff-badge aff-badge--warning aff-badge--pill">
@@ -500,7 +500,7 @@ function MetaCampaignCard({
             }}
             className="font-medium text-[var(--accent)]"
           >
-            Collega campagna Affianco
+            Collega campagna Ally
           </button>
         )}
       </div>
@@ -808,7 +808,7 @@ export function MetaCampagneSection({
     <section className="mt-8">
       <h2 className="text-lg font-medium text-[var(--ink)]">Campagne Meta</h2>
       <p className="mt-1 text-sm text-[var(--ink-muted)]">
-        Monitoraggio separato dalle campagne Affianco. Imposta un target per
+        Monitoraggio separato dalle campagne Ally. Imposta un target per
         valutare la performance.
       </p>
       <div className="mt-4 space-y-4">

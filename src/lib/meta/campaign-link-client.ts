@@ -1,5 +1,5 @@
 /**
- * Client-side helpers for the Meta ↔ Affianco campaign link API.
+ * Client-side helpers for the Meta ↔ Ally campaign link API.
  * No Meta tokens. No user_id in body. Auth via Bearer header.
  */
 

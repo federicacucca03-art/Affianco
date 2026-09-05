@@ -1,5 +1,5 @@
 /**
- * M5C — explicit Meta ↔ Affianco campaign link
+ * M5C — explicit Meta ↔ Ally campaign link
  */
 
 import fs from "node:fs";
@@ -113,7 +113,7 @@ const confidentLeadsAgg = {
   resultMappingConfidence: "CONFIDENT" as const,
 };
 
-console.log("\nM5C — explicit Meta ↔ Affianco link\n");
+console.log("\nM5C — explicit Meta ↔ Ally link\n");
 
 test("A: same-client same-user ownership accepted", () => {
   assert(
@@ -380,7 +380,7 @@ test("S: selector is same-client only (API + UI)", () => {
   assert(svc.includes(".eq(\"user_id\", userId)"), "options filter user");
   const ui = read("./src/components/risultati/MetaCampagneSection.tsx");
   assert(ui.includes("fetchMetaCampaignLink"), "selector uses API options");
-  assert(ui.includes("Collega campagna Affianco"), "link CTA");
+  assert(ui.includes("Collega campagna Ally"), "link CTA");
   assert(ui.includes("Scollega"), "unlink CTA");
   assert(ui.includes("Cambia"), "change CTA");
 });

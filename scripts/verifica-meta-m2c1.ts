@@ -1,5 +1,5 @@
 /**
- * M2C.1 — Meta connections scoped by Affianco user + client.
+ * M2C.1 — Meta connections scoped by Ally user + client.
  * Esegui: npx tsx --conditions=react-server scripts/verifica-meta-m2c1.ts
  */
 import { readFileSync } from "node:fs";

@@ -14,6 +14,7 @@ type Props = {
   onCreateClientDone: (client: { id: string; name: string }) => void;
   onChooseMeta: () => void;
   onChooseNative: () => void;
+  onContinueDraft: () => void;
   onPrimaryClick: () => void;
   showForm: boolean;
   onShowForm: () => void;
@@ -24,6 +25,7 @@ export function HomeSetupPanel({
   onCreateClientDone,
   onChooseMeta,
   onChooseNative,
+  onContinueDraft,
   onPrimaryClick,
   showForm,
   onShowForm,
@@ -37,26 +39,21 @@ export function HomeSetupPanel({
   /* CHOOSE_START_PATH: cards sit on dotted canvas — no outer white panel. */
   if (isChoosePath) {
     return (
-      <section className="mt-7 space-y-7 text-center sm:mt-8">
+      <section className="mt-6 space-y-4 text-center sm:mt-7">
         {guidance.bodyLines[0] ? (
           <p className="mx-auto max-w-xl text-[14px] leading-relaxed text-[var(--ink-muted)]">
             {guidance.bodyLines[0]}
           </p>
         ) : null}
 
-        <div className="pt-1">
-          <StartPathCards onMeta={onChooseMeta} onNative={onChooseNative} />
+        <div>
+          <StartPathCards
+            mode={guidance.startPathMode ?? "plan_new"}
+            onMeta={onChooseMeta}
+            onNative={onChooseNative}
+            onContinueDraft={onContinueDraft}
+          />
         </div>
-
-        {guidance.checklistVisible ? (
-          <div className="mx-auto max-w-[720px] pt-1 text-left">
-            <AllySetupChecklist
-              steps={guidance.checklist}
-              completedCount={guidance.completedCount}
-              totalCount={guidance.totalCount}
-            />
-          </div>
-        ) : null}
       </section>
     );
   }
@@ -132,6 +129,7 @@ export function HomeSetupPanel({
         ) : null}
       </AllyPanel>
 
+      {/* Kept for optional later phases; guidance.checklistVisible gates it. */}
       {guidance.checklistVisible ? (
         <AllySetupChecklist
           steps={guidance.checklist}

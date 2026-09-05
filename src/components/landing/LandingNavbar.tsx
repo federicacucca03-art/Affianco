@@ -28,7 +28,7 @@ export function LandingNavbar({
           href="#top"
           className="text-sm font-medium uppercase tracking-[0.12em] text-[var(--ink)]"
         >
-          Affianco
+          Ally
         </a>
 
         <nav className="hidden items-center gap-6 text-sm text-[var(--ink-muted)] md:flex">
@@ -50,7 +50,7 @@ export function LandingNavbar({
             href="/login"
             className="rounded-full bg-[var(--ink)] px-3.5 py-2 text-sm font-medium text-white hover:opacity-90"
           >
-            Inizia con Affianco →
+            Inizia con Ally →
           </Link>
         </div>
 
@@ -88,7 +88,7 @@ export function LandingNavbar({
               className="rounded-full bg-[var(--ink)] px-4 py-2.5 text-center text-white"
               onClick={onChiudiMenu}
             >
-              Inizia con Affianco →
+              Inizia con Ally →
             </Link>
           </div>
         </div>

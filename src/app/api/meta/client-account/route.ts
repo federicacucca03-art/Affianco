@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRouteUserId } from "@/lib/api-auth";
 import {
+  findClientIdByMetaAdAccount,
   getClientMetaAccount,
   removeClientMetaAccount,
   setClientMetaAccount,
@@ -59,6 +60,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Dati mancanti." }, { status: 400 });
   }
   try {
+    const already = await findClientIdByMetaAdAccount(
+      userId,
+      typeof body.metaAdAccountId === "string" ? body.metaAdAccountId.trim() : "",
+    );
+    if (already && already !== clientId) {
+      return NextResponse.json(
+        {
+          error:
+            "Questo account Meta è già collegato a un altro cliente Ally.",
+          code: "META_ACCOUNT_ALREADY_MAPPED",
+          existingClientId: already,
+        },
+        { status: 409 },
+      );
+    }
     const mapping = await setClientMetaAccount(userId, clientId, metaAdAccountId);
     return NextResponse.json({ mapping });
   } catch (error) {

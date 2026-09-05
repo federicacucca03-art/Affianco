@@ -95,7 +95,7 @@ export function AffiancoSuggerisce({
   return (
     <section className="aff-panel-white p-6">
       <p className="text-[13px] font-medium text-[var(--primary)]">
-        Affianco suggerisce
+        Ally suggerisce
       </p>
       <ul className="mt-3 space-y-3">
         <InsightRiga item={principale} evidenziato onAction={onAction} />
@@ -139,7 +139,7 @@ export function RaccomandazioneLancio({
   return (
     <section className="aff-panel-white p-5 sm:p-6">
       <p className="text-[13px] font-medium text-[var(--primary)]">
-        Affianco suggerisce
+        Ally suggerisce
       </p>
       <span className="mt-2 inline-flex">
         <StatoChip kind={stile.kind} label={stile.etichetta} />

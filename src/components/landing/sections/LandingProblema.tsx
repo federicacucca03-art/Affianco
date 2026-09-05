@@ -44,7 +44,7 @@ export function LandingProblema() {
           </div>
 
           <p className="mt-10 max-w-xl text-center text-2xl font-medium tracking-tight text-[var(--ink)] sm:text-3xl">
-            Affianco mette ordine in tutto questo.
+            Ally mette ordine in tutto questo.
           </p>
         </div>
       </div>

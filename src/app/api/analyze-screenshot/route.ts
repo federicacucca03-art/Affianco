@@ -16,7 +16,7 @@ import {
 export const runtime = "nodejs";
 
 const SYSTEM_PROMPT = `Sei un Senior Meta Media Buyer. Analizza lo screenshot di Meta Ads Manager / Business Suite.
-Estrai SOLO i dati numerici visibili. Non decidere lo stato economico di Affianco: health, diagnosi e azioni finali sono calcolati dal runtime.
+Estrai SOLO i dati numerici visibili. Non decidere lo stato economico di Ally: health, diagnosi e azioni finali sono calcolati dal runtime.
 
 Rispondi SOLO con JSON valido, senza markdown, senza testo fuori dal JSON.
 Schema esatto (backward compatible):
@@ -38,7 +38,7 @@ Schema esatto (backward compatible):
   "azioniConsigliate": string[]
 }
 
-verdetto e azioniConsigliate restano nello schema per compatibilità: Affianco li ignora per health e next action.
+verdetto e azioniConsigliate restano nello schema per compatibilità: Ally li ignora per health e next action.
 
 Se obiettivo è AWARENESS:
 - il confronto rilevante è il CPM, non il CPL
@@ -53,7 +53,7 @@ Se lo screenshot mostra una di queste label, usa quel valore. Non distinguere or
 NON ricostruire clicks o impressions da CTR, CPC, CPM o spesa.
 Esempio: CTR 1% e Impressions 10000 visibili, Click non visibile → clicks = null. NON calcolare 100.
 Se non visibili, usa null. Non inventare. Non arrotondare decimali: se il conteggio non è intero, usa null.
-Non calcolare CTR/CPC/CPM: Affianco li deriva a runtime dai conteggi.`;
+Non calcolare CTR/CPC/CPM: Ally li deriva a runtime dai conteggi.`;
 
 function estraiMediaType(base64: string): "image/jpeg" | "image/png" | "image/webp" {
   if (base64.startsWith("/9j/")) return "image/jpeg";

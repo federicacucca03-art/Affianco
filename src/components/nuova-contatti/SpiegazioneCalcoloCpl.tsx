@@ -40,7 +40,7 @@ export function SpiegazioneCalcoloCpl({
       {aperto ? (
         <div className="mt-3 space-y-3 text-xs leading-relaxed text-[var(--ink)]">
           <p>
-            Affianco non prevede il costo reale su Meta. Costruisce una{" "}
+            Ally non prevede il costo reale su Meta. Costruisce una{" "}
             <strong className="font-medium">soglia economica di riferimento</strong>{" "}
             dai numeri che inserisci:
           </p>

@@ -2334,9 +2334,9 @@ export function PercorsoContatti({
       : isPercorsoBookings && wizardStep === 2
         ? "Quanto può costare una prenotazione? Calcola CPA target, tasso di presenza e break-even."
         : isPercorsoBookings && wizardStep === 4
-          ? "Carica ciò che vuoi usare nella campagna. Affianco ti aiuta a controllare formato e coerenza con una campagna di prenotazione."
+          ? "Carica ciò che vuoi usare nella campagna. Ally ti aiuta a controllare formato e coerenza con una campagna di prenotazione."
           : isPercorsoBookings && wizardStep === 5
-          ? "Affianco controlla che la campagna sia pronta per generare prenotazioni."
+          ? "Ally controlla che la campagna sia pronta per generare prenotazioni."
           : isPercorsoBookings && wizardStep === 6
             ? "La struttura è completa. Falla approvare al cliente e poi esportala su Meta Ads Manager."
             : isPercorsoLeads && wizardStep === 6
@@ -2383,7 +2383,7 @@ export function PercorsoContatti({
 
         <div className="mt-5 mb-8 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="aff-eyebrow">Affianco / Campagna</p>
+            <p className="aff-eyebrow">Ally / Campagna</p>
             {config.nomeCliente?.trim() ? (
               <p className="mt-1 text-[17px] font-semibold tracking-[-0.02em] text-[var(--ink)]">
                 {config.nomeCliente.trim()}

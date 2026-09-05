@@ -8,7 +8,7 @@ export function LandingStoricoCliente() {
         <LandingSectionHeader
           eyebrow="Storico cliente"
           titolo="Ogni cliente costruisce una memoria."
-          descrizione="Affianco conserva campagne, risultati, approvazioni e decisioni nel tempo, così non riparti da zero ogni volta. Dal campaign-centric al client-centric."
+          descrizione="Ally conserva campagne, risultati, approvazioni e decisioni nel tempo, così non riparti da zero ogni volta. Dal campaign-centric al client-centric."
         />
         <MockStoricoCliente />
       </div>

@@ -361,6 +361,12 @@ textarea.aff-input-error {
   color: var(--ally-violet-active-text);
   font-weight: 600;
 }
+/* Secondary emphasis during setup (e.g. Campagne vs Configura Ally). */
+.aff-nav-item--quiet {
+  color: var(--ink-faint, var(--ink-muted));
+  font-weight: 450;
+  opacity: 0.88;
+}
 
 .aff-rail-btn {
   display: flex;
@@ -379,6 +385,9 @@ textarea.aff-input-error {
 .aff-rail-btn[aria-current="page"] {
   background: var(--ally-violet);
   color: #fff;
+}
+.aff-rail-btn--quiet {
+  opacity: 0.72;
 }
 
 .aff-header-icon {
