@@ -235,7 +235,7 @@ assert(
   );
 }
 
-// C native draft → stay on start-choice (Import + Continue), not auto-open
+// C native draft → unlocks workspace (not Configura Ally / start-choice)
 {
   const draftItem = item({
     attentionState: "CONFIGURATION_REQUIRED",
@@ -252,7 +252,10 @@ assert(
       attentionItems: [draftItem],
     }),
   );
-  assert(phase === "CHOOSE_START_PATH", "C native draft → CHOOSE_START_PATH");
+  assert(
+    phase === "MONITORING_CONFIGURATION_REQUIRED",
+    "C native draft → workspace monitoring (unlocked)",
+  );
   const g = buildAllySetupGuidance(
     base({
       hasClient: true,
@@ -260,20 +263,17 @@ assert(
       attentionItems: [draftItem],
     }),
   );
-  assert(g.startPathMode === "continue_draft", "C continue_draft mode");
-  assert(g.heroTitle === "Come vuoi continuare?", "C continue hero");
-  assert(
-    g.resumeDraftHref === "/campagne/c1",
-    "C resume exact draft href",
-  );
-  assert(g.showControlRoom === false, "C no Control Room with draft-only");
-  assert(
-    !/Pianifica una campagna/.test(g.secondaryLabel ?? ""),
-    "C Plan New not the secondary label",
-  );
+  assert(g.heroTitle === "Capisci cosa conta oggi.", "C workspace hero");
+  assert(g.startPathCards === false, "C no start-choice after draft");
+  assert(g.showControlRoom === true, "C Control Room with draft config");
+  const nav = buildAllyNavPresentation(phase);
+  assert(nav.homeLabel === "Home", "C draft unlocks Home label");
+  assert(nav.isActiveWorkspace === true, "C draft is workspace");
+  assert(nav.showCampagne && nav.showRisultati, "C full nav with draft");
+  assert(nav.showImportMetaCta === true, "C Importa da Meta in workspace");
 }
 
-// C2 zero drafts → plan_new
+// C2 zero drafts → plan_new on choose
 {
   const g = buildAllySetupGuidance(
     base({
@@ -353,10 +353,10 @@ assert(
     }),
   );
   assert(
-    g.resumeDraftHref === "/campagne/newer",
-    "C5 first draft in order wins (created_at DESC)",
+    g.phase === "MONITORING_CONFIGURATION_REQUIRED",
+    "C5 drafts unlock workspace monitoring",
   );
-  assert(g.startPathMode === "continue_draft", "C5 draft-aware continue mode");
+  assert(g.startPathCards === false, "C5 no start cards after unlock");
 }
 
 // D Meta readiness alone must NOT auto-select Import branch
@@ -449,10 +449,10 @@ assert(
     g.title.toLowerCase().includes("soglia"),
     "E explains target threshold",
   );
-  assert(g.heroTitle.includes("Completa il monitoraggio"), "E target hero");
+  assert(g.heroTitle.includes("Capisci cosa conta"), "E workspace hero");
   assert(/soglia/i.test(g.heroSubtitle), "E target hero subtitle");
   assert(!/configurazione richiesta/i.test(g.title), "E no generic config title");
-  assert(g.showQuickActions === false, "E no quick actions");
+  assert(g.showQuickActions === true, "E workspace quick actions");
 }
 
 // F result mapping
@@ -479,7 +479,7 @@ assert(
       ],
     }),
   );
-  assert(g.heroTitle.includes("Completa il monitoraggio"), "F result hero");
+  assert(g.heroTitle.includes("Capisci cosa conta"), "F result hero");
   assert(/risultato/i.test(g.heroSubtitle), "F result hero subtitle");
 }
 
@@ -613,15 +613,14 @@ assert(
       ],
     }),
   );
-  assert(g.heroTitle.includes("Ally è pronta"), "G ready hero");
+  assert(g.heroTitle.includes("Capisci cosa conta"), "G ready workspace hero");
   assert(
-    /configurazione è completata/i.test(g.heroSubtitle),
-    "G complete subtitle",
+    /abbastanza dati/i.test(g.heroSubtitle),
+    "G waiting-for-data copy",
   );
-  assert(/servono dati/i.test(g.heroSubtitle), "G waiting-for-data copy");
   assert(g.primaryLabel.includes("Control Room"), "G CTA Control Room");
-  assert(g.showQuickActions === false, "G no quick actions yet");
-  assert(!/Capisci cosa conta/i.test(g.heroTitle), "G no active hero");
+  assert(g.showQuickActions === true, "G workspace quick actions");
+  assert(g.showControlRoom === true, "G ready shows Control Room");
 }
 
 // H / I active
@@ -806,23 +805,23 @@ assert(
   assert(g.phase === "ACTIVE_WORKSPACE", "multi-client: evaluable wins globally");
 }
 
-// Search/workspace visibility contract (Home): ACTIVE only
+// Search/workspace visibility: unlocked workspace (not first-run)
 {
   const home = readFileSync(
     "./src/components/dashboard/DashboardHome.tsx",
     "utf8",
   );
   assert(
-    /const showSearchShell = isActiveWorkspace;/.test(home),
-    "Home search gated to ACTIVE_WORKSPACE only",
+    /isFirstRunOnboardingPhase/.test(home),
+    "Home uses first-run vs workspace gate",
   );
   assert(
-    !/showSetup && guidance\?\.phase !== "NO_CLIENT"/.test(home),
-    "Home no longer shows search during incomplete setup",
+    /showHeroTools/.test(home),
+    "Home search follows workspace showHeroTools",
   );
 }
 
-// M8.5A.7 — state-specific navigation presentation
+// M8.5A.7 / M8.5C — navigation: onboarding vs workspace unlock
 {
   const noClient = buildAllyNavPresentation("NO_CLIENT");
   assert(noClient.homeLabel === "Configura Ally", "NO_CLIENT home label");
@@ -830,6 +829,7 @@ assert(
   assert(!noClient.showNotifiche, "NO_CLIENT hides Notifiche");
   assert(!noClient.showCampagne, "NO_CLIENT hides Campagne");
   assert(!noClient.showNewCampaignCta, "NO_CLIENT hides Nuova campagna");
+  assert(!noClient.showImportMetaCta, "NO_CLIENT hides Importa da Meta");
   assert(noClient.showClienti && noClient.showMeta, "NO_CLIENT keeps Clienti+Meta");
 
   const choose = buildAllyNavPresentation("CHOOSE_START_PATH");
@@ -857,26 +857,37 @@ assert(
   for (const phase of [
     "MONITORING_CONFIGURATION_REQUIRED",
     "READY_FOR_FIRST_CONTROL",
+    "ACTIVE_WORKSPACE",
   ] as const) {
     const n = buildAllyNavPresentation(phase);
-    assert(n.showCampagne, `${phase} reveals Campagne after campaign exists`);
-    assert(!n.showRisultati, `${phase} keeps Risultati hidden`);
-    assert(!n.showNotifiche, `${phase} keeps Notifiche hidden`);
-    assert(!n.showNewCampaignCta, `${phase} hides Nuova campagna`);
+    assert(n.isActiveWorkspace, `${phase} workspace unlocked`);
+    assert(n.homeLabel === "Home", `${phase} Home label`);
+    assert(n.showCampagne, `${phase} shows Campagne`);
+    assert(n.showRisultati, `${phase} shows Risultati`);
+    assert(n.showNotifiche, `${phase} shows Notifiche`);
+    assert(n.showNewCampaignCta, `${phase} shows Nuova campagna`);
+    assert(n.showImportMetaCta, `${phase} shows Importa da Meta`);
   }
 
-  const active = buildAllyNavPresentation("ACTIVE_WORKSPACE");
-  assert(active.homeLabel === "Control Room", "ACTIVE Control Room label");
-  assert(
-    active.showRisultati &&
-      active.showNotifiche &&
-      active.showCampagne &&
-      active.showNewCampaignCta,
-    "ACTIVE full nav + CTA",
-  );
-
   const loading = buildAllyNavPresentation(null);
-  assert(loading.homeLabel === "Control Room", "loading keeps full nav");
+  assert(loading.homeLabel === "Home", "loading keeps full workspace nav");
+
+  const sidebar = readFileSync(
+    "./src/components/shell/SecondarySidebar.tsx",
+    "utf8",
+  );
+  assert(
+    /Importa da Meta/.test(sidebar),
+    "Sidebar has Importa da Meta workspace action",
+  );
+  assert(
+    /showImportMetaCta/.test(sidebar),
+    "Sidebar gates Importa da Meta CTA",
+  );
+  assert(
+    /startMetaImportHref|preferredClientIdFromPathname/.test(sidebar),
+    "Sidebar Import uses safe client-scoped import flow",
+  );
 
   const home = readFileSync(
     "./src/components/dashboard/DashboardHome.tsx",
@@ -918,20 +929,12 @@ assert(
     "Client plan path skips /campagne listing",
   );
 
-  const sidebar = readFileSync(
-    "./src/components/shell/SecondarySidebar.tsx",
-    "utf8",
-  );
   const rail = readFileSync("./src/components/shell/IconRail.tsx", "utf8");
-  const header = readFileSync("./src/components/BarraSuperiore.tsx", "utf8");
-  assert(
-    /useAllySetupNav/.test(sidebar) && /allyNavItemVisible/.test(sidebar),
-    "SecondarySidebar uses progressive nav",
-  );
   assert(
     /useAllySetupNav/.test(rail) && /allyNavItemVisible/.test(rail),
     "IconRail uses progressive nav",
   );
+  const header = readFileSync("./src/components/BarraSuperiore.tsx", "utf8");
   assert(
     /nav\.showNotifiche/.test(header),
     "Header bell gated like Notifiche nav",
@@ -1092,11 +1095,11 @@ assert(
     "utf8",
   );
   assert(
-    /ensureMetaImportClient/.test(homeSrc),
+    /startMetaImportHref|ensureMetaImportClient/.test(homeSrc),
     "Home Import auto-provisions canonical client",
   );
   assert(
-    /focus=meta/.test(homeSrc),
+    /startMetaImportHref|focus=meta/.test(homeSrc),
     "Home Import Meta preserves client context with focus=meta",
   );
 

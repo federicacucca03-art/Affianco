@@ -99,7 +99,7 @@ export type AllySetupGuidance = {
  * B. Product readiness: client / Meta / campaigns / monitoring
  *
  * Priority when incomplete:
- * 1. Launchable campaign → monitoring / ready / active (Layer B wins)
+ * 1. Real campaign exists (native incl. DRAFT, or Meta import) → workspace phases
  * 2. Explicit Plan without client → NO_CLIENT
  * 3. Explicit Import → Meta connect / import phases
  * 4. Else → CHOOSE_START_PATH (never infer branch from Meta/draft/client alone)
@@ -148,7 +148,15 @@ export function pickResumableNativeDraftId(
   return null;
 }
 
-/** Launchable / monitorable campaign — drafts alone do not count. */
+/**
+ * First real campaign unlocks the workspace (native incl. DRAFT, or imported Meta).
+ * Provisional Meta client / OAuth / ad-account alone do NOT unlock.
+ */
+export function hasWorkspaceCampaign(signals: AllySetupSignals): boolean {
+  return signals.hasNativeCampaign || signals.hasMetaCampaign;
+}
+
+/** Launchable / monitorable campaign — drafts alone do not count for evaluable health. */
 export function hasLaunchableCampaign(signals: AllySetupSignals): boolean {
   if (signals.hasMetaCampaign) return true;
   return signals.attentionItems.some(
@@ -159,8 +167,24 @@ export function hasLaunchableCampaign(signals: AllySetupSignals): boolean {
   );
 }
 
+/** Onboarding ends when a real campaign exists — drafts unlock the workspace. */
 export function hasCampaignAvailable(signals: AllySetupSignals): boolean {
-  return hasLaunchableCampaign(signals);
+  return hasWorkspaceCampaign(signals);
+}
+
+/** Phases that still use first-run / Configura Ally chrome. */
+export function isFirstRunOnboardingPhase(phase: AllySetupPhase): boolean {
+  return (
+    phase === "NO_CLIENT" ||
+    phase === "CHOOSE_START_PATH" ||
+    phase === "META_CONNECTION_REQUIRED" ||
+    phase === "META_IMPORT_REQUIRED"
+  );
+}
+
+/** Account has entered the normal Ally workspace (nav + Home). */
+export function isWorkspacePhase(phase: AllySetupPhase): boolean {
+  return !isFirstRunOnboardingPhase(phase);
 }
 
 function pickConfigItem(
@@ -462,9 +486,9 @@ export function buildAllySetupGuidance(
       return {
         ...base,
         phase,
-        heroTitle: "Completa il monitoraggio.",
+        heroTitle: "Capisci cosa conta oggi.",
         heroSubtitle,
-        eyebrow: "PROSSIMO PASSO",
+        eyebrow: "DA CONFIGURARE",
         title: explain.title,
         bodyLines: [explain.reason],
         primaryLabel: explain.cta,
@@ -475,6 +499,8 @@ export function buildAllySetupGuidance(
           reason: explain.reason,
         },
         showControlRoom: true,
+        showQuickActions: true,
+        showHeroTools: true,
       };
     }
 
@@ -482,9 +508,9 @@ export function buildAllySetupGuidance(
       return {
         ...base,
         phase,
-        heroTitle: "Ally è pronta.",
+        heroTitle: "Capisci cosa conta oggi.",
         heroSubtitle:
-          "La configurazione è completata. Ora servono dati prima di suggerire interventi.",
+          "La campagna è pronta: Ally monitorerà appena ci sono abbastanza dati.",
         eyebrow: "PRONTO",
         title: "Apri Control Room",
         bodyLines: [
@@ -493,7 +519,9 @@ export function buildAllySetupGuidance(
         primaryLabel: "Apri Control Room",
         primaryHref: "/risultati",
         primaryAction: "navigate",
-        showControlRoom: false,
+        showControlRoom: true,
+        showQuickActions: true,
+        showHeroTools: true,
       };
 
     case "ACTIVE_WORKSPACE":

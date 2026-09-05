@@ -29,7 +29,7 @@ type VoceNav = {
 const voci: VoceNav[] = [
   {
     id: "home",
-    etichettaActive: "Control Room",
+    etichettaActive: "Home",
     href: "/home",
     icona: Home,
   },

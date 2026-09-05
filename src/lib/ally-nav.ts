@@ -1,15 +1,16 @@
 /**
- * M8.5A.7 — state-specific navigation during Ally first-value setup.
+ * M8.5A.7 / M8.5C — navigation during Ally first-value setup vs workspace.
  * Pure UI rules from phase. Does not change setup-state derivation.
  *
- * Progressive reveal:
- * L1 client setup → Configura Ally, Clienti, Meta
- * L2 campaign exists → + Campagne
- * L3 monitoring useful → + Risultati (ACTIVE only for now)
- * L4 active workspace → + Notifiche, CTA, Control Room label
+ * Onboarding (no real campaign yet): Configura Ally + minimal nav
+ * Workspace (native and/or Meta campaign exists): full nav labeled Home
  */
 
-import type { AllySetupPhase } from "@/lib/ally-setup";
+import {
+  isFirstRunOnboardingPhase,
+  isWorkspacePhase,
+  type AllySetupPhase,
+} from "@/lib/ally-setup";
 
 export type AllyNavItemId =
   | "home"
@@ -22,7 +23,7 @@ export type AllyNavItemId =
 export type AllyNavPresentation = {
   /** True when full product nav should show (or phase not yet known). */
   isActiveWorkspace: boolean;
-  /** Incomplete setup — progressive disclosure active. */
+  /** Incomplete first-run setup — progressive disclosure active. */
   isSetupIncomplete: boolean;
   homeLabel: string;
   showHome: boolean;
@@ -32,12 +33,14 @@ export type AllyNavPresentation = {
   showClienti: boolean;
   showMeta: boolean;
   showNewCampaignCta: boolean;
+  /** Persistent Importa da Meta action in workspace action area. */
+  showImportMetaCta: boolean;
 };
 
-const ACTIVE_NAV: AllyNavPresentation = {
+const WORKSPACE_NAV: AllyNavPresentation = {
   isActiveWorkspace: true,
   isSetupIncomplete: false,
-  homeLabel: "Control Room",
+  homeLabel: "Home",
   showHome: true,
   showCampagne: true,
   showRisultati: true,
@@ -45,15 +48,8 @@ const ACTIVE_NAV: AllyNavPresentation = {
   showClienti: true,
   showMeta: true,
   showNewCampaignCta: true,
+  showImportMetaCta: true,
 };
-
-/** Phases before any campaign exists — Campagne stays hidden. */
-const PRE_CAMPAIGN: ReadonlySet<AllySetupPhase> = new Set([
-  "NO_CLIENT",
-  "CHOOSE_START_PATH",
-  "META_CONNECTION_REQUIRED",
-  "META_IMPORT_REQUIRED",
-]);
 
 /**
  * @param phase — derived setup phase, or null while still loading.
@@ -63,24 +59,23 @@ const PRE_CAMPAIGN: ReadonlySet<AllySetupPhase> = new Set([
 export function buildAllyNavPresentation(
   phase: AllySetupPhase | null,
 ): AllyNavPresentation {
-  if (phase === null || phase === "ACTIVE_WORKSPACE") {
-    return ACTIVE_NAV;
+  if (phase === null || isWorkspacePhase(phase)) {
+    return WORKSPACE_NAV;
   }
 
-  const campaignExists = !PRE_CAMPAIGN.has(phase);
-
+  /* First-run onboarding only. */
   return {
     isActiveWorkspace: false,
     isSetupIncomplete: true,
     homeLabel: "Configura Ally",
     showHome: true,
-    showCampagne: campaignExists,
+    showCampagne: false,
     showRisultati: false,
     showNotifiche: false,
-    /* Hide Clienti until a real client exists (CHOOSE) or during pure Import start. */
     showClienti: phase !== "CHOOSE_START_PATH",
     showMeta: true,
     showNewCampaignCta: false,
+    showImportMetaCta: false,
   };
 }
 
@@ -103,3 +98,5 @@ export function allyNavItemVisible(
       return nav.showMeta;
   }
 }
+
+export { isFirstRunOnboardingPhase, isWorkspacePhase };

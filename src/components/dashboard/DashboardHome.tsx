@@ -45,6 +45,7 @@ import {
 } from "@/lib/supabase-errori";
 import {
   buildAllySetupGuidance,
+  isFirstRunOnboardingPhase,
   readSetupPathPreference,
   writeSetupPathPreference,
   type AllySetupGuidance,
@@ -52,7 +53,9 @@ import {
 } from "@/lib/ally-setup";
 import { loadAllySetupSignals } from "@/lib/ally-setup-loader";
 import { notifyAllySetupChanged } from "@/lib/ally-setup-shell-loader";
-import { ensureMetaImportClient } from "@/lib/meta-import-client";
+import {
+  startMetaImportHref,
+} from "@/lib/meta-import-client";
 
 const MAX_REVISIONI = 3;
 const TREND_CHECK_DAYS = 30;
@@ -280,8 +283,18 @@ export function DashboardHome() {
     return buildAllySetupGuidance(setupSignals);
   }, [setupSignals]);
 
-  const isActiveWorkspace = guidance?.phase === "ACTIVE_WORKSPACE";
-  const showSetup = Boolean(guidance && !isActiveWorkspace);
+  const isActiveWorkspace = Boolean(
+    guidance && !isFirstRunOnboardingPhase(guidance.phase),
+  );
+  const showSetup = Boolean(
+    guidance && isFirstRunOnboardingPhase(guidance.phase),
+  );
+  const showWorkspaceConfig = Boolean(
+    guidance &&
+      !isFirstRunOnboardingPhase(guidance.phase) &&
+      guidance.phase !== "ACTIVE_WORKSPACE" &&
+      guidance.primaryLabel,
+  );
   const showControlRoom = Boolean(
     guidance?.showControlRoom &&
       guidance.phase !== "CHOOSE_START_PATH" &&
@@ -302,25 +315,21 @@ export function DashboardHome() {
 
   async function chooseMeta() {
     if (importBusy) return;
-    writeSetupPathPreference("meta");
     setImportBusy(true);
     setErrore(null);
     try {
-      let id =
+      const preferred =
         setupSignals?.hasDbClient && setupSignals.primaryClientId
           ? setupSignals.primaryClientId
           : null;
-      if (!id) {
-        const client = await ensureMetaImportClient();
-        id = client.id;
+      const href = await startMetaImportHref(preferred);
+      if (!preferred) {
         setSetupSignals((prev) =>
           prev
             ? {
                 ...prev,
                 hasClient: true,
                 hasDbClient: true,
-                primaryClientId: client.id,
-                primaryClientName: client.name,
                 pathPreference: "meta",
               }
             : prev,
@@ -330,7 +339,7 @@ export function DashboardHome() {
           prev ? { ...prev, pathPreference: "meta" } : prev,
         );
       }
-      router.push(`/clienti/${encodeURIComponent(id)}?focus=meta`);
+      router.push(href);
     } catch (e) {
       logErroreSupabaseDev("dashboard_home_meta_import_client", e);
       setErrore(
@@ -395,18 +404,24 @@ export function DashboardHome() {
     }
   }
 
-  const heroForSetup = Boolean(guidance && !isActiveWorkspace);
-  // Search/workspace + quick cards only in ACTIVE_WORKSPACE (no empty placeholders).
-  const showSearchShell = isActiveWorkspace;
-  const heroBadge = heroForSetup
-    ? guidance!.heroBadge
-    : "Ciao, sono Ally";
-  const heroTitle = heroForSetup
-    ? guidance!.heroTitle
-    : "Capisci cosa conta oggi.";
-  const heroSubtitle = heroForSetup
-    ? guidance!.heroSubtitle
-    : "Controlla le campagne che richiedono attenzione e il prossimo passo da fare.";
+  // Search/quick cards once the workspace is unlocked (first real campaign).
+  const showSearchShell = Boolean(
+    isActiveWorkspace && guidance?.showHeroTools,
+  );
+  const showQuickCards = Boolean(
+    isActiveWorkspace && guidance?.showQuickActions,
+  );
+  const heroBadge = guidance?.heroBadge ?? "Ciao, sono Ally";
+  const heroTitle =
+    guidance?.heroTitle ??
+    (isActiveWorkspace
+      ? "Capisci cosa conta oggi."
+      : "Come vuoi iniziare?");
+  const heroSubtitle =
+    guidance?.heroSubtitle ??
+    (isActiveWorkspace
+      ? "Controlla le campagne che richiedono attenzione e il prossimo passo da fare."
+      : "Importa le campagne che gestisci già oppure pianificane una nuova.");
 
   return (
     <main className="mx-auto w-full max-w-[1040px] pb-12">
@@ -528,16 +543,18 @@ export function DashboardHome() {
               </div>
 
               <div className="mt-6 grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {QUICK_ACTIONS.map((card) => (
-                  <AllyFeatureCard
-                    key={card.title}
-                    href={card.href}
-                    title={card.title}
-                    body={card.body}
-                    icon={card.icon}
-                    tone={card.tone}
-                  />
-                ))}
+                {showQuickCards
+                  ? QUICK_ACTIONS.map((card) => (
+                      <AllyFeatureCard
+                        key={card.title}
+                        href={card.href}
+                        title={card.title}
+                        body={card.body}
+                        icon={card.icon}
+                        tone={card.tone}
+                      />
+                    ))
+                  : null}
               </div>
             </div>
           ) : null}
@@ -550,7 +567,7 @@ export function DashboardHome() {
         <p className="mt-16 text-sm text-[#7a3d58]">{errore}</p>
       ) : (
         <>
-          {showSetup && guidance ? (
+          {(showSetup || showWorkspaceConfig) && guidance ? (
             <HomeSetupPanel
               guidance={guidance}
               showForm={showFirstClientForm}
@@ -565,7 +582,11 @@ export function DashboardHome() {
 
           {showControlRoom ? (
             <>
-              <div className={showSetup ? "mt-10" : "mt-16"}>
+              <div
+                className={
+                  showSetup || showWorkspaceConfig ? "mt-10" : "mt-16"
+                }
+              >
                 <MondayControlRoomSection summary={monday} />
               </div>
 
