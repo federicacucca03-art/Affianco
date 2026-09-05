@@ -43,9 +43,9 @@ export function buildAllyCopilotSuggestions(
   if (status === "DRAFT" || config === "DRAFT") {
     return uniq([
       "Cosa manca prima del lancio?",
+      "Cosa manca perché Ally possa monitorarla bene?",
       "La campagna è pronta per Meta?",
       "Cosa testeresti per primo?",
-      "L'offerta è chiara rispetto all'obiettivo?",
     ]).slice(0, 4);
   }
 

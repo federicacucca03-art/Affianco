@@ -68,6 +68,11 @@ const PROHIBITED =
 
 function scrubInternalLabels(text: string): string {
   return text
+    .replace(/\blaunchReadiness\b/gi, "preparazione al lancio")
+    .replace(/\bconfigurationKind\b/gi, "tipo di configurazione")
+    .replace(/\battentionReason\b/gi, "motivo")
+    .replace(/\bnextAction\b/gi, "prossimo passo")
+    .replace(/\bmaxSustainableCpa\b/gi, "soglia sostenibile")
     .replace(/\bCONFIGURATION_REQUIRED\b/g, "configurazione da completare")
     .replace(/\bREVISION_REQUESTED\b/g, "revisione richiesta")
     .replace(/\bINSUFFICIENT_DATA\b/g, "dati insufficienti")

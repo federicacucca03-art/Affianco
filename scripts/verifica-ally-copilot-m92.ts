@@ -1,5 +1,5 @@
 /**
- * M9.2 / M9.2A — Ask Ally campaign copilot verification
+ * M9.2 / M9.2A / M9.2B — Ask Ally campaign copilot verification
  * Pure logic + structural security. No live Anthropic calls.
  */
 
@@ -577,8 +577,15 @@ test("M9.2A G: no second readiness engine — reuses calculateLaunchReadiness", 
     }),
     payload: basePayload({ status: "APPROVED" }),
   });
-  assert(ctx.configuration.launchReadiness != null, "LR present");
-  assert(Array.isArray(ctx.configuration.launchReadiness?.missingLabels), "labels");
+  assert(ctx.configuration.interpretazione != null, "interpretazione present");
+  assert(
+    Array.isArray(ctx.configuration.interpretazione?.preparazioneAlLancio?.blocchi),
+    "blocchi",
+  );
+  assert(
+    !("launchReadiness" in (ctx.configuration as object)),
+    "no launchReadiness key in AI context",
+  );
 });
 
 test("M9.2A Aurora-like: some complete some missing", () => {
@@ -603,6 +610,209 @@ test("M9.2A Aurora-like: some complete some missing", () => {
   assert(byId.creative === "missing", "creative missing");
   assert(byId.strategicScore === "unavailable", "score unavailable");
   assert(ctx.workflow.statusLabelIt === "Bozza", ctx.workflow.statusLabelIt);
+});
+
+// ——— M9.2B launch vs monitoring readiness ———
+
+test("M9.2B A: target missing + launch fields complete → target NOT launch blocker", () => {
+  const inv = buildAllyCopilotConfigurationInventory(
+    baseSnapshot({
+      maxSustainableCpa: null,
+      pageId: "page-1",
+      formId: "form-1",
+      hasCreativeAsset: true,
+      headline: "Titolo",
+      copyVariants: ["A", "B"],
+      status: "APPROVED",
+      approvedAt: "2026-01-01",
+    }),
+  );
+  assert(inv.launchReadiness.isReady === true, "LR ready without CPA");
+  assert(
+    inv.interpretazione.preparazioneAlLancio?.blocchi.length === 0,
+    "no launch blockers",
+  );
+  const target = inv.fields.find((f) => f.id === "sustainableTarget");
+  assert(target?.status === "missing", "target missing");
+  assert(target?.category === "monitoring", "target is monitoring");
+  assert(
+    !inv.interpretazione.preparazioneAlLancio?.blocchi.some((b) =>
+      /CPA|sostenibil/i.test(b),
+    ),
+    "CPA not in launch blockers",
+  );
+});
+
+test("M9.2B B: target missing → monitoring readiness identifies it", () => {
+  const inv = buildAllyCopilotConfigurationInventory(
+    baseSnapshot({ maxSustainableCpa: null }),
+  );
+  assert(
+    inv.interpretazione.monitoraggioAlly.lacune.some((l) =>
+      /sostenibil/i.test(l),
+    ),
+    inv.interpretazione.monitoraggioAlly.lacune.join("|"),
+  );
+  assert(
+    inv.interpretazione.monitoraggioAlly.note.some((n) =>
+      /non blocca il lancio/i.test(n),
+    ),
+    "note explains non-blocker",
+  );
+});
+
+test("M9.2B C: lead-form campaign missing Page/Form → launch requirements", () => {
+  const inv = buildAllyCopilotConfigurationInventory(
+    baseSnapshot({
+      objective: "LEADS",
+      pageId: null,
+      formId: null,
+      maxSustainableCpa: 40,
+    }),
+  );
+  const blocchi = inv.interpretazione.preparazioneAlLancio?.blocchi ?? [];
+  assert(
+    blocchi.some((b) => /Pagina Facebook|page/i.test(b)),
+    blocchi.join("|"),
+  );
+  assert(
+    blocchi.some((b) => /Modulo Contatti|destinazione/i.test(b)),
+    blocchi.join("|"),
+  );
+  assert(
+    !blocchi.some((b) => /sostenibil|CPA/i.test(b)),
+    "CPA not launch blocker when present in economics elsewhere",
+  );
+});
+
+test("M9.2B D: irrelevant unavailable field — prompt forbids dumping on pre-launch", () => {
+  const prompt = read("src/lib/ally-copilot/prompt.ts");
+  assert(
+    /NON elencare Strategic Score|unavailable e non richiesto|omettilo/i.test(
+      prompt,
+    ),
+    "omit irrelevant unavailable",
+  );
+  const inv = buildAllyCopilotConfigurationInventory(baseSnapshot());
+  assert(
+    inv.fields.find((f) => f.id === "strategicScore")?.category ===
+      "unavailable",
+    "score category",
+  );
+});
+
+test("M9.2B E: relevant unavailable — prompt says cannot verify when needed", () => {
+  const prompt = read("src/lib/ally-copilot/prompt.ts");
+  assert(
+    /NON dire che manca nella campagna|unavailable rilevanti/i.test(prompt),
+    "cannot verify rule",
+  );
+});
+
+test("M9.2B F: no raw launchReadiness identifier in AI context or scrubbed answer", () => {
+  const ctx = buildAllyCampaignCopilotContext({
+    identity: baseIdentity(),
+    payload: basePayload(),
+  });
+  const blob = JSON.stringify(ctx);
+  assert(!/"launchReadiness"/.test(blob), "no launchReadiness key");
+  assert(/"interpretazione"/.test(blob), "has interpretazione");
+  assert(/"preparazioneAlLancio"/.test(blob), "Italian key");
+  const parsed = parseAllyCopilotAnswer(
+    JSON.stringify({
+      answer:
+        "launchReadiness indica 40%. configurationKind=DRAFT. nextAction: completa.",
+      confidence: "MEDIUM",
+      evidence: [],
+      hypotheses: [],
+      missing_information: [],
+      suggested_next_questions: [],
+      recommended_action_href: null,
+    }),
+    ctx,
+  );
+  assert(!/launchReadiness/i.test(parsed.answer), parsed.answer);
+  assert(/preparazione al lancio/i.test(parsed.answer), parsed.answer);
+});
+
+test("M9.2B G: asset present + approval missing → presence ≠ fully ready", () => {
+  const inv = buildAllyCopilotConfigurationInventory(
+    baseSnapshot({
+      hasCreativeAsset: true,
+      status: "DRAFT",
+      approvedAt: null,
+      pageId: "p1",
+      formId: "f1",
+    }),
+  );
+  const creative = inv.fields.find((f) => f.id === "creative");
+  assert(creative?.status === "complete", "asset complete");
+  assert(creative?.value === "Asset presente", String(creative?.value));
+  assert(
+    inv.interpretazione.preparazioneAlLancio?.presenti.some((p) =>
+      /Creatività presente/i.test(p),
+    ),
+    "presenti says presente",
+  );
+  assert(
+    !inv.interpretazione.preparazioneAlLancio?.presenti.some((p) =>
+      /completamente pronta|Creatività pronta/i.test(p),
+    ),
+    "not pronta wording when unapproved",
+  );
+  assert(
+    inv.interpretazione.preparazioneAlLancio?.blocchi.some((b) =>
+      /Approvazione/i.test(b),
+    ),
+    "approval is launch blocker",
+  );
+  const prompt = read("src/lib/ally-copilot/prompt.ts");
+  assert(/creatività presente.*NON.*pronta/i.test(prompt), "prompt precision");
+});
+
+test("M9.2B question-specific: monitoring question uses different priority than launch", () => {
+  const prompt = read("src/lib/ally-copilot/prompt.ts");
+  assert(
+    /Cosa manca perché Ally possa monitorarla/i.test(prompt),
+    "monitoring question",
+  );
+  assert(
+    /priorità a monitoraggioAlly\.lacune/i.test(prompt),
+    "monitoring priority",
+  );
+  assert(
+    /SOLO preparazioneAlLancio\.blocchi/i.test(prompt),
+    "launch priority",
+  );
+  const sug = buildAllyCopilotSuggestions(
+    buildAllyCampaignCopilotContext({
+      identity: baseIdentity(),
+      payload: basePayload(),
+    }),
+  );
+  assert(
+    sug.some((s) => /monitorarla/i.test(s)),
+    sug.join("|"),
+  );
+});
+
+test("M9.2B canonical engine does not mix CPA into Launch Readiness", () => {
+  const lrSrc = read("src/lib/launch-readiness.ts");
+  assert(!/\bmaxSustainableCpa\b|\bCPA\b|\bCPL\b/i.test(lrSrc), "LR no CPA fields");
+  assert(
+    /Non valuta qualità strategica né sostenibilità/i.test(lrSrc),
+    "LR comment",
+  );
+  const inv = buildAllyCopilotConfigurationInventory(
+    baseSnapshot({
+      maxSustainableCpa: null,
+      pageId: "1",
+      formId: "2",
+      status: "APPROVED",
+      approvedAt: "2026-01-01",
+    }),
+  );
+  assert(inv.launchReadiness.isReady, "ready without sustainable target");
 });
 
 console.log(`\nM9.2 result: ${passed} passed, ${failed} failed\n`);

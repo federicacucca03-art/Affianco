@@ -1,5 +1,5 @@
 /**
- * M9.2A — pure builders for Ally campaign copilot context.
+ * M9.2A / M9.2B — pure builders for Ally campaign copilot context.
  */
 
 import { isSmallSample } from "@/lib/campaign-next-action";
@@ -13,10 +13,7 @@ import type {
 import { ALLY_COPILOT_MAX_INPUT_CHARS } from "@/lib/ally-copilot/types";
 import { buildAllyCopilotUserPrompt } from "@/lib/ally-copilot/prompt";
 import type { AllyCopilotNativePlanningSnapshot } from "@/lib/ally-copilot/configuration-inventory";
-import {
-  buildAllyCopilotConfigurationInventory,
-  summarizeLaunchReadinessForCopilot,
-} from "@/lib/ally-copilot/configuration-inventory";
+import { buildAllyCopilotConfigurationInventory } from "@/lib/ally-copilot/configuration-inventory";
 
 export type AllyCopilotIdentityInput = {
   campaignId: string;
@@ -63,7 +60,27 @@ function attentionLabelIt(state: string): string {
 }
 
 function emptyConfiguration(): AllyCopilotConfiguration {
-  return { fields: [], launchReadiness: null };
+  return { fields: [], interpretazione: null };
+}
+
+function cloneInterpretazione(
+  interpretazione: AllyCopilotConfiguration["interpretazione"],
+): AllyCopilotConfiguration["interpretazione"] {
+  if (!interpretazione) return null;
+  return {
+    preparazioneAlLancio: interpretazione.preparazioneAlLancio
+      ? {
+          ...interpretazione.preparazioneAlLancio,
+          blocchi: [...interpretazione.preparazioneAlLancio.blocchi],
+          presenti: [...interpretazione.preparazioneAlLancio.presenti],
+        }
+      : null,
+    monitoraggioAlly: {
+      lacune: [...interpretazione.monitoraggioAlly.lacune],
+      note: [...interpretazione.monitoraggioAlly.note],
+    },
+    regoleDomanda: { ...interpretazione.regoleDomanda },
+  };
 }
 
 /** Merge diagnosis whitelist + identity/planning into compact copilot context. */
@@ -80,7 +97,7 @@ export function buildAllyCampaignCopilotContext(input: {
     const inv = buildAllyCopilotConfigurationInventory(snap);
     configuration = {
       fields: inv.fields,
-      launchReadiness: summarizeLaunchReadinessForCopilot(inv.launchReadiness),
+      interpretazione: inv.interpretazione,
     };
   }
 
@@ -217,17 +234,9 @@ export function fitAllyCopilotInput(input: {
     decision: { ...input.context.decision },
     configuration: {
       fields: [...input.context.configuration.fields],
-      launchReadiness: input.context.configuration.launchReadiness
-        ? {
-            ...input.context.configuration.launchReadiness,
-            completeLabels: [
-              ...input.context.configuration.launchReadiness.completeLabels,
-            ],
-            missingLabels: [
-              ...input.context.configuration.launchReadiness.missingLabels,
-            ],
-          }
-        : null,
+      interpretazione: cloneInterpretazione(
+        input.context.configuration.interpretazione,
+      ),
     },
   };
   let droppedHistoryTurns = 0;

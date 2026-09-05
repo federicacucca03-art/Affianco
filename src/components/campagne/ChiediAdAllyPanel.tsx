@@ -24,8 +24,8 @@ function provisionalSuggestions(statusHint: string | null | undefined): string[]
   if (s === "DRAFT" || !s) {
     return [
       "Cosa manca prima del lancio?",
+      "Cosa manca perché Ally possa monitorarla bene?",
       "La campagna è pronta per Meta?",
-      "Cosa testeresti per primo?",
     ];
   }
   if (s === "REVISION_REQUESTED") {

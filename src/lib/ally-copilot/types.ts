@@ -14,11 +14,42 @@ export type AllyCopilotHistoryTurn = {
 
 export type AllyCopilotFieldStatus = "complete" | "missing" | "unavailable";
 
+export type AllyCopilotFieldCategory =
+  | "launch"
+  | "monitoring"
+  | "planning"
+  | "unavailable";
+
 export type AllyCopilotConfigField = {
   id: string;
   label: string;
   status: AllyCopilotFieldStatus;
+  category: AllyCopilotFieldCategory;
   value: string | null;
+};
+
+export type AllyCopilotReadinessInterpretation = {
+  preparazioneAlLancio: {
+    percentuale: number;
+    pronta: boolean;
+    blocchi: string[];
+    presenti: string[];
+  } | null;
+  monitoraggioAlly: {
+    lacune: string[];
+    note: string[];
+  };
+  regoleDomanda: {
+    sogliaSostenibileNonBloccaLancio: true;
+    preLancioPrioritaSoloBlocchi: true;
+    unavailableSoloSeNecessario: true;
+  };
+};
+
+export type AllyCopilotConfiguration = {
+  fields: AllyCopilotConfigField[];
+  /** Question-specific launch vs monitoring split (Italian keys). */
+  interpretazione: AllyCopilotReadinessInterpretation | null;
 };
 
 /** Safe identity — names only, no emails / ids of other users. */
@@ -99,16 +130,6 @@ export type AllyCopilotDecision = {
   nextActionType: string | null;
   nextActionTitle: string | null;
   nextActionHref: string | null;
-};
-
-export type AllyCopilotConfiguration = {
-  fields: AllyCopilotConfigField[];
-  launchReadiness: {
-    isReady: boolean;
-    percentuale: number;
-    completeLabels: string[];
-    missingLabels: string[];
-  } | null;
 };
 
 /** Canonical compact context sent to the model (plus question + short history). */
