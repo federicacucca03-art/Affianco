@@ -5,7 +5,7 @@
  * Reuses deriveAllySetupPhase via loadAllySetupSignals — no phase logic changes.
  */
 
-import { leggiCampagneDaSupabase } from "@/lib/campagne-db";
+import { leggiInventarioCampagneNative } from "@/lib/campagne-inventory";
 import {
   leggiChecksUtenteDal,
   leggiUltimiChecksUtente,
@@ -37,7 +37,7 @@ export async function loadAllySetupPhaseForShell(
 ): Promise<AllySetupPhase> {
   const daTrend = isoInizioFinestraGiorni(TREND_CHECK_DAYS);
   const [lista, mappa, trendChecks] = await Promise.all([
-    leggiCampagneDaSupabase(),
+    leggiInventarioCampagneNative(),
     leggiUltimiChecksUtente(),
     leggiChecksUtenteDal(daTrend),
   ]);

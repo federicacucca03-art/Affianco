@@ -4,9 +4,12 @@
 
 import type { AllyOggiBrief, AllyOggiBriefContext } from "@/lib/ally-oggi/types";
 
-const PREFIX = "affianco-ally-oggi-v2:";
+const PREFIX = "affianco-ally-oggi-v3:";
 
-export function allyOggiCacheFingerprint(context: AllyOggiBriefContext): string {
+export function allyOggiCacheFingerprint(
+  context: AllyOggiBriefContext,
+  nativeInventory?: readonly { id?: string; status?: string | null }[],
+): string {
   const tip = context.campaigns
     .slice(0, 8)
     .map(
@@ -25,8 +28,15 @@ export function allyOggiCacheFingerprint(context: AllyOggiBriefContext): string 
     )
     .join("|");
   const ws = context.workspace;
+  const inventoryKey = (nativeInventory ?? [])
+    .map((c) => `${c.id ?? ""}:${c.status ?? ""}`)
+    .filter((s) => s !== ":")
+    .sort()
+    .join(",");
   return [
     ws.totalWorkspaceCampaigns,
+    ws.nativeCampaigns,
+    ws.metaCampaigns,
     ws.draftCampaigns,
     ws.revisionRequestedCampaigns,
     ws.approvedCampaigns,
@@ -40,6 +50,7 @@ export function allyOggiCacheFingerprint(context: AllyOggiBriefContext): string 
     context.counts.configurationRequired,
     context.counts.insufficientData,
     context.staleMetaCount,
+    inventoryKey,
     tip,
   ].join(";");
 }

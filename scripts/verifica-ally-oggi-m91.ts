@@ -886,5 +886,271 @@ test("M9.1B I: 5 native + 7 Meta inventory — workspace counts all Meta, not on
   assert(/12 campagne/i.test(fb.summary), fb.summary);
 });
 
+// ——— M9.1C.1 canonical Supabase inventory (no localStorage workspace truth) ———
+
+test("M9.1C.1 A: localStorage-only records are NOT workspace inventory", () => {
+  // Simulate: Supabase has 1; browser memory has 4 ghosts.
+  const supabaseNative = [
+    campagna({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      status: "APPROVED",
+      nomeCliente: "Canonical",
+    }),
+  ];
+  const localOnlyGhosts = [
+    "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+  ];
+  // Ally oggi receives only canonical Supabase natives (Home after fix).
+  const ctx = buildAllyOggiBriefContext({
+    attentionItems: supabaseNative.map((c) =>
+      buildNativeAttentionItem({
+        campagna: c,
+        check: null,
+        checksForTrend: [],
+      }),
+    ),
+    nativeCampaigns: supabaseNative,
+    metaItems: [],
+    linkedNativeIds: new Set(),
+  });
+  assert(ctx.workspace.totalWorkspaceCampaigns === 1, String(ctx.workspace.totalWorkspaceCampaigns));
+  assert(
+    !localOnlyGhosts.some((id) =>
+      ctx.campaigns.some((c) => c.campaignId === id),
+    ),
+    "ghosts must not appear in performance facts",
+  );
+  const fb = buildAllyOggiFallback(ctx);
+  assert(/1 campagna/i.test(fb.summary), fb.summary);
+  assert(!/5 campagne/i.test(fb.summary), fb.summary);
+});
+
+test("M9.1C.1 B: 5 canonical Supabase natives → workspace 5", () => {
+  const natives = [
+    campagna({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01", status: "DRAFT" }),
+    campagna({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa02", status: "DRAFT" }),
+    campagna({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa03", status: "DRAFT" }),
+    campagna({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa04",
+      status: "REVISION_REQUESTED",
+    }),
+    campagna({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa05",
+      status: "APPROVED",
+    }),
+  ];
+  const ctx = buildAllyOggiBriefContext({
+    attentionItems: natives.map((c) =>
+      buildNativeAttentionItem({ campagna: c, check: null, checksForTrend: [] }),
+    ),
+    nativeCampaigns: natives,
+    metaItems: [],
+    linkedNativeIds: new Set(),
+  });
+  assert(ctx.workspace.totalWorkspaceCampaigns === 5, "canonical 5");
+  assert(ctx.workspace.draftCampaigns === 3, "drafts");
+  assert(ctx.workspace.revisionRequestedCampaigns === 1, "rev");
+  assert(ctx.workspace.approvedCampaigns === 1, "approved");
+});
+
+test("M9.1C B: multi-client natives all counted (no current-client filter)", () => {
+  const remote = [
+    campagna({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01",
+      status: "DRAFT",
+      nomeCliente: "Client A1",
+    }),
+    campagna({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa02",
+      status: "DRAFT",
+      nomeCliente: "Client A2",
+    }),
+    campagna({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa03",
+      status: "APPROVED",
+      nomeCliente: "Client A3",
+    }),
+    campagna({
+      id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb01",
+      status: "REVISION_REQUESTED",
+      nomeCliente: "Client B1",
+    }),
+    campagna({
+      id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb02",
+      status: "DRAFT",
+      nomeCliente: "Client B2",
+    }),
+  ];
+  const ctx = buildAllyOggiBriefContext({
+    attentionItems: remote.map((c) =>
+      buildNativeAttentionItem({ campagna: c, check: null, checksForTrend: [] }),
+    ),
+    nativeCampaigns: remote,
+    metaItems: [],
+    linkedNativeIds: new Set(),
+  });
+  assert(ctx.workspace.totalWorkspaceCampaigns === 5, "multi-client total");
+});
+
+test("M9.1C C: Control Room 1 monitorable / workspace still 5", () => {
+  const natives = [
+    campagna({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01", status: "DRAFT" }),
+    campagna({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa02", status: "DRAFT" }),
+    campagna({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa03", status: "DRAFT" }),
+    campagna({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa04",
+      status: "REVISION_REQUESTED",
+    }),
+    campagna({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa05",
+      status: "APPROVED",
+      nomeCliente: "Only Monitorable",
+    }),
+  ];
+  const items = natives.map((c, i) =>
+    buildNativeAttentionItem({
+      campagna: c,
+      check:
+        i === 4
+          ? check({
+              campaignId: c.id!,
+              healthStatus: "GREEN",
+              primaryCost: 10,
+              resultsCount: 8,
+            })
+          : null,
+      checksForTrend: [],
+    }),
+  );
+  const ctx = buildAllyOggiBriefContext({
+    attentionItems: items,
+    nativeCampaigns: natives,
+    metaItems: [],
+    linkedNativeIds: new Set(),
+  });
+  assert(ctx.workspace.totalWorkspaceCampaigns === 5, "workspace 5");
+  assert(ctx.workspace.monitorableCampaigns === 1, String(ctx.workspace.monitorableCampaigns));
+  assert(ctx.campaigns.length === 1, "perf subset 1");
+});
+
+test("M9.1C D: cache fingerprint changes when native inventory grows", () => {
+  const one = [
+    campagna({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", status: "DRAFT" }),
+  ];
+  const five = Array.from({ length: 5 }, (_, i) =>
+    campagna({
+      id: `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa${String(i).padStart(2, "0")}`,
+      status: "DRAFT",
+    }),
+  );
+  const ctx1 = buildAllyOggiBriefContext({
+    attentionItems: one.map((c) =>
+      buildNativeAttentionItem({ campagna: c, check: null, checksForTrend: [] }),
+    ),
+    nativeCampaigns: one,
+    metaItems: [],
+    linkedNativeIds: new Set(),
+  });
+  const ctx5 = buildAllyOggiBriefContext({
+    attentionItems: five.map((c) =>
+      buildNativeAttentionItem({ campagna: c, check: null, checksForTrend: [] }),
+    ),
+    nativeCampaigns: five,
+    metaItems: [],
+    linkedNativeIds: new Set(),
+  });
+  assert(
+    allyOggiCacheFingerprint(ctx1, one) !==
+      allyOggiCacheFingerprint(ctx5, five),
+    "fingerprint must change with inventory",
+  );
+});
+
+test("M9.1C E: structural — inventory is Supabase-canonical, not localStorage merge", () => {
+  const home = read("src/components/dashboard/DashboardHome.tsx");
+  const lista = read("src/components/ListaCampagne.tsx");
+  const inv = read("src/lib/campagne-inventory.ts");
+  const plan = read("src/components/nuova-contatti/PercorsoContatti.tsx");
+  const risultati = read("src/app/risultati/page.tsx");
+  const clienti = read("src/app/clienti/page.tsx");
+  const dettaglio = read("src/app/clienti/[id]/page.tsx");
+  assert(home.includes("leggiInventarioCampagneNative"), "Home shared loader");
+  assert(lista.includes("leggiInventarioCampagneNative"), "Liste shared loader");
+  assert(
+    inv.includes("leggiCampagneDaSupabase"),
+    "inventory delegates to Supabase",
+  );
+  assert(
+    !inv.includes("getCampaigns"),
+    "inventory must not read localStorage campaigns",
+  );
+  assert(
+    !inv.includes("fondiInventario"),
+    "no local merge in inventory",
+  );
+  assert(
+    !lista.includes("getCampaigns"),
+    "ListaCampagne must not merge local campaigns",
+  );
+  assert(
+    plan.includes("salvaCampagnaCompleta"),
+    "Plan persists real campaigns to Supabase",
+  );
+  assert(
+    !plan.includes("saveCampaign("),
+    "Plan must not mirror persisted campaigns into localStorage inventory",
+  );
+  assert(
+    !risultati.includes("getCampaigns"),
+    "Risultati must not fall back to localStorage inventory",
+  );
+  assert(
+    clienti.includes("contaCampagneNativePerCliente") ||
+      clienti.includes("leggiClientiDaSupabase"),
+    "Clienti list uses server counts",
+  );
+  assert(
+    !clienti.includes("getCampaigns"),
+    "Clienti list must not count localStorage campaigns",
+  );
+  assert(
+    dettaglio.includes("clienteHaCampagneCanoniche"),
+    "Client detail uses canonical campaign flags",
+  );
+  assert(
+    !dettaglio.includes("getCampaigns"),
+    "Client detail must not use localStorage campaigns",
+  );
+});
+
+test("M9.1C.2 F: clienti-inventory module is Supabase-only", () => {
+  const mod = read("src/lib/clienti-inventory.ts");
+  assert(mod.includes('from("campaigns")'), "counts native from campaigns");
+  assert(mod.includes('from("meta_campaigns")'), "counts meta from meta_campaigns");
+  assert(mod.includes('from("clients")'), "lists clients from clients");
+  assert(!mod.includes("getCampaigns"), "no localStorage campaign reads");
+  assert(!mod.includes("affianco-campaign-memory"), "no campaign memory key");
+  assert(!mod.includes("clientStorage"), "no clientStorage import");
+});
+
+test("M9.1C.2 G: Ally oggi path does not import campaign localStorage", () => {
+  const service = read("src/lib/ally-oggi/service.ts");
+  const build = read("src/lib/ally-oggi/build-context.ts");
+  const home = read("src/components/dashboard/DashboardHome.tsx");
+  const route = read("src/app/api/ally-oggi/route.ts");
+  assert(!service.includes("getCampaigns"), "service no getCampaigns");
+  assert(!service.includes("clientStorage"), "service no clientStorage");
+  assert(!build.includes("getCampaigns"), "build-context no getCampaigns");
+  assert(!route.includes("getCampaigns"), "API route no getCampaigns");
+  assert(
+    home.includes("leggiInventarioCampagneNative"),
+    "Home feeds Ally oggi from canonical inventory",
+  );
+  assert(!home.includes("getCampaigns"), "Home no localStorage campaigns");
+});
+
 console.log(`\nM9.1 result: ${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);

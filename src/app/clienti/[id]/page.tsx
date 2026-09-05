@@ -9,7 +9,7 @@ import { StartPathCards } from "@/components/dashboard/FirstClientForm";
 import { AllyPanel } from "@/components/shell/AllyPanel";
 import { supabase } from "@/lib/supabase";
 import type { Cliente } from "@/types/clienti";
-import { getCampaigns, getClientById } from "@/utils/clientStorage";
+import { getClientById } from "@/utils/clientStorage";
 import {
   readSetupPathPreference,
   writeSetupPathPreference,
@@ -22,6 +22,7 @@ import {
 } from "@/lib/meta-import-client";
 import { salvaBozzaOnboarding } from "@/data/clienti-store";
 import { nomeCampagnaContatti } from "@/data/defaults-contatti";
+import { clienteHaCampagneCanoniche } from "@/lib/clienti-inventory";
 
 function normalizzaNome(nome: string): string {
   return nome.trim().toLowerCase().replace(/\s+/g, " ");
@@ -130,22 +131,19 @@ function DettaglioClienteInner() {
         setDbClientId(row.id);
       }
 
-      const localCamps = getCampaigns().filter(
-        (c) =>
-          c.clientId === id ||
-          (resolved &&
-            normalizzaNome(c.nomeCliente) === normalizzaNome(resolved.nome)),
-      );
-      let metaCount = 0;
       if (dbId) {
-        const { count } = await supabase
-          .from("meta_campaigns")
-          .select("id", { count: "exact", head: true })
-          .eq("client_id", dbId);
-        metaCount = count ?? 0;
+        try {
+          const flags = await clienteHaCampagneCanoniche(dbId);
+          setHasMetaRows(flags.hasMeta);
+          setHasCampaigns(flags.hasNative || flags.hasMeta);
+        } catch {
+          setHasMetaRows(false);
+          setHasCampaigns(false);
+        }
+      } else {
+        setHasMetaRows(false);
+        setHasCampaigns(false);
       }
-      setHasMetaRows(metaCount > 0);
-      setHasCampaigns(localCamps.length > 0 || metaCount > 0);
     })();
   }, [params.id]);
 

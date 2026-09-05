@@ -3,68 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { Campagna } from "@/types/campagne";
-import { leggiCampagneDaSupabase } from "@/lib/campagne-db";
+import { leggiInventarioCampagneNative } from "@/lib/campagne-inventory";
 import { RigaCampagna } from "@/components/RigaCampagna";
 import { AllyEmptyState } from "@/components/shell/AllyEmptyState";
-import { getCampaigns, type SavedCampaign } from "@/utils/clientStorage";
 import {
   logErroreSupabaseDev,
   messaggioErroreSupabase,
 } from "@/lib/supabase-errori";
 import { LayoutGrid } from "lucide-react";
-
-function inizialiDaNome(nome: string): string {
-  const parti = nome.trim().split(/\s+/).filter(Boolean);
-  if (parti.length === 0) return "??";
-  if (parti.length === 1) return parti[0].slice(0, 2).toUpperCase();
-  return `${parti[0][0]}${parti[parti.length - 1][0]}`.toUpperCase();
-}
-
-function campagnaDaMemoria(c: SavedCampaign): Campagna {
-  return {
-    id: c.id,
-    nomeCliente: c.nomeCliente,
-    iniziali: inizialiDaNome(c.nomeCliente),
-    stato: c.status || "Bozza",
-    giudizio: "Ancora presto",
-    objective: c.objective,
-    nomeCampagna: c.nomeCampagna,
-    settore: c.settore,
-    citta: c.citta,
-    dataLancio: c.dataCreazione,
-    status: c.status,
-    frontEndOffer: c.frontEndOffer || undefined,
-  };
-}
-
-function fondiCampagne(
-  remote: Campagna[],
-  locali: SavedCampaign[],
-): Campagna[] {
-  const byId = new Map<string, Campagna>();
-  for (const loc of locali) {
-    byId.set(loc.id, campagnaDaMemoria(loc));
-  }
-  for (const rem of remote) {
-    const precedente = byId.get(rem.id);
-    byId.set(
-      rem.id,
-      precedente
-        ? {
-            ...precedente,
-            ...rem,
-            dataLancio: rem.dataLancio || precedente.dataLancio,
-            objective: rem.objective ?? precedente.objective,
-            status: rem.status ?? precedente.status,
-            nomeCampagna: rem.nomeCampagna || precedente.nomeCampagna,
-          }
-        : rem,
-    );
-  }
-  return [...byId.values()].sort((a, b) =>
-    (b.dataLancio ?? "").localeCompare(a.dataLancio ?? ""),
-  );
-}
 
 function SkeletonCampagne() {
   return (
@@ -74,10 +20,7 @@ function SkeletonCampagne() {
       aria-label="Caricamento campagne"
     >
       {[0, 1, 2].map((i) => (
-        <li
-          key={i}
-          className="aff-list-row animate-pulse"
-        >
+        <li key={i} className="aff-list-row animate-pulse">
           <span className="h-10 w-10 shrink-0 rounded-full bg-[var(--surface-hover)]" />
           <div className="min-w-0 flex-1 space-y-2">
             <span className="block h-3.5 w-2/5 max-w-[200px] rounded bg-[var(--surface-hover)]" />
@@ -106,23 +49,17 @@ export function ListaCampagne() {
     setErrore(false);
     setMessaggioErrore(null);
 
-    const locali = getCampaigns();
     try {
-      const lista = await leggiCampagneDaSupabase();
-      setCampagne(fondiCampagne(lista, locali));
+      /* Canonical Supabase inventory only — never localStorage campaign memory. */
+      const lista = await leggiInventarioCampagneNative();
+      setCampagne(lista);
       setErrore(false);
       setMessaggioErrore(null);
     } catch (e) {
       logErroreSupabaseDev("lista_campagne", e);
-      const daLocale = fondiCampagne([], locali);
-      setCampagne(daLocale);
-      if (daLocale.length === 0) {
-        setErrore(true);
-        setMessaggioErrore(messaggioErroreSupabase(e, "lista"));
-      } else {
-        setErrore(false);
-        setMessaggioErrore(null);
-      }
+      setCampagne([]);
+      setErrore(true);
+      setMessaggioErrore(messaggioErroreSupabase(e, "lista"));
     } finally {
       setCaricamento(false);
     }
@@ -141,9 +78,7 @@ export function ListaCampagne() {
       <AllyEmptyState
         className="min-h-[11.5rem] max-w-md"
         title="Non riesco a caricare le campagne."
-        description={
-          messaggioErrore ?? "Riprova tra qualche secondo."
-        }
+        description={messaggioErrore ?? "Riprova tra qualche secondo."}
         action={
           <button
             type="button"

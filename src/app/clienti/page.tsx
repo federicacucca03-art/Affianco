@@ -1,65 +1,103 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, Users } from "lucide-react";
 import { salvaBozzaOnboarding } from "@/data/clienti-store";
 import { nomeCampagnaContatti } from "@/data/defaults-contatti";
-import type { Cliente } from "@/types/clienti";
-import { getCampaigns, getClients } from "@/utils/clientStorage";
+import {
+  contaCampagneNativePerCliente,
+  leggiClientiDaSupabase,
+} from "@/lib/clienti-inventory";
 import { AllyEmptyState } from "@/components/shell/AllyEmptyState";
 import { AllyListRow } from "@/components/shell/AllyListRow";
 import { FirstClientForm } from "@/components/dashboard/FirstClientForm";
 import { writeSetupPathPreference } from "@/lib/ally-setup";
+import {
+  logErroreSupabaseDev,
+  messaggioErroreSupabase,
+} from "@/lib/supabase-errori";
+
+type ClienteLista = { id: string; nome: string };
 
 export default function ClientiPage() {
   const router = useRouter();
-  const [clienti, setClienti] = useState<Cliente[]>([]);
+  const [clienti, setClienti] = useState<ClienteLista[]>([]);
   const [conteggioCampagne, setConteggioCampagne] = useState<
     Record<string, number>
   >({});
   const [showForm, setShowForm] = useState(false);
+  const [caricamento, setCaricamento] = useState(true);
+  const [errore, setErrore] = useState<string | null>(null);
 
-  function refresh() {
-    const lista = getClients();
-    setClienti(lista);
-    const campagne = getCampaigns();
-    const conteggi: Record<string, number> = {};
-    for (const cliente of lista) {
-      const ids = new Set(cliente.storicoCampagne ?? []);
-      for (const campagna of campagne) {
-        if (campagna.clientId === cliente.id) ids.add(campagna.id);
-      }
-      conteggi[cliente.id] = ids.size;
+  const refresh = useCallback(async () => {
+    setCaricamento(true);
+    setErrore(null);
+    try {
+      const [rows, conteggi] = await Promise.all([
+        leggiClientiDaSupabase(),
+        contaCampagneNativePerCliente(),
+      ]);
+      setClienti(rows.map((c) => ({ id: c.id, nome: c.name })));
+      setConteggioCampagne(conteggi);
+    } catch (e) {
+      logErroreSupabaseDev("clienti_lista", e);
+      setClienti([]);
+      setConteggioCampagne({});
+      setErrore(messaggioErroreSupabase(e, "lista"));
+    } finally {
+      setCaricamento(false);
     }
-    setConteggioCampagne(conteggi);
-  }
-
-  useEffect(() => {
-    refresh();
   }, []);
 
-  function nuovaCampagna(cliente: Cliente) {
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  function nuovaCampagna(cliente: ClienteLista) {
     writeSetupPathPreference("native");
     salvaBozzaOnboarding({
       clienteId: cliente.id,
       nomeCliente: cliente.nome,
       nomeCampagna: nomeCampagnaContatti(cliente.nome),
-      settore: cliente.settore,
-      citta: cliente.citta,
-      sitoWeb: cliente.sitoWeb,
-      note: cliente.note,
-      targetType: cliente.targetType,
-      targetAge: cliente.targetAge,
+      settore: "",
+      citta: "",
     });
     const paramsQs = new URLSearchParams({
       nomeCliente: cliente.nome,
-      settore: cliente.settore ?? "",
-      citta: cliente.citta ?? "",
       clienteId: cliente.id,
     });
     router.push(`/campagne/nuova/richieste-contatto?${paramsQs.toString()}`);
+  }
+
+  if (caricamento) {
+    return (
+      <main className="aff-page">
+        <p className="text-sm text-[var(--ink-muted)]">Caricamento…</p>
+      </main>
+    );
+  }
+
+  if (errore) {
+    return (
+      <main className="aff-page">
+        <AllyEmptyState
+          className="mt-1"
+          title="Non riesco a caricare i clienti."
+          description={errore}
+          action={
+            <button
+              type="button"
+              className="aff-btn-secondary"
+              onClick={() => void refresh()}
+            >
+              Riprova
+            </button>
+          }
+        />
+      </main>
+    );
   }
 
   return (
@@ -85,10 +123,8 @@ export default function ClientiPage() {
           />
           {showForm ? (
             <FirstClientForm
-              onCreated={(c) => {
-                refresh();
-                setShowForm(false);
-                router.push(`/clienti/${encodeURIComponent(c.id)}`);
+              onCreated={() => {
+                void refresh().then(() => setShowForm(false));
               }}
             />
           ) : null}
@@ -97,16 +133,10 @@ export default function ClientiPage() {
         <ul className="mt-1 flex flex-col gap-2.5">
           {clienti.map((cliente) => {
             const nCampagne = conteggioCampagne[cliente.id] ?? 0;
-            const meta = [
-              [cliente.settore, cliente.citta, cliente.targetType]
-                .filter(Boolean)
-                .join(" · "),
+            const meta =
               nCampagne > 0
                 ? `${nCampagne} campagn${nCampagne === 1 ? "a" : "e"}`
-                : "Nessuna campagna",
-            ]
-              .filter(Boolean)
-              .join(" · ");
+                : "Nessuna campagna";
 
             return (
               <li key={cliente.id}>

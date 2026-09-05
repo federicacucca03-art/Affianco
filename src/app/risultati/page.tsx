@@ -71,7 +71,6 @@ import { messaggioAiUserFacing } from "@/lib/anthropic-messaggi";
 import type { Campagna, CampagnaObjective } from "@/types/campagne";
 import { normalizzaObjective } from "@/types/campagne";
 import type { ScreenshotAnalysisResult } from "@/types/screenshot-analysis";
-import { getCampaigns, type SavedCampaign } from "@/utils/clientStorage";
 import {
   etichettaRigaMetaCsv,
   kpiFormDaRigaMeta,
@@ -87,59 +86,6 @@ const inputClass = "aff-input";
 type InputMode = "kpi" | "import";
 type ImportTab = "screenshot" | "csv";
 type ImportOrigin = "screenshot" | "csv" | null;
-
-function inizialiDaNome(nome: string): string {
-  const parti = nome.trim().split(/\s+/).filter(Boolean);
-  if (parti.length === 0) return "??";
-  if (parti.length === 1) return parti[0].slice(0, 2).toUpperCase();
-  return `${parti[0][0]}${parti[parti.length - 1][0]}`.toUpperCase();
-}
-
-function campagnaDaMemoria(c: SavedCampaign): Campagna {
-  return {
-    id: c.id,
-    nomeCliente: c.nomeCliente,
-    iniziali: inizialiDaNome(c.nomeCliente),
-    stato: c.status || "Bozza",
-    giudizio: "Ancora presto",
-    objective: c.objective,
-    nomeCampagna: c.nomeCampagna,
-    settore: c.settore,
-    citta: c.citta,
-    dataLancio: c.dataCreazione,
-    status: c.status,
-    frontEndOffer: c.frontEndOffer || undefined,
-  };
-}
-
-function fondiCampagne(
-  remote: Campagna[],
-  locali: SavedCampaign[],
-): Campagna[] {
-  const byId = new Map<string, Campagna>();
-  for (const loc of locali) {
-    byId.set(loc.id, campagnaDaMemoria(loc));
-  }
-  for (const rem of remote) {
-    const precedente = byId.get(rem.id);
-    byId.set(
-      rem.id,
-      precedente
-        ? {
-            ...precedente,
-            ...rem,
-            dataLancio: rem.dataLancio || precedente.dataLancio,
-            objective: rem.objective ?? precedente.objective,
-            status: rem.status ?? precedente.status,
-            nomeCampagna: rem.nomeCampagna || precedente.nomeCampagna,
-          }
-        : rem,
-    );
-  }
-  return [...byId.values()].sort((a, b) =>
-    (b.dataLancio ?? "").localeCompare(a.dataLancio ?? ""),
-  );
-}
 
 function emptyKpiStrings() {
   return {
@@ -322,7 +268,6 @@ function RisultatiPage() {
   const [campagne, setCampagne] = useState<Campagna[]>([]);
   const [caricamentoCampagne, setCaricamentoCampagne] = useState(true);
   const [erroreCampagne, setErroreCampagne] = useState<string | null>(null);
-  const [fallbackLocale, setFallbackLocale] = useState(false);
   const [ultimiChecks, setUltimiChecks] = useState<Map<string, CampaignCheck>>(
     () => new Map(),
   );
@@ -371,7 +316,6 @@ function RisultatiPage() {
   const caricaLista = useCallback(async () => {
     setCaricamentoCampagne(true);
     setErroreCampagne(null);
-    setFallbackLocale(false);
     try {
       const lista = await leggiCampagneDaSupabase();
       setCampagne(lista);
@@ -384,14 +328,10 @@ function RisultatiPage() {
       }
     } catch (e) {
       logErroreSupabaseDev("risultati_liste_campagne", e);
-      const locali = getCampaigns();
-      const daLocale = fondiCampagne([], locali);
-      setCampagne(daLocale);
-      setFallbackLocale(daLocale.length > 0);
+      /* No localStorage inventory fallback — canonical source is Supabase only. */
+      setCampagne([]);
       setUltimiChecks(new Map());
-      if (daLocale.length === 0) {
-        setErroreCampagne(messaggioErroreSupabase(e, "lista"));
-      }
+      setErroreCampagne(messaggioErroreSupabase(e, "lista"));
     } finally {
       setCaricamentoCampagne(false);
     }
@@ -1107,13 +1047,6 @@ function RisultatiPage() {
             ) : null}
           </div>
         )}
-
-        {fallbackLocale ? (
-          <p className="aff-callout aff-callout--warning mt-3 text-xs">
-            Connessione al database non disponibile: mostrando solo campagne
-            salvate in questo browser. Accedi con lo stesso account e riprova.
-          </p>
-        ) : null}
 
         {manuale ? (
           <div className="mt-5 grid gap-3 sm:grid-cols-2">

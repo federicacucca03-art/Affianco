@@ -45,8 +45,8 @@ export function AllyOggiBriefPanel({
     [attentionItems, nativeCampaigns, metaItems, linkedNativeIds],
   );
   const fingerprint = useMemo(
-    () => allyOggiCacheFingerprint(context),
-    [context],
+    () => allyOggiCacheFingerprint(context, nativeCampaigns),
+    [context, nativeCampaigns],
   );
   const fallback = useMemo(
     () => buildAllyOggiFallback(context),

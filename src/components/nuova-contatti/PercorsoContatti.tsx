@@ -31,7 +31,7 @@ import {
   tassoConversioneLeadsValido,
 } from "@/lib/conversion-rate";
 import { leggiBozzaOnboarding } from "@/data/clienti-store";
-import { saveCampaign, saveClient, getClientById, getCampaigns } from "@/utils/clientStorage";
+import { saveClient, getClientById, getCampaigns } from "@/utils/clientStorage";
 import type { Cliente } from "@/types/clienti";
 import type { DeconstructAdResult } from "@/types/deconstruct-ad";
 import { FormConfigurazione } from "@/components/nuova-contatti/FormConfigurazione";
@@ -2041,7 +2041,7 @@ export function PercorsoContatti({
         permettiCampiVuoti: isEditMode,
       });
 
-      const clientIdSalvato = persistiClienteSeRichiesto();
+      persistiClienteSeRichiesto();
       campagnaIdStabileRef.current = salvata.id;
       setCampagnaIdSalvata(salvata.id);
       if (isPercorsoLeads) {
@@ -2082,23 +2082,8 @@ export function PercorsoContatti({
         }
       }
 
-      saveCampaign({
-        id: salvata.id,
-        clientId: clientIdSalvato,
-        nomeCliente: config.nomeCliente || "Nuovo cliente",
-        nomeCampagna:
-          config.nomeCampagna.trim() ||
-          nomeCampagnaPerObiettivo(
-            objectiveEffettivo,
-            config.nomeCliente || "Nuovo cliente",
-          ),
-        objective: objectiveEffettivo,
-        settore: contesto.settore,
-        citta: contesto.citta,
-        // Preserva status remoto (APPROVED / REVISION_REQUESTED / DRAFT).
-        status: statusDopoSave,
-        frontEndOffer: frontEndOffer.trim(),
-      });
+      /* Supabase is authoritative after save — do not mirror into localStorage
+       * campaign inventory (would reintroduce browser-local workspace truth). */
 
       if (salvata.status || isEditMode) {
         setStatusApprovazioneGrezzo(statusDopoSave);

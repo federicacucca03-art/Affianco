@@ -13,7 +13,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { Campagna } from "@/types/campagne";
-import { leggiCampagneDaSupabase } from "@/lib/campagne-db";
+import { leggiInventarioCampagneNative } from "@/lib/campagne-inventory";
 import {
   leggiChecksUtenteDal,
   leggiUltimiChecksUtente,
@@ -153,7 +153,8 @@ export function DashboardHome() {
       const da = isoInizioFinestraGiorni(7);
       const daTrend = isoInizioFinestraGiorni(TREND_CHECK_DAYS);
       const [lista, mappa, settimana, trendChecks] = await Promise.all([
-        leggiCampagneDaSupabase(),
+        /* Canonical Supabase inventory — same as /campagne (no localStorage). */
+        leggiInventarioCampagneNative(),
         leggiUltimiChecksUtente(),
         leggiChecksUtenteDal(da),
         leggiChecksUtenteDal(daTrend),
