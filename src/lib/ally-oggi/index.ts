@@ -8,6 +8,7 @@ export {
   isStaleMetaInsights,
 } from "@/lib/ally-oggi/build-context";
 export { buildAllyOggiFallback } from "@/lib/ally-oggi/fallback";
+export { canGenerateAllyOggiAiBrief } from "@/lib/ally-oggi/ai-eligibility";
 export {
   sanitizeAllyOggiBriefContext,
   shouldGenerateAllyOggiBrief,

@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import {
   buildAllyOggiBriefContext,
   buildAllyOggiFallback,
+  canGenerateAllyOggiAiBrief,
   type AllyOggiBrief,
 } from "@/lib/ally-oggi";
 import type { ControlRoomAttentionItem } from "@/lib/monday-control-room";
@@ -52,6 +53,10 @@ export function AllyOggiBriefPanel({
     () => buildAllyOggiFallback(context),
     [context],
   );
+  const aiEligible = useMemo(
+    () => canGenerateAllyOggiAiBrief(context),
+    [context],
+  );
 
   const [brief, setBrief] = useState<AllyOggiBrief | null>(null);
   const [loading, setLoading] = useState(false);
@@ -63,13 +68,18 @@ export function AllyOggiBriefPanel({
       setBrief(null);
       return;
     }
+    if (!aiEligible) {
+      // Deterministic-only: ignore any prior AI cache for this fingerprint.
+      setBrief(null);
+      return;
+    }
     const cached = readAllyOggiSessionCache(user.id, fingerprint);
     if (cached) {
       setBrief(cached);
     } else {
       setBrief(null);
     }
-  }, [enabled, user?.id, fingerprint, hasWorkspace]);
+  }, [enabled, user?.id, fingerprint, hasWorkspace, aiEligible]);
 
   if (!enabled || !hasWorkspace) return null;
 
@@ -80,7 +90,7 @@ export function AllyOggiBriefPanel({
     "/campagne";
 
   async function loadBrief(force: boolean) {
-    if (!user?.id || loading) return;
+    if (!user?.id || loading || !aiEligible) return;
     if (!force) {
       const cached = readAllyOggiSessionCache(user.id, fingerprint);
       if (cached) {
@@ -110,9 +120,8 @@ export function AllyOggiBriefPanel({
         brief?: AllyOggiBrief | null;
         skipped?: boolean;
       };
-      if (!res.ok || data.skipped || !data.brief) {
-        setBrief(fallback);
-        writeAllyOggiSessionCache(user.id, fingerprint, fallback);
+      if (!res.ok || data.skipped || !data.brief?.fromAi) {
+        setBrief(null);
         return;
       }
       setBrief(data.brief);
@@ -127,11 +136,21 @@ export function AllyOggiBriefPanel({
     }
   }
 
-  const highlightLines = [
-    ...display.priorityItems.map((i) => `${i.title}: ${i.sentence}`),
-    ...display.watchItems.map((i) => `${i.title}: ${i.sentence}`),
-    ...display.configurationItems.map((i) => `${i.title}: ${i.sentence}`),
-  ].slice(0, 3);
+  // Ally oggi = situation awareness. Campaign-level next steps live in Control Room
+  // (and the top action card). Only surface per-campaign lines when AI synthesis
+  // is meaningful, or when there is a performance priority to highlight.
+  const showCampaignHighlights =
+    display.priorityItems.length > 0 ||
+    (aiEligible &&
+      (display.watchItems.length > 0 || display.configurationItems.length > 0));
+
+  const highlightLines = showCampaignHighlights
+    ? [
+        ...display.priorityItems.map((i) => `${i.title}: ${i.sentence}`),
+        ...display.watchItems.map((i) => `${i.title}: ${i.sentence}`),
+        ...display.configurationItems.map((i) => `${i.title}: ${i.sentence}`),
+      ].slice(0, 3)
+    : [];
 
   return (
     <AllyPanel className="p-5 sm:p-6" as="section">
@@ -167,62 +186,60 @@ export function AllyOggiBriefPanel({
             </p>
           ) : null}
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              className={
-                brief?.fromAi
-                  ? "text-sm font-medium text-[var(--primary)] hover:opacity-80 disabled:opacity-60"
-                  : "aff-btn-primary text-sm"
-              }
-              disabled={loading}
-              onClick={() => void loadBrief(Boolean(brief?.fromAi))}
-            >
-              {loading
-                ? brief?.fromAi
-                  ? "Aggiorno…"
-                  : "Sto preparando il briefing…"
-                : brief?.fromAi
-                  ? "Aggiorna briefing"
-                  : "Leggi il briefing di Ally"}
-            </button>
+          {aiEligible || display.priorityItems.length > 0 ? (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              {aiEligible ? (
+                <button
+                  type="button"
+                  className={
+                    brief?.fromAi
+                      ? "text-sm font-medium text-[var(--primary)] hover:opacity-80 disabled:opacity-60"
+                      : "aff-btn-primary text-sm"
+                  }
+                  disabled={loading}
+                  onClick={() => void loadBrief(Boolean(brief?.fromAi))}
+                >
+                  {loading
+                    ? brief?.fromAi
+                      ? "Aggiorno…"
+                      : "Sto preparando il briefing…"
+                    : brief?.fromAi
+                      ? "Aggiorna briefing"
+                      : "Leggi il briefing di Ally"}
+                </button>
+              ) : null}
 
-            {(display.priorityItems.length > 0 ||
-              display.configurationItems.length > 0) && (
-              <Link
-                href={primaryHref}
-                className="text-sm font-medium text-[var(--primary)] hover:opacity-80"
-              >
-                {display.priorityItems.length > 0
-                  ? "Vai a ciò che richiede attenzione"
-                  : "Vai alla configurazione"}
-              </Link>
-            )}
-          </div>
+              {display.priorityItems.length > 0 ? (
+                <Link
+                  href={primaryHref}
+                  className="text-sm font-medium text-[var(--primary)] hover:opacity-80"
+                >
+                  Vai a ciò che richiede attenzione
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
 
-          {display.priorityItems.length > 0 ||
-          display.configurationItems.length > 0 ? (
+          {showCampaignHighlights && display.priorityItems.length > 0 ? (
             <ul className="mt-4 space-y-2 border-t border-[var(--border-soft)] pt-3">
-              {[...display.priorityItems, ...display.configurationItems]
-                .slice(0, 3)
-                .map((item) => (
-                  <li key={`${item.source}-${item.campaignId}`}>
-                    <Link
-                      href={item.recommendedHref}
-                      className="group block rounded-[10px] px-1 py-1 hover:bg-[var(--surface-hover)]"
-                    >
-                      <p className="text-sm font-medium text-[var(--ink)] group-hover:text-[var(--primary)]">
-                        {item.title}
-                      </p>
-                      <p className="text-[12px] text-[var(--ink-muted)]">
-                        {item.sentence}
-                      </p>
-                      <span className="mt-0.5 inline-block text-[11px] font-medium text-[var(--primary)]">
-                        Apri campagna
-                      </span>
-                    </Link>
-                  </li>
-                ))}
+              {display.priorityItems.slice(0, 3).map((item) => (
+                <li key={`${item.source}-${item.campaignId}`}>
+                  <Link
+                    href={item.recommendedHref}
+                    className="group block rounded-[10px] px-1 py-1 hover:bg-[var(--surface-hover)]"
+                  >
+                    <p className="text-sm font-medium text-[var(--ink)] group-hover:text-[var(--primary)]">
+                      {item.title}
+                    </p>
+                    <p className="text-[12px] text-[var(--ink-muted)]">
+                      {item.sentence}
+                    </p>
+                    <span className="mt-0.5 inline-block text-[11px] font-medium text-[var(--primary)]">
+                      Apri campagna
+                    </span>
+                  </Link>
+                </li>
+              ))}
             </ul>
           ) : null}
         </div>

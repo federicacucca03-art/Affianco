@@ -17,6 +17,7 @@ import {
   estimateAllyOggiPromptChars,
 } from "../src/lib/ally-oggi/build-context";
 import { buildAllyOggiFallback } from "../src/lib/ally-oggi/fallback";
+import { canGenerateAllyOggiAiBrief } from "../src/lib/ally-oggi/ai-eligibility";
 import { parseAllyOggiBrief } from "../src/lib/ally-oggi/parse";
 import {
   sanitizeAllyOggiBriefContext,
@@ -691,7 +692,12 @@ test("M9.1B B: drafts only → workspace summary, no performance priority", () =
   const fb = buildAllyOggiFallback(ctx);
   assert(/2 campagne/i.test(fb.summary), fb.summary);
   assert(fb.priorityItems.length === 0, "no perf priority");
-  assert(/non vedo urgenze di performance|workflow|completare/i.test(`${fb.headline} ${fb.summary}`), fb.summary);
+  assert(
+    /bozza|preparazione|urgenza da valutare/i.test(`${fb.headline} ${fb.summary}`),
+    `${fb.headline} ${fb.summary}`,
+  );
+  assert(!/workflow/i.test(`${fb.headline} ${fb.summary}`), "no workflow jargon");
+  assert(!/1 da completare · 1 da configurare/i.test(fb.summary), fb.summary);
 });
 
 test("M9.1B C: revision → workflow note, not performance failure copy", () => {
@@ -781,7 +787,12 @@ test("M9.1B G: no monitorable → no performance priority claims", () => {
   assert(ctx.workspace.monitorableCampaigns === 0, "none monitorable");
   const fb = buildAllyOggiFallback(ctx);
   assert(fb.priorityItems.length === 0, "no priority");
-  assert(/non vedo urgenze di performance|workflow|completare/i.test(`${fb.headline} ${fb.summary}`), fb.summary);
+  assert(
+    /bozza|urgenza da valutare/i.test(`${fb.headline} ${fb.summary}`),
+    `${fb.headline} ${fb.summary}`,
+  );
+  assert(!/workflow/i.test(`${fb.headline} ${fb.summary}`), "no workflow jargon");
+  assert(!/1 da completare · 1 da configurare/i.test(fb.summary), fb.summary);
 });
 
 test("M9.1B H: 20 workspace / few monitorable — compact aggregate", () => {
@@ -1150,6 +1161,313 @@ test("M9.1C.2 G: Ally oggi path does not import campaign localStorage", () => {
     "Home feeds Ally oggi from canonical inventory",
   );
   assert(!home.includes("getCampaigns"), "Home no localStorage campaigns");
+});
+
+// ——— M9.1D entity-aware copy + AI eligibility ———
+
+test("M9.1D A: 1 DRAFT + config required → one campaign, not 1+1 workload language", () => {
+  const c = campagna({ status: "DRAFT", nomeCliente: "Aurora" });
+  const item = buildNativeAttentionItem({
+    campagna: c,
+    check: null,
+    checksForTrend: [],
+  });
+  assert(item.attentionState === "CONFIGURATION_REQUIRED", item.attentionState);
+  const ctx = buildAllyOggiBriefContext({
+    attentionItems: [item],
+    nativeCampaigns: [c],
+    metaItems: [],
+    linkedNativeIds: new Set(),
+  });
+  assert(ctx.workspace.totalWorkspaceCampaigns === 1, "one campaign");
+  assert(ctx.workspace.draftCampaigns === 1, "draft");
+  assert(
+    ctx.workspace.configurationRequiredCampaigns >= 1,
+    "config required overlap",
+  );
+  const fb = buildAllyOggiFallback(ctx);
+  assert(/1 campagna/i.test(fb.summary), fb.summary);
+  assert(/bozza/i.test(fb.summary), fb.summary);
+  assert(!/1 da completare/i.test(fb.summary), fb.summary);
+  assert(!/1 da configurare/i.test(fb.summary), fb.summary);
+  assert(!/completare · .*configurare/i.test(fb.summary), fb.summary);
+  assert(!/workflow/i.test(`${fb.headline} ${fb.summary}`), "no workflow");
+  assert(/urgenza da valutare/i.test(fb.headline), fb.headline);
+});
+
+test("M9.1D B: 1 DRAFT / no performance → no AI CTA eligibility, no AI call path", () => {
+  const c = campagna({ status: "DRAFT" });
+  const item = buildNativeAttentionItem({
+    campagna: c,
+    check: null,
+    checksForTrend: [],
+  });
+  const ctx = buildAllyOggiBriefContext({
+    attentionItems: [item],
+    nativeCampaigns: [c],
+    metaItems: [],
+    linkedNativeIds: new Set(),
+  });
+  assert(ctx.campaigns.length === 0, "no performance facts");
+  assert(!canGenerateAllyOggiAiBrief(ctx), "AI must be ineligible");
+  assert(
+    !canGenerateAllyOggiAiBrief(ctx, { isFirstRunOnboarding: true }),
+    "onboarding also false",
+  );
+  const ui = read("src/components/dashboard/AllyOggiBrief.tsx");
+  const route = read("src/app/api/ally-oggi/route.ts");
+  assert(ui.includes("canGenerateAllyOggiAiBrief"), "UI gates CTA");
+  assert(ui.includes("aiEligible"), "UI uses eligibility flag");
+  assert(route.includes("canGenerateAllyOggiAiBrief"), "API gates AI");
+  assert(route.includes("NO_AI_VALUE"), "API skip reason");
+});
+
+test("M9.1D C: 1 monitorable with performance facts → AI CTA may appear", () => {
+  const c = campagna({ status: "APPROVED" });
+  const item = buildNativeAttentionItem({
+    campagna: c,
+    check: check({ healthStatus: "YELLOW", resultsCount: 8 }),
+    checksForTrend: [],
+  });
+  const ctx = buildAllyOggiBriefContext({
+    attentionItems: [item],
+    nativeCampaigns: [c],
+    metaItems: [],
+    linkedNativeIds: new Set(),
+  });
+  assert(ctx.campaigns.length >= 1, "has performance facts");
+  assert(canGenerateAllyOggiAiBrief(ctx), "AI eligible");
+});
+
+test("M9.1D D: multiple campaigns with prioritization value → AI CTA appears", () => {
+  const natives = [0, 1, 2].map((i) =>
+    campagna({
+      id: `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa${String(i).padStart(2, "0")}`,
+      status: i === 0 ? "APPROVED" : "DRAFT",
+      nomeCliente: `C${i}`,
+    }),
+  );
+  const items = natives.map((c, i) =>
+    buildNativeAttentionItem({
+      campagna: c,
+      check:
+        i === 0
+          ? check({
+              campaignId: c.id!,
+              healthStatus: "RED",
+              resultsCount: 10,
+            })
+          : null,
+      checksForTrend: [],
+    }),
+  );
+  const ctx = buildAllyOggiBriefContext({
+    attentionItems: items,
+    nativeCampaigns: natives,
+    metaItems: [],
+    linkedNativeIds: new Set(),
+  });
+  assert(ctx.workspace.totalWorkspaceCampaigns === 3, "multi");
+  assert(canGenerateAllyOggiAiBrief(ctx), "AI eligible for mixed multi");
+});
+
+test("M9.1E A: 1 draft → AI false", () => {
+  const c = campagna({ status: "DRAFT" });
+  const ctx = buildAllyOggiBriefContext({
+    attentionItems: [
+      buildNativeAttentionItem({ campagna: c, check: null, checksForTrend: [] }),
+    ],
+    nativeCampaigns: [c],
+    metaItems: [],
+    linkedNativeIds: new Set(),
+  });
+  assert(!canGenerateAllyOggiAiBrief(ctx), "1 draft AI off");
+});
+
+test("M9.1E B: 2 equivalent drafts → AI false", () => {
+  const natives = [0, 1].map((i) =>
+    campagna({
+      id: `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa${String(i).padStart(2, "0")}`,
+      status: "DRAFT",
+      nomeCliente: `D${i}`,
+    }),
+  );
+  const ctx = buildAllyOggiBriefContext({
+    attentionItems: natives.map((c) =>
+      buildNativeAttentionItem({ campagna: c, check: null, checksForTrend: [] }),
+    ),
+    nativeCampaigns: natives,
+    metaItems: [],
+    linkedNativeIds: new Set(),
+  });
+  assert(ctx.workspace.totalWorkspaceCampaigns === 2, "two");
+  assert(ctx.workspace.draftCampaigns === 2, "both drafts");
+  assert(ctx.campaigns.length === 0, "no performance facts");
+  assert(!canGenerateAllyOggiAiBrief(ctx), "equivalent drafts AI off");
+});
+
+test("M9.1E C: draft + revision → AI true", () => {
+  const draft = campagna({
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01",
+    status: "DRAFT",
+  });
+  const rev = campagna({
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa02",
+    status: "REVISION_REQUESTED",
+  });
+  const ctx = buildAllyOggiBriefContext({
+    attentionItems: [
+      buildNativeAttentionItem({
+        campagna: draft,
+        check: null,
+        checksForTrend: [],
+      }),
+      buildNativeAttentionItem({
+        campagna: rev,
+        check: null,
+        checksForTrend: [],
+      }),
+    ],
+    nativeCampaigns: [draft, rev],
+    metaItems: [],
+    linkedNativeIds: new Set(),
+  });
+  assert(ctx.campaigns.length === 0, "no performance facts");
+  assert(ctx.workspace.draftCampaigns === 1, "draft");
+  assert(ctx.workspace.revisionRequestedCampaigns === 1, "revision");
+  assert(canGenerateAllyOggiAiBrief(ctx), "cross-state synthesis AI on");
+});
+
+test("M9.1E D: one performance-evaluable campaign → AI true", () => {
+  const c = campagna({ status: "APPROVED" });
+  const ctx = buildAllyOggiBriefContext({
+    attentionItems: [
+      buildNativeAttentionItem({
+        campagna: c,
+        check: check({ healthStatus: "YELLOW", resultsCount: 8 }),
+        checksForTrend: [],
+      }),
+    ],
+    nativeCampaigns: [c],
+    metaItems: [],
+    linkedNativeIds: new Set(),
+  });
+  assert(ctx.campaigns.length >= 1, "performance fact");
+  assert(canGenerateAllyOggiAiBrief(ctx), "performance AI on");
+});
+
+test("M9.1E E: mixed multi-campaign meaningful context → AI true", () => {
+  const natives = [
+    campagna({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01",
+      status: "APPROVED",
+      nomeCliente: "M1",
+    }),
+    campagna({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa02",
+      status: "APPROVED",
+      nomeCliente: "M2",
+    }),
+    campagna({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa03",
+      status: "DRAFT",
+      nomeCliente: "D1",
+    }),
+    campagna({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa04",
+      status: "DRAFT",
+      nomeCliente: "D2",
+    }),
+    campagna({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa05",
+      status: "REVISION_REQUESTED",
+      nomeCliente: "R1",
+    }),
+  ];
+  const items = natives.map((c, i) =>
+    buildNativeAttentionItem({
+      campagna: c,
+      check:
+        i < 2
+          ? check({
+              campaignId: c.id!,
+              healthStatus: i === 0 ? "RED" : "GREEN",
+              resultsCount: 10,
+            })
+          : null,
+      checksForTrend: [],
+    }),
+  );
+  const ctx = buildAllyOggiBriefContext({
+    attentionItems: items,
+    nativeCampaigns: natives,
+    metaItems: [],
+    linkedNativeIds: new Set(),
+  });
+  assert(ctx.workspace.totalWorkspaceCampaigns === 5, "5");
+  assert(ctx.workspace.draftCampaigns === 2, "drafts");
+  assert(ctx.workspace.revisionRequestedCampaigns === 1, "rev");
+  assert(canGenerateAllyOggiAiBrief(ctx), "mixed AI on");
+});
+
+test("M9.1D E: top action + Ally oggi have distinct copy roles", () => {
+  const ui = read("src/components/dashboard/AllyOggiBrief.tsx");
+  const home = read("src/components/dashboard/DashboardHome.tsx");
+  assert(home.includes("AllyOggiBriefPanel"), "Ally oggi on Home");
+  assert(home.includes("MondayControlRoomSection"), "Control Room on Home");
+  assert(
+    !ui.includes("Completa la campagna in bozza"),
+    "Ally oggi must not own top-action draft CTA copy",
+  );
+  assert(
+    !ui.includes("Continua la campagna"),
+    "Ally oggi must not own continue-draft CTA",
+  );
+  const c = campagna({ status: "DRAFT" });
+  const fb = buildAllyOggiFallback(
+    buildAllyOggiBriefContext({
+      attentionItems: [
+        buildNativeAttentionItem({
+          campagna: c,
+          check: null,
+          checksForTrend: [],
+        }),
+      ],
+      nativeCampaigns: [c],
+      metaItems: [],
+      linkedNativeIds: new Set(),
+    }),
+  );
+  assert(!/^Completa/i.test(fb.headline), fb.headline);
+  assert(/urgenza da valutare|workspace|bozza/i.test(`${fb.headline} ${fb.summary}`), fb.summary);
+});
+
+test("M9.1D F: deterministic fallback still usable without AI", () => {
+  const c = campagna({ status: "DRAFT" });
+  const fb = buildAllyOggiFallback(
+    buildAllyOggiBriefContext({
+      attentionItems: [
+        buildNativeAttentionItem({
+          campagna: c,
+          check: null,
+          checksForTrend: [],
+        }),
+      ],
+      nativeCampaigns: [c],
+      metaItems: [],
+      linkedNativeIds: new Set(),
+    }),
+  );
+  assert(fb.fromAi === false, "deterministic");
+  assert(typeof fb.summary === "string" && fb.summary.length > 10, fb.summary);
+  assert(typeof fb.headline === "string" && fb.headline.length > 0, fb.headline);
+});
+
+test("M9.1D G: canonical inventory unchanged", () => {
+  const inv = read("src/lib/campagne-inventory.ts");
+  assert(inv.includes("leggiCampagneDaSupabase"), "still Supabase");
+  assert(!inv.includes("getCampaigns"), "no localStorage");
+  assert(!inv.includes("fondiInventario"), "no merge");
 });
 
 console.log(`\nM9.1 result: ${passed} passed, ${failed} failed\n`);

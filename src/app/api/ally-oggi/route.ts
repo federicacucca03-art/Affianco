@@ -2,11 +2,13 @@
  * POST /api/ally-oggi
  * Body: { context: AllyOggiBriefContext } — compact deterministic facts only.
  * One Anthropic call. Fallback deterministic on failure.
+ * Skips AI when context has no meaningful synthesis value (M9.1D).
  */
 
 import { NextResponse } from "next/server";
 import { requireRouteUserId } from "@/lib/api-auth";
 import { runAllyOggiBrief } from "@/lib/ally-oggi/service";
+import { canGenerateAllyOggiAiBrief } from "@/lib/ally-oggi/ai-eligibility";
 import {
   sanitizeAllyOggiBriefContext,
   shouldGenerateAllyOggiBrief,
@@ -62,6 +64,19 @@ export async function POST(request: Request) {
       skipped: true,
       reason: isFirstRun ? "ONBOARDING" : "NO_CAMPAIGNS",
       brief: null,
+      promptCharsEstimate: 0,
+      aiCalls: 0,
+    });
+  }
+
+  if (
+    !canGenerateAllyOggiAiBrief(context, { isFirstRunOnboarding: isFirstRun })
+  ) {
+    const brief = buildAllyOggiFallback(context);
+    return NextResponse.json({
+      skipped: true,
+      reason: "NO_AI_VALUE",
+      brief,
       promptCharsEstimate: 0,
       aiCalls: 0,
     });
