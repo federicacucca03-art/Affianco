@@ -220,6 +220,101 @@ function emptyField(id: AllyBriefFieldId): AllyBriefField {
   };
 }
 
+function normalizeClientIdentity(raw: string): string {
+  return raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Exact generic business descriptors — never a client identity. */
+const GENERIC_CLIENT_DESCRIPTORS = new Set([
+  "studio dentistico",
+  "clinica dentale",
+  "dentista",
+  "odontoiatra",
+  "palestra",
+  "agenzia immobiliare",
+  "immobiliare",
+  "azienda",
+  "azienda b2b",
+  "business",
+  "attivita",
+  "ecommerce",
+  "e-commerce",
+  "negozio",
+  "negozio di scarpe",
+  "ristorante",
+  "centro estetico",
+  "bar",
+  "hotel",
+  "studio",
+  "clinica",
+  "centro medico",
+  "locale",
+  "servizi",
+]);
+
+const CATEGORY_PREFIX =
+  /^(studio|centro|agenzia|negozio|clinica|hotel|palestra|ristorante|bar|ecommerce|e-commerce)\b/;
+
+const SECTOR_OR_PRODUCT_TOKEN =
+  /^(dentistico|dentale|odontoiatrico|odontoiatra|immobiliare|estetico|medico|fitness|yoga|scarpe|running|b2b|industriale|industriali|abbigliamento|prodotti|servizi)$/;
+
+/**
+ * Conservative client-identity gate.
+ * Prefer MISSING over promoting a business type / sector phrase to a client name.
+ * EXISTING provenance is trusted separately (owned client row).
+ */
+export function isPlausibleClientIdentity(
+  raw: string | null | undefined,
+): boolean {
+  if (typeof raw !== "string") return false;
+  const n = normalizeClientIdentity(raw);
+  if (n.length < 2) return false;
+  if (GENERIC_CLIENT_DESCRIPTORS.has(n)) return false;
+  if (
+    /^(dentista|palestra|ristorante|negozio|azienda|ecommerce|immobiliare|bar|hotel|clinica|studio|attivita)$/.test(
+      n,
+    )
+  ) {
+    return false;
+  }
+
+  // Descriptive phrases that start with a generic org type and never name the brand.
+  if (
+    /^(azienda|negozio|ecommerce|e-commerce|attivita|business)\b/.test(n) &&
+    /\b(che\s+vende|che\s+offre|di\s+\w+|b2b)\b/.test(n)
+  ) {
+    return false;
+  }
+
+  if (CATEGORY_PREFIX.test(n)) {
+    let rest = n.replace(CATEGORY_PREFIX, "").trim();
+    rest = rest.replace(/^di\s+/, "").trim();
+    if (!rest) return false;
+    // "palestra a milano" / "studio a roma" — location only, not a name.
+    if (/^a\s+\w[\w'-]*$/.test(rest)) return false;
+    if (SECTOR_OR_PRODUCT_TOKEN.test(rest)) return false;
+    // "studio dentistico" already covered; "studio dentistico aurora" keeps "aurora".
+    const withoutSectorAdj = rest
+      .replace(
+        /^(dentistico|dentale|odontoiatrico|immobiliare|estetico|medico|fitness)\s+/,
+        "",
+      )
+      .trim();
+    if (!withoutSectorAdj || SECTOR_OR_PRODUCT_TOKEN.test(withoutSectorAdj)) {
+      return false;
+    }
+    if (/^a\s+\w[\w'-]*$/.test(withoutSectorAdj)) return false;
+    return withoutSectorAdj.length >= 2;
+  }
+
+  return true;
+}
+
 function coerceValue(
   id: AllyBriefFieldId,
   raw: unknown,
@@ -256,6 +351,21 @@ function stripUnsafeInventions(field: AllyBriefField): AllyBriefField {
       confidence: "UNKNOWN",
       note: field.note,
     };
+  }
+  if (field.id === "nomeCliente" && field.provenance !== "EXISTING") {
+    const raw =
+      typeof field.value === "string" ? field.value : null;
+    if (raw && !isPlausibleClientIdentity(raw)) {
+      return {
+        ...field,
+        value: null,
+        provenance: "MISSING",
+        confidence: "UNKNOWN",
+        note:
+          field.note ??
+          "Tipo attività / descrizione, non identità cliente",
+      };
+    }
   }
   if (UNSAFE_ECONOMICS.includes(field.id) && field.provenance === "INFERRED") {
     return {

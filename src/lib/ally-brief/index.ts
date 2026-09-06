@@ -28,6 +28,7 @@ export {
   assertNoInventedEconomics,
   assertNoInventedMetaIds,
   isMeaningfulAllyBriefProposal,
+  isPlausibleClientIdentity,
 } from "@/lib/ally-brief/parse";
 
 export {

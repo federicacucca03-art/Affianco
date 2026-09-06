@@ -22,6 +22,9 @@ ticket, margine, conversione, soglia CPL/CPA, page_id, form_id, performance, ind
 Se existingClient: riusa con provenance EXISTING se non contraddetto.
 Conflitto città campagna vs cliente: tieni brief, note="conflitto con cliente esistente".
 
+nomeCliente: SOLO se c'è un nome proprio di attività/persona (es. "Studio Dentistico Aurora", "Technon").
+NON usare tipi di business come nome cliente (es. "studio dentistico", "palestra", "agenzia immobiliare", "negozio di scarpe") → ometti nomeCliente (va in settore/brief).
+
 targetType: B2C|B2B. targetAge: 18-35|25-50|35-65+|all.
 Numeri: budget/raggio/età come number (25 da "25€", 15 da "15 km").
 

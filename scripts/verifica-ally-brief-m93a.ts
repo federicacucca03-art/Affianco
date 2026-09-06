@@ -14,6 +14,7 @@ import {
   assertNoInventedMetaIds,
   isMeaningfulAllyBriefProposal,
   repairTruncatedJson,
+  isPlausibleClientIdentity,
 } from "../src/lib/ally-brief/parse";
 import {
   ALLY_BRIEF_MAX_CHARS,
@@ -88,6 +89,9 @@ test("A rich brief → fields extracted (explicit)", () => {
   });
   const p = parseAllyBriefProposal(raw, null);
   const byId = Object.fromEntries(p.fields.map((f) => [f.id, f]));
+  assert(byId.nomeCliente?.value == null, "descriptor is not client name");
+  assert(byId.nomeCliente?.provenance === "MISSING", "client missing");
+  assert(byId.settore?.value === "Dentista", "sector kept");
   assert(byId.citta?.value === "Roma", "city");
   assert(byId.citta?.provenance === "EXPLICIT", "city explicit");
   assert(byId.budgetGiornaliero?.value === 25, "budget");
@@ -718,6 +722,64 @@ test("M9.3A.3 explicit brief age wins over stale/default band semantics", () => 
     "brief override comment",
   );
   assert(percorso.includes("if (h.targetAge) setTargetAge(h.targetAge)"), "applies hydrated band");
+});
+
+test("M9.3A.4 client identity vs business descriptor", () => {
+  assert(!isPlausibleClientIdentity("Studio dentistico"), "A descriptor");
+  assert(!isPlausibleClientIdentity("Palestra a Milano"), "C palestra+city");
+  assert(!isPlausibleClientIdentity("azienda B2B che vende nastri industriali"), "E azienda");
+  assert(isPlausibleClientIdentity("Studio Dentistico Aurora"), "B aurora");
+  assert(isPlausibleClientIdentity("BladeFit"), "D BladeFit");
+  assert(isPlausibleClientIdentity("Technon"), "F Technon");
+  assert(isPlausibleClientIdentity("Centro Crescere Insieme"), "centro named");
+  assert(isPlausibleClientIdentity("Hotel Roma Palace"), "hotel named");
+
+  const descriptor = parseAllyBriefProposal(
+    JSON.stringify({
+      summary: "ok",
+      fields: {
+        nomeCliente: field("nomeCliente", "Studio dentistico", "EXPLICIT"),
+        settore: field("settore", "odontoiatria", "EXPLICIT"),
+        citta: field("citta", "Roma", "EXPLICIT"),
+        objective: field("objective", "LEADS", "INFERRED", "MEDIUM"),
+      },
+      missing_information: [],
+      assumptions: [],
+    }),
+    null,
+  );
+  assert(descriptor.fields.find((f) => f.id === "nomeCliente")?.value == null, "A client missing");
+  assert(descriptor.fields.find((f) => f.id === "settore")?.value === "odontoiatria", "A sector");
+
+  const named = parseAllyBriefProposal(
+    JSON.stringify({
+      summary: "ok",
+      fields: {
+        nomeCliente: field("nomeCliente", "Studio Dentistico Aurora", "EXPLICIT"),
+        settore: field("settore", "Dentista", "EXPLICIT"),
+        citta: field("citta", "Roma", "EXPLICIT"),
+        objective: field("objective", "LEADS", "INFERRED", "MEDIUM"),
+      },
+      missing_information: [],
+      assumptions: [],
+    }),
+    null,
+  );
+  assert(
+    named.fields.find((f) => f.id === "nomeCliente")?.value === "Studio Dentistico Aurora",
+    "B explicit name kept",
+  );
+
+  const accepted = proposalToAcceptedPayload("Studio dentistico a Roma...", descriptor);
+  assert(accepted != null, "accepted");
+  const href = hrefWizardFromAcceptedBrief(accepted!);
+  assert(!/[?&]nomeCliente=/.test(href), "no fake client in url");
+  const h = hydrationFromAcceptedBrief(accepted!);
+  assert(h.nomeCliente == null, "hydrate empty client");
+  assert(h.settore === "odontoiatria", "sector hydrated");
+  assert(h.citta === "Roma", "city hydrated");
+
+  assert(ALLY_BRIEF_SYSTEM_PROMPT.includes("NON usare tipi di business"), "prompt guard");
 });
 
 console.log(`\nM9.3A result: ${passed} passed, ${failed} failed\n`);
