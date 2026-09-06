@@ -1,0 +1,427 @@
+/**
+ * M9.3A — validate AI brief JSON + merge existing client + deterministic CPA.
+ */
+
+import {
+  calculateMaxSustainableCpl,
+  calculateMaxSustainableBookingCpa,
+  calculateEcommerceCpaMax,
+  calculateMaxSustainableInStoreCpa,
+} from "@/lib/benchmarks";
+import type { CampagnaObjective, TargetAgeBand, TargetType } from "@/types/campagne";
+import {
+  ALLY_BRIEF_FIELD_LABELS,
+  OBJECTIVES_CANONICI,
+  type AllyBriefConfidence,
+  type AllyBriefExistingClientContext,
+  type AllyBriefField,
+  type AllyBriefFieldId,
+  type AllyBriefFieldValue,
+  type AllyBriefProposal,
+  type AllyBriefProvenance,
+} from "@/lib/ally-brief/types";
+
+const FIELD_IDS = Object.keys(ALLY_BRIEF_FIELD_LABELS) as AllyBriefFieldId[];
+
+const UNSAFE_ECONOMICS: AllyBriefFieldId[] = [
+  "scontrinoMedio",
+  "tassoConversione",
+  "productMargin",
+  "targetMargin",
+  "maxSustainableCpa",
+];
+
+const META_IDS: AllyBriefFieldId[] = ["pageId", "formId"];
+
+function extractJsonObject(raw: string): unknown {
+  const trimmed = raw.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(trimmed.slice(start, end + 1));
+    }
+    throw new Error("JSON non valido");
+  }
+}
+
+function asProvenance(raw: unknown): AllyBriefProvenance {
+  if (
+    raw === "EXISTING" ||
+    raw === "EXPLICIT" ||
+    raw === "INFERRED" ||
+    raw === "MISSING"
+  ) {
+    return raw;
+  }
+  return "MISSING";
+}
+
+function asConfidence(raw: unknown): AllyBriefConfidence {
+  if (
+    raw === "HIGH" ||
+    raw === "MEDIUM" ||
+    raw === "LOW" ||
+    raw === "UNKNOWN"
+  ) {
+    return raw;
+  }
+  return "UNKNOWN";
+}
+
+function asString(raw: unknown, max = 280): string | null {
+  if (typeof raw !== "string") return null;
+  const t = raw.trim();
+  if (!t) return null;
+  return t.slice(0, max);
+}
+
+function asNumber(raw: unknown): number | null {
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string" && raw.trim()) {
+    const n = Number(raw.replace(",", ".").replace(/[^\d.-]/g, ""));
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function asObjective(raw: unknown): CampagnaObjective | null {
+  if (typeof raw !== "string") return null;
+  const u = raw.trim().toUpperCase().replace("INSTORE", "IN_STORE");
+  if ((OBJECTIVES_CANONICI as string[]).includes(u)) {
+    return u as CampagnaObjective;
+  }
+  return null;
+}
+
+function asTargetType(raw: unknown): TargetType | null {
+  if (typeof raw !== "string") return null;
+  const u = raw.trim().toUpperCase();
+  if (u === "B2C" || u === "B2B") return u;
+  return null;
+}
+
+function asTargetAge(raw: unknown): TargetAgeBand | null {
+  if (typeof raw !== "string") return null;
+  const t = raw.trim();
+  if (t === "18-35" || t === "25-50" || t === "35-65+" || t === "all") {
+    return t;
+  }
+  return null;
+}
+
+function emptyField(id: AllyBriefFieldId): AllyBriefField {
+  return {
+    id,
+    label: ALLY_BRIEF_FIELD_LABELS[id],
+    value: null,
+    provenance: "MISSING",
+    confidence: "UNKNOWN",
+    note: null,
+  };
+}
+
+function coerceValue(
+  id: AllyBriefFieldId,
+  raw: unknown,
+): AllyBriefFieldValue {
+  switch (id) {
+    case "objective":
+      return asObjective(raw);
+    case "targetType":
+      return asTargetType(raw);
+    case "targetAge":
+      return asTargetAge(raw);
+    case "raggioKm":
+    case "etaMin":
+    case "etaMax":
+    case "budgetGiornaliero":
+    case "scontrinoMedio":
+    case "tassoConversione":
+    case "productMargin":
+    case "targetMargin":
+    case "maxSustainableCpa":
+      return asNumber(raw);
+    default:
+      return asString(raw, id === "elevatorPitch" ? 2000 : 280);
+  }
+}
+
+function stripUnsafeInventions(field: AllyBriefField): AllyBriefField {
+  if (META_IDS.includes(field.id)) {
+    // Never accept Meta identifiers from the model (even if labeled explicit).
+    return {
+      ...field,
+      value: null,
+      provenance: "MISSING",
+      confidence: "UNKNOWN",
+      note: field.note,
+    };
+  }
+  if (UNSAFE_ECONOMICS.includes(field.id) && field.provenance === "INFERRED") {
+    return {
+      ...field,
+      value: null,
+      provenance: "MISSING",
+      confidence: "UNKNOWN",
+      note: "Non inventato: serve conferma esplicita",
+    };
+  }
+  if (field.provenance === "INFERRED" && field.confidence === "LOW") {
+    return {
+      ...field,
+      value: null,
+      provenance: "MISSING",
+      confidence: "LOW",
+      note: field.note ?? "Inferenza troppo debole",
+    };
+  }
+  return field;
+}
+
+function mergeExistingClient(
+  fields: AllyBriefField[],
+  existing: AllyBriefExistingClientContext | null,
+): AllyBriefField[] {
+  if (!existing) return fields;
+  const byId = new Map(fields.map((f) => [f.id, f]));
+
+  function preferExisting(
+    id: AllyBriefFieldId,
+    value: AllyBriefFieldValue,
+  ) {
+    if (value == null || value === "") return;
+    const cur = byId.get(id) ?? emptyField(id);
+    if (cur.provenance === "EXPLICIT" && cur.value != null) {
+      // Campaign-level brief wins; flag conflict if different
+      if (String(cur.value).toLowerCase() !== String(value).toLowerCase()) {
+        byId.set(id, {
+          ...cur,
+          note:
+            cur.note ??
+            `Brief diverso dal cliente esistente (${String(value)})`,
+        });
+      }
+      return;
+    }
+    if (cur.provenance === "INFERRED" || cur.provenance === "MISSING" || cur.value == null) {
+      byId.set(id, {
+        ...cur,
+        value,
+        provenance: "EXISTING",
+        confidence: "HIGH",
+        note: cur.note,
+      });
+    }
+  }
+
+  preferExisting("nomeCliente", existing.nome);
+  preferExisting("settore", existing.settore);
+  preferExisting("citta", existing.citta);
+  preferExisting("sitoWeb", existing.sitoWeb);
+  preferExisting("elevatorPitch", existing.note);
+  preferExisting("targetType", existing.targetType);
+  preferExisting("targetAge", existing.targetAge);
+
+  return FIELD_IDS.map((id) => byId.get(id) ?? emptyField(id));
+}
+
+function tryDeterministicSustainableCpa(
+  fields: AllyBriefField[],
+): AllyBriefField {
+  const get = (id: AllyBriefFieldId) => fields.find((f) => f.id === id);
+  const objective = get("objective")?.value as CampagnaObjective | null;
+  const ticket = asNumber(get("scontrinoMedio")?.value);
+  const conv = asNumber(get("tassoConversione")?.value);
+  const margin = asNumber(get("productMargin")?.value);
+  const targetMargin = asNumber(get("targetMargin")?.value) ?? 50;
+  const ticketProv = get("scontrinoMedio")?.provenance;
+  const convProv = get("tassoConversione")?.provenance;
+  const marginProv = get("productMargin")?.provenance;
+
+  const economicsOk = (p: AllyBriefProvenance | undefined) =>
+    p === "EXPLICIT" || p === "EXISTING";
+
+  let value: number | null = null;
+  if (
+    objective === "LEADS" &&
+    ticket != null &&
+    conv != null &&
+    economicsOk(ticketProv) &&
+    economicsOk(convProv)
+  ) {
+    value = calculateMaxSustainableCpl(ticket, conv, targetMargin);
+  } else if (
+    objective === "BOOKINGS" &&
+    ticket != null &&
+    conv != null &&
+    economicsOk(ticketProv) &&
+    economicsOk(convProv)
+  ) {
+    value = calculateMaxSustainableBookingCpa(ticket, conv, targetMargin);
+  } else if (
+    objective === "ECOMMERCE" &&
+    ticket != null &&
+    margin != null &&
+    economicsOk(ticketProv) &&
+    economicsOk(marginProv)
+  ) {
+    value = calculateEcommerceCpaMax(ticket, margin, 0);
+  } else if (
+    objective === "IN_STORE" &&
+    ticket != null &&
+    margin != null &&
+    economicsOk(ticketProv) &&
+    economicsOk(marginProv)
+  ) {
+    value = calculateMaxSustainableInStoreCpa(ticket, margin, targetMargin);
+  }
+
+  if (value != null && Number.isFinite(value) && value > 0) {
+    return {
+      id: "maxSustainableCpa",
+      label: ALLY_BRIEF_FIELD_LABELS.maxSustainableCpa,
+      value: Math.round(value * 100) / 100,
+      provenance: "EXPLICIT",
+      confidence: "HIGH",
+      note: "Calcolato con la formula Ally (non inventato dall'AI)",
+    };
+  }
+
+  return {
+    id: "maxSustainableCpa",
+    label: ALLY_BRIEF_FIELD_LABELS.maxSustainableCpa,
+    value: null,
+    provenance: "MISSING",
+    confidence: "UNKNOWN",
+    note: "Servono ticket e conversione/margine espliciti per calcolarla",
+  };
+}
+
+function buildMissingList(fields: AllyBriefField[]): string[] {
+  const important: AllyBriefFieldId[] = [
+    "nomeCliente",
+    "objective",
+    "frontEndOffer",
+    "citta",
+    "budgetGiornaliero",
+    "maxSustainableCpa",
+    "pageId",
+    "formId",
+  ];
+  return important
+    .filter((id) => {
+      const f = fields.find((x) => x.id === id);
+      return !f || f.provenance === "MISSING" || f.value == null;
+    })
+    .map((id) => ALLY_BRIEF_FIELD_LABELS[id]);
+}
+
+export function parseAllyBriefProposal(
+  raw: string,
+  existing: AllyBriefExistingClientContext | null,
+): AllyBriefProposal {
+  const parsed = extractJsonObject(raw) as Record<string, unknown>;
+  const rawFields =
+    parsed.fields && typeof parsed.fields === "object"
+      ? (parsed.fields as Record<string, unknown>)
+      : {};
+
+  let fields: AllyBriefField[] = FIELD_IDS.map((id) => {
+    const cell = rawFields[id];
+    if (!cell || typeof cell !== "object") return emptyField(id);
+    const o = cell as Record<string, unknown>;
+    let provenance = asProvenance(o.provenance);
+    let value = coerceValue(id, o.value);
+    if (value == null) provenance = "MISSING";
+    if (provenance === "MISSING") value = null;
+    return stripUnsafeInventions({
+      id,
+      label: ALLY_BRIEF_FIELD_LABELS[id],
+      value,
+      provenance,
+      confidence: asConfidence(o.confidence),
+      note: asString(o.note, 160),
+    });
+  });
+
+  fields = mergeExistingClient(fields, existing);
+  const cpa = tryDeterministicSustainableCpa(fields);
+  fields = fields.map((f) => (f.id === "maxSustainableCpa" ? cpa : f));
+
+  const assumptions = Array.isArray(parsed.assumptions)
+    ? parsed.assumptions
+        .filter((x): x is string => typeof x === "string")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 6)
+    : [];
+
+  const missingFromModel = Array.isArray(parsed.missing_information)
+    ? parsed.missing_information
+        .filter((x): x is string => typeof x === "string")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 8)
+    : [];
+
+  const missingInformation = [
+    ...new Set([...buildMissingList(fields), ...missingFromModel]),
+  ].slice(0, 10);
+
+  return {
+    summary:
+      asString(parsed.summary, 400) ??
+      "Ho preparato una prima configurazione da rivedere.",
+    fields,
+    missingInformation,
+    assumptions,
+    matchedClienteId: existing?.id ?? null,
+    fromAi: true,
+  };
+}
+
+export function buildAllyBriefFallbackProposal(
+  brief: string,
+  existing: AllyBriefExistingClientContext | null,
+): AllyBriefProposal {
+  const fields = mergeExistingClient(
+    FIELD_IDS.map((id) => emptyField(id)),
+    existing,
+  );
+  if (brief.trim()) {
+    const pitch = fields.find((f) => f.id === "elevatorPitch");
+    if (pitch && pitch.provenance === "MISSING") {
+      pitch.value = brief.trim().slice(0, 2000);
+      pitch.provenance = "EXPLICIT";
+      pitch.confidence = "HIGH";
+    }
+  }
+  return {
+    summary:
+      "Non riesco a preparare la configurazione in questo momento. Puoi riprovare o continuare manualmente.",
+    fields,
+    missingInformation: buildMissingList(fields),
+    assumptions: [],
+    matchedClienteId: existing?.id ?? null,
+    fromAi: false,
+  };
+}
+
+/** Pure helpers exported for tests. */
+export function assertNoInventedEconomics(fields: AllyBriefField[]): boolean {
+  return fields.every((f) => {
+    if (!UNSAFE_ECONOMICS.includes(f.id)) return true;
+    if (f.provenance === "INFERRED" && f.value != null) return false;
+    return true;
+  });
+}
+
+export function assertNoInventedMetaIds(fields: AllyBriefField[]): boolean {
+  return fields.every((f) => {
+    if (!META_IDS.includes(f.id)) return true;
+    return f.value == null && f.provenance === "MISSING";
+  });
+}

@@ -34,6 +34,10 @@ import { leggiBozzaOnboarding } from "@/data/clienti-store";
 import { saveClient, getClientById, getCampaigns } from "@/utils/clientStorage";
 import type { Cliente } from "@/types/clienti";
 import type { DeconstructAdResult } from "@/types/deconstruct-ad";
+import {
+  hydrationFromAcceptedBrief,
+  readAcceptedAllyBrief,
+} from "@/lib/ally-brief";
 import { FormConfigurazione } from "@/components/nuova-contatti/FormConfigurazione";
 import { PannelloPerche } from "@/components/nuova-contatti/PannelloPerche";
 import { ChecklistMeta } from "@/components/nuova-contatti/ChecklistMeta";
@@ -756,6 +760,66 @@ export function PercorsoContatti({
       if (bozza?.targetAge) setTargetAge(bozza.targetAge);
     }
   }, [searchParams, objectiveEffettivo, currentSlug, isEcommerce, isRetargeting, isInStore, isBookings]);
+
+  /** M9.3A — apply accepted brief proposal after wizard reset (no DB write). */
+  useEffect(() => {
+    if (isEditMode) return;
+    if (searchParams.get("fromBrief") !== "1") return;
+    const accepted = readAcceptedAllyBrief();
+    if (!accepted) return;
+    if (accepted.objective !== objectiveEffettivo) return;
+    const h = hydrationFromAcceptedBrief(accepted);
+
+    if (h.nomeCliente) {
+      setConfig((prev) => ({
+        ...prev,
+        nomeCliente: h.nomeCliente!,
+        budgetGiornaliero:
+          h.budgetGiornaliero != null
+            ? h.budgetGiornaliero
+            : prev.budgetGiornaliero,
+        raggioKm: h.raggioKm != null ? h.raggioKm : prev.raggioKm,
+        etaMin: h.etaMin != null ? h.etaMin : prev.etaMin,
+        etaMax: h.etaMax != null ? h.etaMax : prev.etaMax,
+      }));
+    } else if (h.budgetGiornaliero != null || h.raggioKm != null) {
+      setConfig((prev) => ({
+        ...prev,
+        budgetGiornaliero:
+          h.budgetGiornaliero != null
+            ? h.budgetGiornaliero
+            : prev.budgetGiornaliero,
+        raggioKm: h.raggioKm != null ? h.raggioKm : prev.raggioKm,
+        etaMin: h.etaMin != null ? h.etaMin : prev.etaMin,
+        etaMax: h.etaMax != null ? h.etaMax : prev.etaMax,
+      }));
+    }
+
+    if (h.settore || h.citta) {
+      setContesto((prev) => ({
+        settore: h.settore ?? prev.settore,
+        citta: h.citta ?? prev.citta,
+      }));
+    }
+    if (h.sitoWeb) setSitoWeb(h.sitoWeb);
+    if (h.elevatorPitch) {
+      setElevatorPitch(h.elevatorPitch);
+    } else if (h.marketingAngle) {
+      setElevatorPitch(h.marketingAngle);
+    }
+    if (h.frontEndOffer) setFrontEndOffer(h.frontEndOffer);
+    if (h.targetType) setTargetType(h.targetType);
+    if (h.targetAge) setTargetAge(h.targetAge);
+    if (h.scontrinoMedio != null) setScontrinoMedio(h.scontrinoMedio);
+    if (h.tassoConversione != null) setTassoConversione(h.tassoConversione);
+    if (h.productMargin != null) setProductMargin(h.productMargin);
+    if (accepted.matchedClienteId) {
+      setClienteId(accepted.matchedClienteId);
+      setSalvaClientePreferito(true);
+    }
+    // Keep session proposal so React Strict Mode remount / wizard reset can re-apply.
+    // Overwritten when the user accepts a new brief.
+  }, [searchParams, objectiveEffettivo, isEditMode]);
 
   useEffect(() => {
     if (!isEditMode || !campaignIdEdit) {

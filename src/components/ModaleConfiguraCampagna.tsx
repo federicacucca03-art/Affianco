@@ -165,7 +165,7 @@ export function ModaleConfiguraCampagna({ aperta, onChiudi }: Props) {
             <p className="mt-1 text-sm text-[var(--ink-muted)]">
               {modalitaNuovo
                 ? "Compila il micro brand kit del nuovo cliente."
-                : "Scegli un cliente esistente oppure creane uno nuovo."}
+                : "Parti dal brief con Ally, oppure scegli un cliente e compila manualmente."}
             </p>
           </div>
           <button
@@ -181,6 +181,22 @@ export function ModaleConfiguraCampagna({ aperta, onChiudi }: Props) {
         <div className="mt-6 space-y-4">
           {!modalitaNuovo ? (
             <>
+              <button
+                type="button"
+                className="aff-btn-primary w-full"
+                onClick={() => {
+                  onChiudi();
+                  const q = selezione && selezione !== NUOVO
+                    ? `?clienteId=${encodeURIComponent(selezione)}`
+                    : "";
+                  router.push(`/campagne${q}#obiettivi-campagna`);
+                }}
+              >
+                Partiamo dal brief
+              </button>
+              <p className="text-center text-xs text-[var(--ink-muted)]">
+                oppure compila manualmente
+              </p>
               <label className="block">
                 <span className="mb-1.5 block text-xs font-medium text-[var(--ink-muted)]">
                   Cliente
