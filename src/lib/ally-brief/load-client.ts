@@ -93,14 +93,42 @@ export async function loadAllyBriefExistingClient(
   };
 }
 
+function normalizeClientName(raw: string): string {
+  return raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
 /**
- * Best-effort name match among owned clients (no cross-user leak).
+ * Among owned clients, return the id only when normalized name equals hint
+ * for exactly one row. 0 or 2+ matches → null (no silent pick).
+ */
+export function pickUniqueExactClientId(
+  clients: Array<{ id: string; name: string | null | undefined }>,
+  nomeHint: string | null,
+): string | null {
+  const hint = normalizeClientName(nomeHint ?? "");
+  if (hint.length < 3) return null;
+  const hits = clients.filter((c) => {
+    const n = normalizeClientName(String(c.name ?? ""));
+    return n.length > 0 && n === hint;
+  });
+  if (hits.length !== 1) return null;
+  return String(hits[0]!.id);
+}
+
+/**
+ * Exact owned-client name match only (no fuzzy / substring / sector / city).
+ * Requires exactly one canonical owned client with that name.
  */
 export async function matchAllyBriefClientByName(
   token: string,
   nomeHint: string | null,
 ): Promise<AllyBriefExistingClientContext | null> {
-  const hint = (nomeHint ?? "").trim().toLowerCase();
+  const hint = normalizeClientName(nomeHint ?? "");
   if (hint.length < 3) return null;
   const sb = clientForBearer(token);
   const { data, error } = await sb
@@ -108,12 +136,7 @@ export async function matchAllyBriefClientByName(
     .select("id, name")
     .limit(40);
   if (error || !data?.length) return null;
-  const hit = data.find((c) => {
-    const n = String(c.name ?? "")
-      .trim()
-      .toLowerCase();
-    return n === hint || n.includes(hint) || hint.includes(n);
-  });
-  if (!hit?.id) return null;
-  return loadAllyBriefExistingClient(token, String(hit.id));
+  const id = pickUniqueExactClientId(data, nomeHint);
+  if (!id) return null;
+  return loadAllyBriefExistingClient(token, id);
 }

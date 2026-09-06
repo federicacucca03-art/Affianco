@@ -95,6 +95,8 @@ export async function POST(request: Request) {
   try {
     let existing = await loadAllyBriefExistingClient(token, clienteId);
     if (!existing) {
+      // Explicit name cue only ("per/cliente/azienda X") → exact owned-client match.
+      // Never fuzzy-match sector/city/"Studio dentistico" onto an existing profile.
       const nameGuess = brief.match(
         /(?:per|cliente|azienda)\s+([A-ZÀ-Ü][\wÀ-ü'&.-]{2,}(?:\s+[A-ZÀ-Ü][\wÀ-ü'&.-]{1,}){0,3})/i,
       );

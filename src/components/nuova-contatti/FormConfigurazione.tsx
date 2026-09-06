@@ -607,6 +607,7 @@ export function FormConfigurazione({
   );
   const validazioneBrief = validateElevatorPitch(elevatorPitch, {
     objective: objectiveEffettivo,
+    relatedContext: [frontEndOffer, heroProduct].filter(Boolean).join("\n"),
   });
   const valoreVisita = Number(scontrinoMedio) || 0;
   const tassoLeads = isPercorsoLeads

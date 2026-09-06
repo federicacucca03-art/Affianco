@@ -38,11 +38,12 @@ export function seedBozzaFromAcceptedBrief(
     typeof payload.values.nomeCliente === "string"
       ? payload.values.nomeCliente.trim()
       : "";
-  if (!nome) return;
+  // Always rewrite bozza so a previous Aurora (or other) clientId cannot linger.
+  // Without an explicit client name / matched id, leave client fields empty.
   salvaBozzaOnboarding({
     clienteId: payload.matchedClienteId ?? "",
     nomeCliente: nome,
-    nomeCampagna: `Campagna ${nome}`,
+    nomeCampagna: nome ? `Campagna ${nome}` : "",
     settore:
       typeof payload.values.settore === "string"
         ? payload.values.settore

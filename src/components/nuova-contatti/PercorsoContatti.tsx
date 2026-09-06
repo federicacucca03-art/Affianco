@@ -206,12 +206,19 @@ function leggiContestoIniziale(
   objective: CampagnaObjective,
 ) {
   const bozza = leggiBozzaOnboarding();
+  const fromBrief = searchParams.get("fromBrief") === "1";
+  const hasExplicitClient =
+    Boolean(searchParams.get("clienteId")?.trim()) ||
+    Boolean(searchParams.get("nomeCliente")?.trim()) ||
+    Boolean(searchParams.get("cliente")?.trim());
+  // fromBrief without explicit client: never inherit a previous bozza client name.
   const nomeCliente =
     searchParams.get("nomeCliente") ||
     searchParams.get("cliente") ||
-    bozza?.nomeCliente ||
+    (fromBrief && !hasExplicitClient ? null : bozza?.nomeCliente) ||
     null;
-  const campagna = bozza?.nomeCampagna || null;
+  const campagna =
+    fromBrief && !hasExplicitClient ? null : bozza?.nomeCampagna || null;
   const settoreGrezzo = searchParams.get("settore") || bozza?.settore || null;
   const cittaDaUrlOBozza = searchParams.get("citta") || bozza?.citta || null;
   // E-commerce / in-store: ignora bozze locali/dentali (valori, non solo placeholder).
@@ -724,11 +731,14 @@ export function PercorsoContatti({
     setFormatoCuratoId(null);
     setDeconstructResult(null);
 
+    const fromBrief = searchParams.get("fromBrief") === "1";
     const clienteIdUrl = searchParams.get("clienteId")?.trim() || "";
     const bozza = leggiBozzaOnboarding();
+    // Explicit client only: URL clienteId, or (non-fromBrief) prior bozza with id.
+    // fromBrief without clienteId must NOT revive last/primary client from bozza.
     const daMemoria = clienteIdUrl
       ? getClientById(clienteIdUrl)
-      : bozza?.clienteId
+      : !fromBrief && bozza?.clienteId
         ? getClientById(bozza.clienteId)
         : null;
     if (daMemoria) {
@@ -752,6 +762,13 @@ export function PercorsoContatti({
       setElevatorPitch(daMemoria.note ?? "");
       setTargetType(daMemoria.targetType ?? "B2C");
       setTargetAge(daMemoria.targetAge ?? "25-50");
+    } else if (fromBrief) {
+      setClienteId(null);
+      setSalvaClientePreferito(false);
+      if (bozza?.sitoWeb) setSitoWeb(bozza.sitoWeb);
+      if (bozza?.note) setElevatorPitch(bozza.note);
+      if (bozza?.targetType) setTargetType(bozza.targetType);
+      if (bozza?.targetAge) setTargetAge(bozza.targetAge);
     } else {
       setClienteId(bozza?.clienteId || null);
       if (bozza?.sitoWeb) setSitoWeb(bozza.sitoWeb);
@@ -816,6 +833,15 @@ export function PercorsoContatti({
     if (accepted.matchedClienteId) {
       setClienteId(accepted.matchedClienteId);
       setSalvaClientePreferito(true);
+    } else {
+      // Brief without explicit client: never keep a previously selected profile.
+      setClienteId(null);
+      setSalvaClientePreferito(false);
+      if (!h.nomeCliente) {
+        setConfig((prev) =>
+          prev.nomeCliente ? { ...prev, nomeCliente: "" } : prev,
+        );
+      }
     }
     // Keep session proposal so React Strict Mode remount / wizard reset can re-apply.
     // Overwritten when the user accepts a new brief.

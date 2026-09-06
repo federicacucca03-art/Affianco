@@ -27,6 +27,8 @@ import {
   hrefWizardFromAcceptedBrief,
   hydrationFromAcceptedBrief,
 } from "../src/lib/ally-brief/apply";
+import { validateElevatorPitch } from "../src/lib/validate-elevator-pitch";
+import { pickUniqueExactClientId } from "../src/lib/ally-brief/load-client";
 
 let passed = 0;
 let failed = 0;
@@ -545,6 +547,127 @@ test("M9.3A.1 numeric normalization from euro/km strings", () => {
   const p = parseAllyBriefProposal(raw, null);
   assert(p.fields.find((f) => f.id === "budgetGiornaliero")?.value === 25, "€");
   assert(p.fields.find((f) => f.id === "raggioKm")?.value === 15, "km");
+});
+
+test("M9.3A.2 no-client brief: wizard does not revive bozza client", () => {
+  const percorso = read("src/components/nuova-contatti/PercorsoContatti.tsx");
+  assert(percorso.includes("fromBrief && !hasExplicitClient"), "iniziale skip bozza nome");
+  assert(percorso.includes("!fromBrief && bozza?.clienteId"), "reset skip bozza client");
+  assert(percorso.includes("Brief without explicit client"), "hydrate clear client");
+  const apply = read("src/lib/ally-brief/apply.ts");
+  assert(apply.includes("Always rewrite bozza"), "seed clears stale client");
+  const load = read("src/lib/ally-brief/load-client.ts");
+  assert(load.includes("pickUniqueExactClientId"), "unique-only helper");
+  assert(load.includes("hits.length !== 1"), "reject 0 and >1");
+  assert(!load.includes("n.includes(hint)"), "no substring fuzzy");
+  const route = read("src/app/api/ally-brief/route.ts");
+  assert(route.includes("Never fuzzy-match"), "route guard");
+});
+
+test("M9.3A.2 exact name match is unique-only", () => {
+  const a = { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "Studio Dentistico Aurora" };
+  const b = { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", name: "Studio Dentistico Aurora" };
+  const c = { id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", name: "Technon" };
+  assert(
+    pickUniqueExactClientId([a, c], "Studio Dentistico Aurora") === a.id,
+    "one exact → resolve",
+  );
+  assert(
+    pickUniqueExactClientId([a, b, c], "Studio Dentistico Aurora") === null,
+    "duplicate names → unresolved",
+  );
+  assert(pickUniqueExactClientId([a, c], "Studio dentistico") === null, "0 exact → unresolved");
+  assert(pickUniqueExactClientId([a, c], "studio dentistico aurora") === a.id, "normalized case");
+});
+
+test("M9.3A.2 no-client accept → href without clienteId / empty seed client", () => {
+  const raw = JSON.stringify({
+    summary: "ok",
+    fields: {
+      objective: field("objective", "LEADS", "INFERRED", "MEDIUM"),
+      citta: field("citta", "Roma", "EXPLICIT"),
+      settore: field("settore", "Dentista", "EXPLICIT"),
+      frontEndOffer: field("frontEndOffer", "Prima visita gratuita", "EXPLICIT"),
+      budgetGiornaliero: field("budgetGiornaliero", 25, "EXPLICIT"),
+    },
+    missing_information: [],
+    assumptions: [],
+  });
+  const proposal = parseAllyBriefProposal(raw, null);
+  assert(proposal.matchedClienteId == null, "no match");
+  assert(proposal.fields.find((f) => f.id === "nomeCliente")?.provenance === "MISSING", "nome missing");
+  const accepted = proposalToAcceptedPayload(
+    "Studio dentistico a Roma. Implantologia. Prima visita gratuita.",
+    proposal,
+  );
+  assert(accepted != null, "accepted");
+  assert(accepted!.matchedClienteId == null, "payload no client");
+  const href = hrefWizardFromAcceptedBrief(accepted!);
+  assert(href.includes("fromBrief=1"), "fromBrief");
+  assert(!/[?&]clienteId=/.test(href), "no clienteId in url");
+  assert(!/[?&]nomeCliente=/.test(href), "no nomeCliente in url");
+  const h = hydrationFromAcceptedBrief(accepted!);
+  assert(h.nomeCliente == null, "hydrate nome empty");
+  assert(h.citta === "Roma", "city kept");
+  assert(h.frontEndOffer === "Prima visita gratuita", "offer kept");
+  assert(h.budgetGiornaliero === 25, "budget kept");
+});
+
+test("M9.3A.2 explicit client context still wires clienteId", () => {
+  const raw = JSON.stringify({
+    summary: "ok",
+    fields: {
+      objective: field("objective", "LEADS", "EXPLICIT"),
+      nomeCliente: field("nomeCliente", "Studio Dentistico Aurora", "EXISTING"),
+      citta: field("citta", "Roma", "EXISTING"),
+    },
+    missing_information: [],
+    assumptions: [],
+  });
+  const proposal = parseAllyBriefProposal(raw, {
+    id: "11111111-1111-4111-8111-111111111111",
+    nome: "Studio Dentistico Aurora",
+    settore: "Dentista",
+    citta: "Roma",
+    sitoWeb: null,
+    note: null,
+    targetType: "B2C",
+    targetAge: "35-65+",
+  });
+  assert(proposal.matchedClienteId === "11111111-1111-4111-8111-111111111111", "matched");
+  const accepted = proposalToAcceptedPayload("brief", proposal);
+  assert(accepted != null, "ok");
+  const href = hrefWizardFromAcceptedBrief(accepted!);
+  assert(href.includes("clienteId=11111111-1111-4111-8111-111111111111"), href);
+});
+
+test("M9.3A.2 generic brief detector: implantologia specific, dentistico alone generic", () => {
+  const generic = validateElevatorPitch("Studio dentistico a Roma vuole più pazienti");
+  assert(!generic.isValid, "E generic may warn");
+  assert(generic.reason?.includes("troppo generico"), "generic reason");
+
+  const specific = validateElevatorPitch(
+    "Studio dentistico a Roma specializzato in implantologia, prima visita gratuita",
+  );
+  assert(specific.isValid, "F implantologia not generic");
+
+  const viaOffer = validateElevatorPitch("Studio dentistico a Roma vuole più pazienti", {
+    relatedContext: "Campagna per implantologia",
+  });
+  assert(viaOffer.isValid, "G offer/service context suppresses repeat");
+
+  assert(
+    validateElevatorPitch("Technon vuole promuovere nastri 3M VHB per lead B2B").isValid,
+    "Technon product specific",
+  );
+  assert(
+    validateElevatorPitch("Ecommerce scarpe da running, nuova collezione").isValid,
+    "running collection specific",
+  );
+  assert(
+    !validateElevatorPitch("Negozio di scarpe a Milano").isValid,
+    "scarpe alone still generic",
+  );
 });
 
 console.log(`\nM9.3A result: ${passed} passed, ${failed} failed\n`);

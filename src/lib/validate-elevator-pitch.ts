@@ -16,13 +16,20 @@ export const DOMAIN_ANCHORS_REGEX: RegExp[] = [
   /\butenz[aei]?\b/i,
   /\bfiscal[ei]?\b/i,
   /\bcontabilita\b/i,
+  /\bconsulenza\s+fiscal\w*\b/i,
   /\bsocieta\b/i,
   /\bimmobil[ei]?\b/i,
   /\bcas[ae]\b/i,
   /\bdent[ei]\b|\bdentist[aei]\b|\bdental[ei]\b/i,
+  // Specific dental services (not "dentistico" alone — sector ≠ product)
+  /\bimplantolog\w*\b/i,
   /\bimpiant[oi]\b/i,
+  /\bsbiancament\w*\b/i,
+  /\bortodonzi\w*\b/i,
   /\bristrutturazion[ei]\b/i,
   /\bpalestr[ae]\b/i,
+  /\byoga\b/i,
+  /\bsoftware\s+gestional\w*\b/i,
   /\bauto\b|\bautovettur[ae]\b/i,
   /\bnoleggi[oi]?\b/i,
   /\bpellicol[aei]\b/i,
@@ -30,6 +37,12 @@ export const DOMAIN_ANCHORS_REGEX: RegExp[] = [
   /\brivestiment[oi]\b/i,
   /\bcontrollo\s+solare\b/i,
   /\bisolamento\b|\btermic[oa]\b/i,
+  // Product / offer specificity (sector alone e.g. "scarpe" is not enough)
+  /\bnastr[io]\b/i,
+  /\bvhb\b/i,
+  /\b3m\b/i,
+  /\brunning\b/i,
+  /\bcollezion[ei]\b/i,
 ];
 
 /**
@@ -62,6 +75,8 @@ export type ElevatorPitchValidation = {
 
 export type ValidateElevatorPitchOptions = {
   objective?: CampagnaObjective;
+  /** Offer / angle / extracted service — used so users need not repeat Ally facts. */
+  relatedContext?: string | null;
 };
 
 function contaDettagliEcommerce(cleanText: string): number {
@@ -96,14 +111,18 @@ export function validateElevatorPitch(
   pitch: string,
   options?: ValidateElevatorPitchOptions,
 ): ElevatorPitchValidation {
-  const cleanText = stripAccents(pitch.toLowerCase().trim());
-  const words = cleanText.split(/\s+/).filter(Boolean);
+  const related = (options?.relatedContext ?? "").trim();
+  const combined = related ? `${pitch}\n${related}` : pitch;
+  const cleanText = stripAccents(combined.toLowerCase().trim());
+  const words = stripAccents(pitch.toLowerCase().trim())
+    .split(/\s+/)
+    .filter(Boolean);
 
   if (options?.objective === "ECOMMERCE") {
     return validateEcommerceBrief(cleanText, words);
   }
 
-  if (words.length < 5) {
+  if (words.length < 5 && !related) {
     return {
       isValid: false,
       reason:
