@@ -216,29 +216,65 @@ export function isAllowedWebsiteContentType(ct: string | null): boolean {
 
 /**
  * Stream body with a hard byte cap (bytes as delivered on the Node response
- * stream after transport decoding). Aborts as soon as limit is exceeded.
+ * stream after transport decoding).
+ *
+ * When the response exceeds maxBytes:
+ * - stop reading immediately (destroy stream — do not buffer the rest)
+ * - keep only the first maxBytes for HTML extraction (Wix/etc. bloat)
+ * - never grow memory beyond maxBytes
+ *
+ * Callers must treat `truncated: true` as partial HTML and extract from it.
  */
 export async function readStreamWithByteLimit(
   stream: NodeJS.ReadableStream,
   maxBytes: number,
-): Promise<{ bytes: number; text: string }> {
+): Promise<{ bytes: number; text: string; truncated: boolean }> {
   const chunks: Buffer[] = [];
   let total = 0;
-  for await (const chunk of stream) {
-    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string);
-    total += buf.byteLength;
-    if (total > maxBytes) {
-      const destroyable = stream as unknown as {
-        destroy?: (e?: Error) => void;
-      };
-      destroyable.destroy?.();
-      throw Object.assign(new Error("too large"), { code: "TOO_LARGE" as const });
+  let truncated = false;
+  try {
+    for await (const chunk of stream) {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string);
+      if (total + buf.byteLength > maxBytes) {
+        const take = maxBytes - total;
+        if (take > 0) chunks.push(buf.subarray(0, take));
+        total = maxBytes;
+        truncated = true;
+        const destroyable = stream as unknown as {
+          destroy?: (e?: Error) => void;
+        };
+        destroyable.destroy?.();
+        break;
+      }
+      chunks.push(buf);
+      total += buf.byteLength;
     }
-    chunks.push(buf);
+  } catch (err) {
+    // destroy() mid-iteration may surface as stream error; keep truncated bytes.
+    if (!truncated) throw err;
   }
-  const merged = Buffer.concat(chunks);
-  return { bytes: merged.byteLength, text: merged.toString("utf8") };
+  const merged = Buffer.concat(chunks, total);
+  return {
+    bytes: merged.byteLength,
+    text: merged.toString("utf8"),
+    truncated,
+  };
 }
+
+/** Internal failure classes for server logs (never shown in UI copy). */
+export type WebsiteFetchFailureClass =
+  | "INVALID_URL"
+  | "PRIVATE_TARGET"
+  | "DNS_FAILURE"
+  | "CONNECT_FAILURE"
+  | "TLS_FAILURE"
+  | "HTTP_ERROR"
+  | "UNSUPPORTED_CONTENT"
+  | "TOO_LARGE"
+  | "TIMEOUT"
+  | "EXTRACTION_FAILURE"
+  | "REDIRECTS"
+  | "NETWORK";
 
 /** Fields that must never receive WEBSITE provenance values. */
 export const WEBSITE_FORBIDDEN_FIELD_IDS = [

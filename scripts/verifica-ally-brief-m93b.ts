@@ -133,20 +133,28 @@ async function main() {
     assert(validatePublicWebsiteUrl("http://example.com").ok, "80 default");
   });
 
-  await test("J response >512KB aborted during stream read", async () => {
+  await test("J response >512KB aborted mid-stream; first 512KB kept for extract", async () => {
     const big = Buffer.alloc(600 * 1024, 0x61);
-    const stream = Readable.from([big.subarray(0, 300 * 1024), big.subarray(300 * 1024)]);
-    let threw = false;
-    try {
-      await readStreamWithByteLimit(stream, ALLY_BRIEF_WEBSITE_MAX_BYTES);
-    } catch (e) {
-      threw = true;
-      assert(
-        e && typeof e === "object" && "code" in e && (e as { code: string }).code === "TOO_LARGE",
-        "code",
-      );
-    }
-    assert(threw, "threw");
+    const stream = Readable.from([
+      big.subarray(0, 300 * 1024),
+      big.subarray(300 * 1024),
+    ]);
+    const r = await readStreamWithByteLimit(stream, ALLY_BRIEF_WEBSITE_MAX_BYTES);
+    assert(r.truncated === true, "truncated");
+    assert(r.bytes === ALLY_BRIEF_WEBSITE_MAX_BYTES, "capped");
+    assert(r.text.length === ALLY_BRIEF_WEBSITE_MAX_BYTES, "text capped");
+    // Oversized HTML bloat: early truncate must still yield extractable head content.
+    const html =
+      `<html><head><title>Broker Noleggio</title>` +
+      `<meta name="description" content="Broker automotive noleggio lungo termine" />` +
+      `</head><body><h1>Noleggio</h1>${"x".repeat(600 * 1024)}</body></html>`;
+    const oversized = Buffer.from(html, "utf8");
+    const s2 = Readable.from([oversized]);
+    const partial = await readStreamWithByteLimit(s2, ALLY_BRIEF_WEBSITE_MAX_BYTES);
+    assert(partial.truncated, "html truncated");
+    const ex = extractVisibleTextFromHtml(partial.text);
+    assert((ex.title ?? "").toLowerCase().includes("noleggio"), "title from head");
+    assert(ex.text.length >= 40, "usable context from truncate");
   });
 
   await test("K binary content types rejected", () => {

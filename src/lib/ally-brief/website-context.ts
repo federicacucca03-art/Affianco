@@ -232,6 +232,14 @@ export async function fetchWebsiteContext(
   const started = Date.now();
   const validated = validatePublicWebsiteUrl(rawUrl);
   if (!validated.ok) {
+    console.info("[ally-brief-website]", {
+      status: "blocked",
+      reason: validated.reason,
+      failureClass:
+        validated.reason === "private"
+          ? ("PRIVATE_TARGET" as const)
+          : ("INVALID_URL" as const),
+    });
     return { status: "blocked", reason: validated.reason };
   }
 
@@ -254,6 +262,7 @@ export async function fetchWebsiteContext(
       console.info("[ally-brief-website]", {
         status: "unavailable",
         reason: "http",
+        failureClass: "HTTP_ERROR",
         httpStatus: res.statusCode,
         hostname: finalUrl.hostname,
         durationMs: Date.now() - started,
@@ -270,13 +279,18 @@ export async function fetchWebsiteContext(
       console.info("[ally-brief-website]", {
         status: "unavailable",
         reason: "not_html",
+        failureClass: "UNSUPPORTED_CONTENT",
         hostname: finalUrl.hostname,
         durationMs: Date.now() - started,
       });
       return { status: "unavailable", reason: "not_html" };
     }
 
-    const { bytes, text: html } = await readStreamWithByteLimit(
+    const {
+      bytes,
+      text: html,
+      truncated,
+    } = await readStreamWithByteLimit(
       res.stream,
       ALLY_BRIEF_WEBSITE_MAX_BYTES,
     );
@@ -289,6 +303,8 @@ export async function fetchWebsiteContext(
       console.info("[ally-brief-website]", {
         status: "unavailable",
         reason: "empty",
+        failureClass: "EXTRACTION_FAILURE",
+        truncated,
         hostname: finalUrl.hostname,
         durationMs: Date.now() - started,
         bytes,
@@ -302,6 +318,7 @@ export async function fetchWebsiteContext(
       durationMs: Date.now() - started,
       bytes,
       textChars: extracted.text.length,
+      truncated,
     });
 
     return {
@@ -322,18 +339,42 @@ export async function fetchWebsiteContext(
     const msg = err instanceof Error ? err.message.toLowerCase() : "";
 
     if (code === "PRIVATE") {
+      console.info("[ally-brief-website]", {
+        status: "blocked",
+        failureClass: "PRIVATE_TARGET",
+        hostname: validated.hostname,
+        durationMs: Date.now() - started,
+      });
       return { status: "blocked", reason: "private" };
     }
     if (code === "DNS") {
+      console.info("[ally-brief-website]", {
+        status: "unavailable",
+        reason: "dns",
+        failureClass: "DNS_FAILURE",
+        hostname: validated.hostname,
+        durationMs: Date.now() - started,
+      });
       return { status: "unavailable", reason: "dns" };
     }
-    if (code === "TOO_LARGE") {
-      return { status: "unavailable", reason: "too_large" };
-    }
     if (code === "REDIRECTS") {
+      console.info("[ally-brief-website]", {
+        status: "unavailable",
+        reason: "redirects",
+        failureClass: "REDIRECTS",
+        hostname: validated.hostname,
+        durationMs: Date.now() - started,
+      });
       return { status: "unavailable", reason: "redirects" };
     }
     if (code === "HTTP") {
+      console.info("[ally-brief-website]", {
+        status: "unavailable",
+        reason: "http",
+        failureClass: "HTTP_ERROR",
+        hostname: validated.hostname,
+        durationMs: Date.now() - started,
+      });
       return { status: "unavailable", reason: "http" };
     }
     if (
@@ -344,14 +385,36 @@ export async function fetchWebsiteContext(
       console.info("[ally-brief-website]", {
         status: "unavailable",
         reason: "timeout",
+        failureClass: "TIMEOUT",
         hostname: validated.hostname,
         durationMs: Date.now() - started,
       });
       return { status: "unavailable", reason: "timeout" };
     }
+
+    let failureClass:
+      | "TLS_FAILURE"
+      | "CONNECT_FAILURE"
+      | "NETWORK" = "NETWORK";
+    if (
+      /certificate|cert|tls|ssl|altname|unable to verify/i.test(msg) ||
+      /CERT_|TLS_|SSL_/.test(code)
+    ) {
+      failureClass = "TLS_FAILURE";
+    } else if (
+      code === "ECONNREFUSED" ||
+      code === "EHOSTUNREACH" ||
+      code === "ENETUNREACH" ||
+      code === "ECONNRESET" ||
+      code === "ETIMEDOUT"
+    ) {
+      failureClass = "CONNECT_FAILURE";
+    }
+
     console.info("[ally-brief-website]", {
       status: "unavailable",
       reason: "network",
+      failureClass,
       hostname: validated.hostname,
       durationMs: Date.now() - started,
     });

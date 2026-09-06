@@ -39,6 +39,8 @@ export {
   WEBSITE_FORBIDDEN_FIELD_IDS,
 } from "@/lib/ally-brief/website-safety";
 
+export type { WebsiteFetchFailureClass } from "@/lib/ally-brief/website-safety";
+
 export { extractVisibleTextFromHtml } from "@/lib/ally-brief/website-extract";
 
 export {
