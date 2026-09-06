@@ -15,6 +15,7 @@ import {
   ALLY_BRIEF_MAX_CHARS,
   ALLY_BRIEF_FAILURE_MESSAGE,
   ALLY_BRIEF_FIELD_LABELS,
+  ALLY_BRIEF_WEBSITE_BLOCKED_MESSAGE,
   provenanceLabelIt,
   objectiveLabelIt,
   type AllyBriefFieldId,
@@ -84,6 +85,8 @@ function badgeVariant(p: AllyBriefProvenance): AllyBadgeVariant {
   switch (p) {
     case "EXPLICIT":
       return "success";
+    case "WEBSITE":
+      return "violet";
     case "INFERRED":
       return "violet";
     case "EXISTING":
@@ -192,8 +195,10 @@ export function PartiamoDalBrief({
   const clienteId = searchParams.get("clienteId")?.trim() || null;
 
   const [brief, setBrief] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [websiteWarning, setWebsiteWarning] = useState<string | null>(null);
   const [proposal, setProposal] = useState<AllyBriefProposal | null>(null);
   const [edits, setEdits] = useState<
     Partial<Record<AllyBriefFieldId, AllyBriefFieldValue>>
@@ -211,8 +216,9 @@ export function PartiamoDalBrief({
 
   async function preparaConAlly() {
     const text = brief.trim();
-    if (!text) {
-      setError("Inserisci un brief per continuare.");
+    const site = websiteUrl.trim();
+    if (!text && !site) {
+      setError("Inserisci un brief o un sito cliente.");
       return;
     }
     if (text.length > ALLY_BRIEF_MAX_CHARS) {
@@ -223,6 +229,7 @@ export function PartiamoDalBrief({
     }
     setLoading(true);
     setError(null);
+    setWebsiteWarning(null);
     setProposal(null);
     setEdits({});
     try {
@@ -240,6 +247,7 @@ export function PartiamoDalBrief({
         },
         body: JSON.stringify({
           brief: text,
+          ...(site ? { websiteUrl: site } : {}),
           ...(clienteId ? { clienteId } : {}),
         }),
       });
@@ -248,7 +256,16 @@ export function PartiamoDalBrief({
         proposal?: AllyBriefProposal;
         code?: string;
         error?: string;
+        websiteWarning?: string | null;
+        websiteStatus?: string | null;
       };
+
+      if (res.status === 400 && data.error === ALLY_BRIEF_WEBSITE_BLOCKED_MESSAGE) {
+        setProposal(null);
+        setEdits({});
+        setError(ALLY_BRIEF_WEBSITE_BLOCKED_MESSAGE);
+        return;
+      }
 
       if (
         res.ok &&
@@ -259,16 +276,27 @@ export function PartiamoDalBrief({
         setProposal(data.proposal);
         setEdits(editableValuesFromProposal(data.proposal));
         setError(null);
+        setWebsiteWarning(
+          typeof data.websiteWarning === "string" && data.websiteWarning.trim()
+            ? data.websiteWarning.trim()
+            : null,
+        );
         return;
       }
 
       // Complete failure: keep brief, no fake all-MISSING review.
       setProposal(null);
       setEdits({});
-      setError(ALLY_BRIEF_FAILURE_MESSAGE);
+      setWebsiteWarning(null);
+      setError(
+        typeof data.error === "string" && data.error.trim()
+          ? data.error.trim()
+          : ALLY_BRIEF_FAILURE_MESSAGE,
+      );
     } catch {
       setProposal(null);
       setEdits({});
+      setWebsiteWarning(null);
       setError(ALLY_BRIEF_FAILURE_MESSAGE);
     } finally {
       setLoading(false);
@@ -326,6 +354,18 @@ export function PartiamoDalBrief({
               {proposal.summary}
             </p>
           </div>
+          {websiteWarning ? (
+            <div className="flex gap-3 rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--lavender-muted)]/55 px-4 py-3.5">
+              <Info
+                className="mt-0.5 h-4 w-4 shrink-0 text-[var(--primary)]"
+                strokeWidth={1.75}
+                aria-hidden
+              />
+              <p className="text-[13.5px] leading-relaxed text-[var(--ink)]">
+                {websiteWarning}
+              </p>
+            </div>
+          ) : null}
           {missingCount > 0 ? (
             <div className="flex gap-3 rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--lavender-muted)]/55 px-4 py-3.5">
               <Info
@@ -405,6 +445,7 @@ export function PartiamoDalBrief({
               setProposal(null);
               setEdits({});
               setError(null);
+              setWebsiteWarning(null);
             }}
           >
             Modifica brief
@@ -443,6 +484,21 @@ export function PartiamoDalBrief({
         </span>
       </label>
 
+      <label className="block space-y-1.5">
+        <span className="text-[13px] font-medium text-[var(--ink)]">
+          Sito cliente (opzionale)
+        </span>
+        <input
+          type="url"
+          className="aff-input"
+          value={websiteUrl}
+          onChange={(e) => setWebsiteUrl(e.target.value)}
+          placeholder="https://www.esempio.it"
+          disabled={loading}
+          autoComplete="url"
+        />
+      </label>
+
       {error ? (
         <div className="space-y-4" role="alert">
           <p className="text-[14px] leading-relaxed text-[var(--ink-muted)]">
@@ -452,7 +508,7 @@ export function PartiamoDalBrief({
             <button
               type="button"
               className="aff-btn-primary min-h-11 flex-1 disabled:opacity-60"
-              disabled={loading || !brief.trim()}
+              disabled={loading || (!brief.trim() && !websiteUrl.trim())}
               onClick={() => void preparaConAlly()}
             >
               {loading ? "Sto preparando…" : "Riprova"}
@@ -472,7 +528,7 @@ export function PartiamoDalBrief({
           <button
             type="button"
             className="aff-btn-primary min-h-11 flex-1 disabled:opacity-60"
-            disabled={loading || !brief.trim()}
+            disabled={loading || (!brief.trim() && !websiteUrl.trim())}
             onClick={() => void preparaConAlly()}
           >
             {loading ? "Sto preparando…" : "Prepara con Ally"}

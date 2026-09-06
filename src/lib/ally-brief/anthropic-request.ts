@@ -1,5 +1,5 @@
 /**
- * M9.3A — Anthropic params for brief analysis (Sonnet 5 compatible).
+ * M9.3A/B — Anthropic params for brief analysis (Sonnet 5 compatible).
  * Pure — safe to import from verification scripts.
  */
 
@@ -22,6 +22,8 @@ export type AllyBriefAnthropicCreateParams = {
 export function buildAllyBriefAnthropicParams(input: {
   brief: string;
   existingClient: AllyBriefExistingClientContext | null;
+  /** Pre-formatted untrusted website block, or null. */
+  websiteBlock?: string | null;
 }): AllyBriefAnthropicCreateParams {
   return {
     model: anthropicModelId(),
@@ -34,6 +36,7 @@ export function buildAllyBriefAnthropicParams(input: {
         content: buildAllyBriefUserPrompt({
           brief: input.brief,
           existingClient: input.existingClient,
+          websiteBlock: input.websiteBlock ?? null,
         }),
       },
     ],

@@ -31,6 +31,7 @@ export type AllyBriefProvenance =
   | "EXISTING"
   | "EXPLICIT"
   | "INFERRED"
+  | "WEBSITE"
   | "MISSING";
 
 export type AllyBriefConfidence = "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN";
@@ -97,11 +98,16 @@ export type AllyBriefRunResult =
       ok: true;
       proposal: AllyBriefProposal;
       aiCalls: 1;
+      /** Soft website enrichment status for UI (null = no website attempted). */
+      websiteStatus: "ok" | "unavailable" | "blocked" | "skipped" | null;
+      websiteWarning: string | null;
     }
   | {
       ok: false;
       code: AllyBriefFailureCode;
       aiCalls: 0 | 1;
+      websiteStatus?: "ok" | "unavailable" | "blocked" | "skipped" | null;
+      websiteWarning?: string | null;
     };
 
 /** Session payload after user accepts review (temporary setup state). */
@@ -146,6 +152,8 @@ export function provenanceLabelIt(p: AllyBriefProvenance): string {
       return "Dal brief";
     case "INFERRED":
       return "Proposto da Ally";
+    case "WEBSITE":
+      return "Dal sito";
     case "MISSING":
       return "Da completare";
   }

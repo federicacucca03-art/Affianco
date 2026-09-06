@@ -20,6 +20,7 @@ import {
   type AllyBriefProposal,
   type AllyBriefProvenance,
 } from "@/lib/ally-brief/types";
+import { WEBSITE_FORBIDDEN_FIELD_IDS } from "@/lib/ally-brief/website-safety";
 
 const FIELD_IDS = Object.keys(ALLY_BRIEF_FIELD_LABELS) as AllyBriefFieldId[];
 
@@ -149,6 +150,7 @@ function asProvenance(raw: unknown): AllyBriefProvenance {
     raw === "EXISTING" ||
     raw === "EXPLICIT" ||
     raw === "INFERRED" ||
+    raw === "WEBSITE" ||
     raw === "MISSING"
   ) {
     return raw;
@@ -352,6 +354,18 @@ function stripUnsafeInventions(field: AllyBriefField): AllyBriefField {
       note: field.note,
     };
   }
+  if (
+    (WEBSITE_FORBIDDEN_FIELD_IDS as readonly string[]).includes(field.id) &&
+    field.provenance === "WEBSITE"
+  ) {
+    return {
+      ...field,
+      value: null,
+      provenance: "MISSING",
+      confidence: "UNKNOWN",
+      note: field.note ?? "Non derivabile dal sito",
+    };
+  }
   if (field.id === "nomeCliente" && field.provenance !== "EXISTING") {
     const raw =
       typeof field.value === "string" ? field.value : null;
@@ -367,7 +381,10 @@ function stripUnsafeInventions(field: AllyBriefField): AllyBriefField {
       };
     }
   }
-  if (UNSAFE_ECONOMICS.includes(field.id) && field.provenance === "INFERRED") {
+  if (
+    UNSAFE_ECONOMICS.includes(field.id) &&
+    (field.provenance === "INFERRED" || field.provenance === "WEBSITE")
+  ) {
     return {
       ...field,
       value: null,
@@ -413,7 +430,13 @@ function mergeExistingClient(
       }
       return;
     }
-    if (cur.provenance === "INFERRED" || cur.provenance === "MISSING" || cur.value == null) {
+    // EXISTING overwrites WEBSITE / INFERRED / MISSING (client inventory wins over site scrape)
+    if (
+      cur.provenance === "INFERRED" ||
+      cur.provenance === "WEBSITE" ||
+      cur.provenance === "MISSING" ||
+      cur.value == null
+    ) {
       byId.set(id, {
         ...cur,
         value,
@@ -529,6 +552,12 @@ function buildMissingList(fields: AllyBriefField[]): string[] {
 export function parseAllyBriefProposal(
   raw: string,
   existing: AllyBriefExistingClientContext | null,
+  options?: {
+    /** User-typed website URL → inject as EXPLICIT sitoWeb (Dal brief). */
+    userWebsiteUrl?: string | null;
+    /** Site-only (empty brief): do not invent campaign objective/audience/budget. */
+    siteOnly?: boolean;
+  },
 ): AllyBriefProposal {
   const parsed = extractJsonObject(raw) as Record<string, unknown>;
   const rawFields =
@@ -554,7 +583,51 @@ export function parseAllyBriefProposal(
     });
   });
 
+  // Brief EXPLICIT must not be silently overwritten by WEBSITE in the same payload:
+  // already enforced by AI rules; server also drops WEBSITE on forbidden ids above.
+
   fields = mergeExistingClient(fields, existing);
+
+  const userUrl = options?.userWebsiteUrl?.trim();
+  if (userUrl) {
+    fields = fields.map((f) => {
+      if (f.id !== "sitoWeb") return f;
+      // User-supplied URL is brief/input EXPLICIT — never label "Dal sito".
+      if (f.provenance === "EXPLICIT" && f.value != null) return f;
+      if (f.provenance === "EXISTING" && f.value != null) return f;
+      return {
+        ...f,
+        value: userUrl.slice(0, 280),
+        provenance: "EXPLICIT",
+        confidence: "HIGH",
+        note: f.note,
+      };
+    });
+  }
+
+  if (options?.siteOnly) {
+    const siteOnlyBlock: AllyBriefFieldId[] = [
+      "objective",
+      "budgetGiornaliero",
+      "raggioKm",
+      "etaMin",
+      "etaMax",
+      "targetAge",
+      ...UNSAFE_ECONOMICS,
+    ];
+    fields = fields.map((f) => {
+      if (!siteOnlyBlock.includes(f.id)) return f;
+      if (f.provenance === "EXPLICIT" || f.provenance === "EXISTING") return f;
+      return {
+        ...f,
+        value: null,
+        provenance: "MISSING",
+        confidence: "UNKNOWN",
+        note: f.note ?? "Serve conferma nel brief (solo sito)",
+      };
+    });
+  }
+
   const cpa = tryDeterministicSustainableCpa(fields);
   fields = fields.map((f) => (f.id === "maxSustainableCpa" ? cpa : f));
 
@@ -621,7 +694,12 @@ export function buildAllyBriefFallbackProposal(
 export function assertNoInventedEconomics(fields: AllyBriefField[]): boolean {
   return fields.every((f) => {
     if (!UNSAFE_ECONOMICS.includes(f.id)) return true;
-    if (f.provenance === "INFERRED" && f.value != null) return false;
+    if (
+      (f.provenance === "INFERRED" || f.provenance === "WEBSITE") &&
+      f.value != null
+    ) {
+      return false;
+    }
     return true;
   });
 }
@@ -648,7 +726,8 @@ export function isMeaningfulAllyBriefProposal(
       f.value !== "" &&
       (f.provenance === "EXPLICIT" ||
         f.provenance === "INFERRED" ||
-        f.provenance === "EXISTING"),
+        f.provenance === "EXISTING" ||
+        f.provenance === "WEBSITE"),
   );
   return usable.length >= 2;
 }

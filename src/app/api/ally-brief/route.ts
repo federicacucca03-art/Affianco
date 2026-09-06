@@ -1,9 +1,10 @@
 /**
  * POST /api/ally-brief
- * Body: { brief, clienteId? }
- * Max 1 AI call. No campaign DB writes.
+ * Body: { brief?, websiteUrl?, clienteId? }
+ * Max 1 AI call. Optional server-side website fetch (not an AI call).
+ * No campaign DB writes.
  *
- * SUCCESS: { ok: true, proposal, aiCalls, dbWrites: 0 }
+ * SUCCESS: { ok: true, proposal, aiCalls, dbWrites: 0, websiteStatus?, websiteWarning? }
  * FAILURE: { ok: false, code, aiCalls, dbWrites: 0 } — no synthetic empty proposal
  */
 
@@ -19,6 +20,10 @@ import {
   matchAllyBriefClientByName,
 } from "@/lib/ally-brief/load-client";
 import { runAllyBriefAnalysis } from "@/lib/ally-brief/service";
+import {
+  ALLY_BRIEF_WEBSITE_BLOCKED_MESSAGE,
+  validatePublicWebsiteUrl,
+} from "@/lib/ally-brief/website-safety";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,6 +50,7 @@ export async function POST(request: Request) {
 
   let body: {
     brief?: unknown;
+    websiteUrl?: unknown;
     clienteId?: unknown;
     campaignId?: unknown;
   };
@@ -70,12 +76,20 @@ export async function POST(request: Request) {
 
   const brief =
     typeof body.brief === "string" ? body.brief.trim() : "";
-  if (!brief) {
+  const websiteUrl =
+    typeof body.websiteUrl === "string" ? body.websiteUrl.trim() : "";
+
+  if (!brief && !websiteUrl) {
     return NextResponse.json(
-      { ok: false, code: "BAD_REQUEST", error: "Inserisci un brief." },
+      {
+        ok: false,
+        code: "BAD_REQUEST",
+        error: "Inserisci un brief o un sito cliente.",
+      },
       { status: 400 },
     );
   }
+
   if (brief.length > ALLY_BRIEF_MAX_CHARS) {
     return NextResponse.json(
       {
@@ -87,6 +101,22 @@ export async function POST(request: Request) {
     );
   }
 
+  // Site-only with a blocked URL → fail early (nothing to analyze).
+  if (!brief && websiteUrl) {
+    const v = validatePublicWebsiteUrl(websiteUrl);
+    if (!v.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "BAD_REQUEST",
+          error: ALLY_BRIEF_WEBSITE_BLOCKED_MESSAGE,
+          websiteStatus: "blocked",
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   const clienteIdRaw =
     typeof body.clienteId === "string" ? body.clienteId.trim() : "";
   const clienteId =
@@ -94,7 +124,7 @@ export async function POST(request: Request) {
 
   try {
     let existing = await loadAllyBriefExistingClient(token, clienteId);
-    if (!existing) {
+    if (!existing && brief) {
       // Explicit name cue only ("per/cliente/azienda X") → exact owned-client match.
       // Never fuzzy-match sector/city/"Studio dentistico" onto an existing profile.
       const nameGuess = brief.match(
@@ -108,6 +138,7 @@ export async function POST(request: Request) {
     const result = await runAllyBriefAnalysis({
       brief,
       existingClient: existing,
+      websiteUrl: websiteUrl || null,
     });
 
     if (!result.ok) {
@@ -117,6 +148,8 @@ export async function POST(request: Request) {
           code: result.code,
           aiCalls: result.aiCalls,
           dbWrites: 0,
+          websiteStatus: result.websiteStatus ?? null,
+          websiteWarning: result.websiteWarning ?? null,
         },
         { status: 200 },
       );
@@ -127,6 +160,8 @@ export async function POST(request: Request) {
       proposal: result.proposal,
       aiCalls: result.aiCalls,
       dbWrites: 0,
+      websiteStatus: result.websiteStatus,
+      websiteWarning: result.websiteWarning,
     });
   } catch {
     return NextResponse.json(
