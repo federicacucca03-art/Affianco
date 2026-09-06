@@ -5,15 +5,21 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { ALLY_BRIEF_SYSTEM_PROMPT } from "../src/lib/ally-brief/prompt";
+import { buildAllyBriefAnthropicParams } from "../src/lib/ally-brief/anthropic-request";
 import {
   parseAllyBriefProposal,
   buildAllyBriefFallbackProposal,
   assertNoInventedEconomics,
   assertNoInventedMetaIds,
+  isMeaningfulAllyBriefProposal,
+  repairTruncatedJson,
 } from "../src/lib/ally-brief/parse";
 import {
   ALLY_BRIEF_MAX_CHARS,
+  ALLY_BRIEF_MAX_TOKENS,
   ALLY_BRIEF_FIELD_LABELS,
+  ALLY_BRIEF_FAILURE_MESSAGE,
   provenanceLabelIt,
 } from "../src/lib/ally-brief/types";
 import { proposalToAcceptedPayload } from "../src/lib/ally-brief/session";
@@ -21,8 +27,6 @@ import {
   hrefWizardFromAcceptedBrief,
   hydrationFromAcceptedBrief,
 } from "../src/lib/ally-brief/apply";
-import { ALLY_BRIEF_SYSTEM_PROMPT } from "../src/lib/ally-brief/prompt";
-import { buildAllyBriefAnthropicParams } from "../src/lib/ally-brief/service";
 
 let passed = 0;
 let failed = 0;
@@ -385,6 +389,162 @@ test("Hydration session kept for remount (no premature clear)", () => {
     /Keep session proposal|Strict Mode/i.test(percorso),
     "documents remount safety",
   );
+});
+
+test("M9.3A.1 max_tokens raised above production truncation", () => {
+  assert(ALLY_BRIEF_MAX_TOKENS >= 4096, String(ALLY_BRIEF_MAX_TOKENS));
+  const params = buildAllyBriefAnthropicParams({
+    brief: "x",
+    existingClient: null,
+  });
+  assert(params.max_tokens === ALLY_BRIEF_MAX_TOKENS, "params");
+});
+
+test("M9.3A.1 exact production brief fields + provenance", () => {
+  const raw = JSON.stringify({
+    summary: "Studio dentistico a Roma per implantologia.",
+    fields: {
+      settore: field("settore", "Dentista", "EXPLICIT"),
+      citta: field("citta", "Roma", "EXPLICIT"),
+      frontEndOffer: field("frontEndOffer", "Prima visita gratuita", "EXPLICIT"),
+      budgetGiornaliero: field("budgetGiornaliero", 25, "EXPLICIT"),
+      etaMin: field("etaMin", 35, "EXPLICIT"),
+      etaMax: field("etaMax", 65, "EXPLICIT"),
+      raggioKm: field("raggioKm", 15, "EXPLICIT"),
+      objective: field("objective", "LEADS", "INFERRED", "MEDIUM"),
+    },
+    missing_information: ["Soglia sostenibile"],
+    assumptions: ["LEADS da acquisizione pazienti"],
+  });
+  const p = parseAllyBriefProposal(raw, null);
+  assert(isMeaningfulAllyBriefProposal(p), "meaningful");
+  const by = Object.fromEntries(p.fields.map((f) => [f.id, f]));
+  assert(by.citta?.value === "Roma" && by.citta.provenance === "EXPLICIT", "roma");
+  assert(by.budgetGiornaliero?.value === 25 && by.budgetGiornaliero.provenance === "EXPLICIT", "budget");
+  assert(by.frontEndOffer?.provenance === "EXPLICIT", "offer");
+  assert(by.etaMin?.value === 35 && by.etaMax?.value === 65, "age");
+  assert(by.raggioKm?.value === 15, "radius");
+  assert(by.objective?.value === "LEADS" && by.objective.provenance === "INFERRED", "leads");
+  assert(by.maxSustainableCpa?.provenance === "MISSING", "cpa missing");
+  assert(assertNoInventedEconomics(p.fields), "econ");
+  assert(assertNoInventedMetaIds(p.fields), "meta");
+});
+
+test("M9.3A.1 partial enum failure preserves explicit facts", () => {
+  const raw = JSON.stringify({
+    summary: "ok",
+    fields: {
+      settore: field("settore", "UnknownNicheXYZ", "EXPLICIT"),
+      citta: field("citta", "Roma", "EXPLICIT"),
+      budgetGiornaliero: field("budgetGiornaliero", 25, "EXPLICIT"),
+      raggioKm: field("raggioKm", 15, "EXPLICIT"),
+      objective: field("objective", "NOT_A_REAL_OBJ", "INFERRED", "MEDIUM"),
+    },
+    missing_information: [],
+    assumptions: [],
+  });
+  const p = parseAllyBriefProposal(raw, null);
+  assert(isMeaningfulAllyBriefProposal(p), "still meaningful");
+  assert(p.fields.find((f) => f.id === "citta")?.value === "Roma", "city kept");
+  assert(p.fields.find((f) => f.id === "budgetGiornaliero")?.value === 25, "budget kept");
+  assert(p.fields.find((f) => f.id === "objective")?.value == null, "bad objective dropped");
+});
+
+test("M9.3A.1 truncated JSON repair keeps prior fields, drops incomplete", () => {
+  const truncated = `{
+  "summary": "Studio dentistico",
+  "fields": {
+    "citta": {"value":"Roma","provenance":"EXPLICIT","confidence":"HIGH"},
+    "budgetGiornaliero": {"value":25,"provenance":"EXPLICIT","confidence":"HIGH"},
+    "frontEndOffer": {"value":"Prima visita gratuita","provenance":"EXPLICIT","confidence":"HIGH"},
+    "etaMin": {"value":35,"provenance":"EXPLICIT","confidence":"HIGH"},
+    "etaMax": {"value":65,"provenance":"EXPLICIT","confidence":"HIGH"},
+    "raggioKm": {"value":15,"provenance":"EXPLICIT","confidence":"HIGH"},
+    "objective": {"value":"LEADS","provenance":"INFERRED","confidence":"MEDIUM"},
+    "marketingAngle": {"value": "Impianti a Roma con`;
+  const p = parseAllyBriefProposal(truncated, null);
+  assert(isMeaningfulAllyBriefProposal(p), "repaired meaningful");
+  assert(p.fields.find((f) => f.id === "citta")?.value === "Roma", "roma");
+  assert(p.fields.find((f) => f.id === "budgetGiornaliero")?.value === 25, "25");
+  assert(p.fields.find((f) => f.id === "objective")?.value === "LEADS", "leads");
+  // Incomplete trailing string must NOT become a fabricated complete value.
+  const angle = p.fields.find((f) => f.id === "marketingAngle");
+  assert(angle?.value == null && angle?.provenance === "MISSING", "no invented angle");
+});
+
+test("M9.3A.1 truncated repair never auto-closes partial strings as facts", () => {
+  const midString = `{"summary":"ok","fields":{"citta":{"value":"Rom`;
+  // May drop back to {"summary":"ok"} — never invent "Rom" as a city value.
+  const repaired = repairTruncatedJson(midString);
+  if (repaired) {
+    assert(!/"Rom"/.test(repaired), "no closed partial string fact");
+    const p = parseAllyBriefProposal(repaired, null);
+    assert(p.fields.find((f) => f.id === "citta")?.value == null, "citta not invented");
+    assert(!isMeaningfulAllyBriefProposal(p), "summary-only not meaningful");
+  } else {
+    let threw = false;
+    try {
+      parseAllyBriefProposal(midString, null);
+    } catch {
+      threw = true;
+    }
+    assert(threw, "unrecoverable → parse failure");
+  }
+});
+
+test("M9.3A.1 unrecoverable malformed JSON fails (no fabricated proposal)", () => {
+  let threw = false;
+  try {
+    parseAllyBriefProposal("not json at all {{{", null);
+  } catch {
+    threw = true;
+  }
+  assert(threw, "must throw");
+  assert(repairTruncatedJson("{garbage") === null, "garbage null");
+  assert(repairTruncatedJson("") === null, "empty null");
+  assert(repairTruncatedJson('{"a":') === null, "dangling colon null");
+});
+
+test("M9.3A.1 all-MISSING proposal is not meaningful", () => {
+  const p = buildAllyBriefFallbackProposal("brief text", null);
+  assert(!isMeaningfulAllyBriefProposal(p), "not meaningful");
+});
+
+test("M9.3A.1 full failure UX: one error, Riprova, no accept without proposal", () => {
+  const ui = read("src/components/campagne/PartiamoDalBrief.tsx");
+  assert(ui.includes("ALLY_BRIEF_FAILURE_MESSAGE"), "canonical msg");
+  assert(ui.includes("Riprova"), "retry");
+  assert(ui.includes("isMeaningfulAllyBriefProposal"), "gate");
+  assert(ui.includes("canAccept"), "accept gate");
+  const occurrences = (
+    ui.match(/Non riesco a preparare la configurazione/g) || []
+  ).length;
+  assert(occurrences === 0, "no duplicated inline failure strings");
+  assert(ALLY_BRIEF_FAILURE_MESSAGE.includes("riprovare"), "msg");
+});
+
+test("M9.3A.1 API failure returns ok:false without synthetic proposal", () => {
+  const route = read("src/app/api/ally-brief/route.ts");
+  assert(route.includes("ok: false"), "failure shape");
+  assert(route.includes("ok: true"), "success shape");
+  assert(!route.includes("buildAllyBriefFallbackProposal"), "no fake proposal");
+  assert(route.includes("no synthetic empty proposal"), "comment");
+});
+
+test("M9.3A.1 numeric normalization from euro/km strings", () => {
+  const raw = JSON.stringify({
+    summary: "ok",
+    fields: {
+      budgetGiornaliero: field("budgetGiornaliero", "25€", "EXPLICIT"),
+      raggioKm: field("raggioKm", "15 km", "EXPLICIT"),
+      citta: field("citta", "Roma", "EXPLICIT"),
+    },
+    missing_information: [],
+    assumptions: [],
+  });
+  const p = parseAllyBriefProposal(raw, null);
+  assert(p.fields.find((f) => f.id === "budgetGiornaliero")?.value === 25, "€");
+  assert(p.fields.find((f) => f.id === "raggioKm")?.value === 15, "km");
 });
 
 console.log(`\nM9.3A result: ${passed} passed, ${failed} failed\n`);

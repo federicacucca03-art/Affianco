@@ -34,16 +34,113 @@ const UNSAFE_ECONOMICS: AllyBriefFieldId[] = [
 const META_IDS: AllyBriefFieldId[] = ["pageId", "formId"];
 
 function extractJsonObject(raw: string): unknown {
-  const trimmed = raw.trim();
+  const trimmed = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "");
   try {
     return JSON.parse(trimmed);
   } catch {
     const start = trimmed.indexOf("{");
-    const end = trimmed.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      return JSON.parse(trimmed.slice(start, end + 1));
+    if (start < 0) throw new Error("JSON non valido");
+    const candidate = trimmed.slice(start);
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // Truncation only: drop incomplete trailing property, close braces.
+      // Never invent field values / never keep partial string facts.
+      const repaired = repairTruncatedJson(candidate);
+      if (!repaired) throw new Error("JSON non valido");
+      const parsed = JSON.parse(repaired) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("JSON non valido");
+      }
+      return parsed;
     }
-    throw new Error("JSON non valido");
+  }
+}
+
+/**
+ * Structural truncation repair only.
+ * - Drops incomplete trailing keys/values (never completes partial strings as facts)
+ * - Closes unmatched { [ only
+ * Returns null if nothing safe remains.
+ */
+export function repairTruncatedJson(raw: string): string | null {
+  let s = raw.trim();
+  if (!s.startsWith("{")) return null;
+
+  let braces = 0;
+  let brackets = 0;
+  let inString = false;
+  let escape = false;
+  /** Index of last comma between top-level field properties (safe cut). */
+  let lastSafeCut = -1;
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]!;
+    if (inString) {
+      if (escape) escape = false;
+      else if (ch === "\\") escape = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "{") braces += 1;
+    else if (ch === "}") braces -= 1;
+    else if (ch === "[") brackets += 1;
+    else if (ch === "]") brackets -= 1;
+    else if (ch === ",") {
+      // Last complete property separator at any nesting depth.
+      lastSafeCut = i;
+    }
+  }
+
+  if (inString || /,\s*"[^"]*"\s*:\s*$/.test(s) || /:\s*$/.test(s)) {
+    if (lastSafeCut <= 0) return null;
+    s = s.slice(0, lastSafeCut).replace(/,\s*$/, "");
+  } else {
+    s = s.replace(/,\s*"[^"]*"\s*:\s*$/, "");
+    s = s.replace(/,\s*$/, "");
+  }
+
+  braces = 0;
+  brackets = 0;
+  inString = false;
+  escape = false;
+  for (const ch of s) {
+    if (inString) {
+      if (escape) escape = false;
+      else if (ch === "\\") escape = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") braces += 1;
+    else if (ch === "}") braces -= 1;
+    else if (ch === "[") brackets += 1;
+    else if (ch === "]") brackets -= 1;
+  }
+  // Must not still be inside a string — closing it would invent a value.
+  if (inString) return null;
+  if (braces < 1) return null;
+
+  while (brackets > 0) {
+    s += "]";
+    brackets -= 1;
+  }
+  while (braces > 0) {
+    s += "}";
+    braces -= 1;
+  }
+  try {
+    JSON.parse(s);
+    return s;
+  } catch {
+    return null;
   }
 }
 
@@ -424,4 +521,24 @@ export function assertNoInventedMetaIds(fields: AllyBriefField[]): boolean {
     if (!META_IDS.includes(f.id)) return true;
     return f.value == null && f.provenance === "MISSING";
   });
+}
+
+/**
+ * Valid proposal for review/accept:
+ * AI-sourced + at least 2 normalized fields with value
+ * (EXPLICIT / INFERRED / EXISTING). All-MISSING is NOT valid.
+ */
+export function isMeaningfulAllyBriefProposal(
+  proposal: AllyBriefProposal,
+): boolean {
+  if (!proposal.fromAi) return false;
+  const usable = proposal.fields.filter(
+    (f) =>
+      f.value != null &&
+      f.value !== "" &&
+      (f.provenance === "EXPLICIT" ||
+        f.provenance === "INFERRED" ||
+        f.provenance === "EXISTING"),
+  );
+  return usable.length >= 2;
 }

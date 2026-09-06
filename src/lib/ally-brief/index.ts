@@ -15,6 +15,7 @@ export type {
 export {
   ALLY_BRIEF_MAX_CHARS,
   ALLY_BRIEF_SESSION_KEY,
+  ALLY_BRIEF_FAILURE_MESSAGE,
   provenanceLabelIt,
   objectiveLabelIt,
   ALLY_BRIEF_FIELD_LABELS,
@@ -26,6 +27,7 @@ export {
   buildAllyBriefFallbackProposal,
   assertNoInventedEconomics,
   assertNoInventedMetaIds,
+  isMeaningfulAllyBriefProposal,
 } from "@/lib/ally-brief/parse";
 
 export {

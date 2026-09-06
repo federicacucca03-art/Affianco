@@ -10,6 +10,7 @@ import { AllyPanel } from "@/components/shell/AllyPanel";
 import { readBearerToken } from "@/lib/meta-import-client";
 import {
   ALLY_BRIEF_MAX_CHARS,
+  ALLY_BRIEF_FAILURE_MESSAGE,
   ALLY_BRIEF_FIELD_LABELS,
   provenanceLabelIt,
   objectiveLabelIt,
@@ -27,6 +28,7 @@ import {
   hrefWizardFromAcceptedBrief,
   seedBozzaFromAcceptedBrief,
 } from "@/lib/ally-brief/apply";
+import { isMeaningfulAllyBriefProposal } from "@/lib/ally-brief/parse";
 import type { CampagnaObjective } from "@/types/campagne";
 import { OBJECTIVES_CANONICI } from "@/lib/ally-brief/types";
 
@@ -104,6 +106,8 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
     }
     setLoading(true);
     setError(null);
+    setProposal(null);
+    setEdits({});
     try {
       const token = await readBearerToken();
       if (!token) {
@@ -123,27 +127,32 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
         }),
       });
       const data = (await res.json()) as {
+        ok?: boolean;
         proposal?: AllyBriefProposal;
+        code?: string;
         error?: string;
       };
-      if (!res.ok || !data.proposal) {
-        setError(
-          "Non riesco a preparare la configurazione in questo momento. Puoi riprovare o continuare manualmente.",
-        );
-        setLoading(false);
+
+      if (
+        res.ok &&
+        data.ok === true &&
+        data.proposal &&
+        isMeaningfulAllyBriefProposal(data.proposal)
+      ) {
+        setProposal(data.proposal);
+        setEdits(editableValuesFromProposal(data.proposal));
+        setError(null);
         return;
       }
-      setProposal(data.proposal);
-      setEdits(editableValuesFromProposal(data.proposal));
-      if (!data.proposal.fromAi) {
-        setError(
-          "Non riesco a preparare la configurazione in questo momento. Puoi riprovare o continuare manualmente.",
-        );
-      }
+
+      // Complete failure: keep brief, no fake all-MISSING review.
+      setProposal(null);
+      setEdits({});
+      setError(ALLY_BRIEF_FAILURE_MESSAGE);
     } catch {
-      setError(
-        "Non riesco a preparare la configurazione in questo momento. Puoi riprovare o continuare manualmente.",
-      );
+      setProposal(null);
+      setEdits({});
+      setError(ALLY_BRIEF_FAILURE_MESSAGE);
     } finally {
       setLoading(false);
     }
@@ -154,7 +163,7 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
   }
 
   function usaConfigurazione() {
-    if (!proposal) return;
+    if (!proposal || !isMeaningfulAllyBriefProposal(proposal)) return;
     const payload = proposalToAcceptedPayload(brief, proposal, edits);
     if (!payload) {
       setError("Seleziona un obiettivo campagna prima di continuare.");
@@ -165,7 +174,21 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
     router.push(hrefWizardFromAcceptedBrief(payload));
   }
 
-  if (proposal) {
+  function vaiManuale() {
+    if (compactManual) {
+      setShowManualHint(true);
+      document
+        .getElementById("obiettivi-manuali")
+        ?.scrollIntoView({ behavior: "smooth" });
+    } else {
+      router.push("/campagne#obiettivi-manuali");
+    }
+  }
+
+  const canAccept =
+    proposal != null && isMeaningfulAllyBriefProposal(proposal);
+
+  if (proposal && canAccept) {
     const missingCount = proposal.fields.filter(
       (f) =>
         (edits[f.id] == null || edits[f.id] === "") &&
@@ -312,12 +335,6 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
           </div>
         ) : null}
 
-        {error ? (
-          <p className="text-sm text-[var(--ink-muted)]" role="status">
-            {error}
-          </p>
-        ) : null}
-
         <div className="flex flex-col gap-2 sm:flex-row-reverse">
           <button
             type="button"
@@ -373,38 +390,47 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
       </label>
 
       {error ? (
-        <p className="text-sm text-[var(--ink-muted)]" role="status">
-          {error}
-        </p>
-      ) : null}
-
-      <div className="flex flex-col gap-2 sm:flex-row-reverse sm:items-center">
-        <button
-          type="button"
-          className="aff-btn-primary flex-1 disabled:opacity-60"
-          disabled={loading || !brief.trim()}
-          onClick={() => void preparaConAlly()}
-        >
-          {loading ? "Sto preparando…" : "Prepara con Ally"}
-        </button>
-        <button
-          type="button"
-          className="aff-btn-secondary"
-          disabled={loading}
-          onClick={() => {
-            if (compactManual) {
-              setShowManualHint(true);
-              document
-                .getElementById("obiettivi-manuali")
-                ?.scrollIntoView({ behavior: "smooth" });
-            } else {
-              router.push("/campagne#obiettivi-manuali");
-            }
-          }}
-        >
-          Compila manualmente
-        </button>
-      </div>
+        <div className="space-y-3" role="alert">
+          <p className="text-sm text-[var(--ink-muted)]">{error}</p>
+          <div className="flex flex-col gap-2 sm:flex-row-reverse">
+            <button
+              type="button"
+              className="aff-btn-primary flex-1 disabled:opacity-60"
+              disabled={loading || !brief.trim()}
+              onClick={() => void preparaConAlly()}
+            >
+              {loading ? "Sto preparando…" : "Riprova"}
+            </button>
+            <button
+              type="button"
+              className="aff-btn-secondary"
+              disabled={loading}
+              onClick={vaiManuale}
+            >
+              Compila manualmente
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2 sm:flex-row-reverse sm:items-center">
+          <button
+            type="button"
+            className="aff-btn-primary flex-1 disabled:opacity-60"
+            disabled={loading || !brief.trim()}
+            onClick={() => void preparaConAlly()}
+          >
+            {loading ? "Sto preparando…" : "Prepara con Ally"}
+          </button>
+          <button
+            type="button"
+            className="aff-btn-secondary"
+            disabled={loading}
+            onClick={vaiManuale}
+          >
+            Compila manualmente
+          </button>
+        </div>
+      )}
       {showManualHint ? (
         <p className="text-xs text-[var(--ink-muted)]">
           Scegli un obiettivo qui sotto per aprire il wizard classico.

@@ -10,9 +10,22 @@ import type {
 } from "@/types/campagne";
 
 export const ALLY_BRIEF_MAX_CHARS = 6_000;
-export const ALLY_BRIEF_MAX_TOKENS = 1_200;
+/** Room for full structured field map; 1200 truncated mid-JSON in production. */
+export const ALLY_BRIEF_MAX_TOKENS = 4_096;
 export const ALLY_BRIEF_TIMEOUT_MS = 25_000;
 export const ALLY_BRIEF_SESSION_KEY = "affianco-ally-brief-proposal-v1";
+
+/** Friendly Italian copy for complete brief failures (single source). */
+export const ALLY_BRIEF_FAILURE_MESSAGE =
+  "Non riesco a preparare la configurazione in questo momento. Puoi riprovare o continuare manualmente.";
+
+export type AllyBriefFailureCode =
+  | "CONFIG"
+  | "ANTHROPIC"
+  | "PARSE"
+  | "EMPTY"
+  | "TIMEOUT"
+  | "NOT_MEANINGFUL";
 
 export type AllyBriefProvenance =
   | "EXISTING"
@@ -78,6 +91,18 @@ export type AllyBriefProposal = {
   matchedClienteId: string | null;
   fromAi: boolean;
 };
+
+export type AllyBriefRunResult =
+  | {
+      ok: true;
+      proposal: AllyBriefProposal;
+      aiCalls: 1;
+    }
+  | {
+      ok: false;
+      code: AllyBriefFailureCode;
+      aiCalls: 0 | 1;
+    };
 
 /** Session payload after user accepts review (temporary setup state). */
 export type AllyBriefAcceptedPayload = {
