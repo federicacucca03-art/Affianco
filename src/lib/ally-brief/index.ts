@@ -42,4 +42,5 @@ export {
   hrefWizardFromAcceptedBrief,
   seedBozzaFromAcceptedBrief,
   hydrationFromAcceptedBrief,
+  targetAgeBandFromEtaRange,
 } from "@/lib/ally-brief/apply";

@@ -26,6 +26,7 @@ import { proposalToAcceptedPayload } from "../src/lib/ally-brief/session";
 import {
   hrefWizardFromAcceptedBrief,
   hydrationFromAcceptedBrief,
+  targetAgeBandFromEtaRange,
 } from "../src/lib/ally-brief/apply";
 import { validateElevatorPitch } from "../src/lib/validate-elevator-pitch";
 import { pickUniqueExactClientId } from "../src/lib/ally-brief/load-client";
@@ -668,6 +669,55 @@ test("M9.3A.2 generic brief detector: implantologia specific, dentistico alone g
     !validateElevatorPitch("Negozio di scarpe a Milano").isValid,
     "scarpe alone still generic",
   );
+});
+
+test("M9.3A.3 age hydration: 35–65 → canonical 35-65+ (not default 25-50)", () => {
+  assert(targetAgeBandFromEtaRange(35, 65) === "35-65+", "A 35-65");
+  assert(targetAgeBandFromEtaRange(25, 50) === "25-50", "B 25-50");
+  assert(targetAgeBandFromEtaRange(18, 35) === "18-35", "C 18-35");
+  assert(targetAgeBandFromEtaRange(null, null) === null, "D no age");
+
+  const raw = JSON.stringify({
+    summary: "ok",
+    fields: {
+      objective: field("objective", "LEADS", "INFERRED", "MEDIUM"),
+      etaMin: field("etaMin", 35, "EXPLICIT"),
+      etaMax: field("etaMax", 65, "EXPLICIT"),
+      citta: field("citta", "Roma", "EXPLICIT"),
+      budgetGiornaliero: field("budgetGiornaliero", 25, "EXPLICIT"),
+      targetType: field("targetType", "B2C", "INFERRED", "MEDIUM"),
+    },
+    missing_information: [],
+    assumptions: [],
+  });
+  const proposal = parseAllyBriefProposal(raw, null);
+  assert(proposal.fields.find((f) => f.id === "etaMin")?.value === 35, "review min");
+  assert(proposal.fields.find((f) => f.id === "etaMax")?.value === 65, "review max");
+  assert(
+    proposal.fields.find((f) => f.id === "targetAge")?.value == null,
+    "targetAge often omitted by model",
+  );
+  const accepted = proposalToAcceptedPayload(
+    "Vorrei raggiungere adulti tra 35 e 65 anni",
+    proposal,
+  );
+  assert(accepted != null, "accepted");
+  // Session values keep raw min/max; band is derived at hydration.
+  assert(accepted!.values.etaMin === 35, "session min");
+  assert(accepted!.values.etaMax === 65, "session max");
+  const h = hydrationFromAcceptedBrief(accepted!);
+  assert(h.etaMin === 35 && h.etaMax === 65, "hydrated eta");
+  assert(h.targetAge === "35-65+", "hydrated band overrides default 25-50");
+});
+
+test("M9.3A.3 explicit brief age wins over stale/default band semantics", () => {
+  const percorso = read("src/components/nuova-contatti/PercorsoContatti.tsx");
+  assert(percorso.includes('setTargetAge("25-50")'), "default still exists for manual");
+  assert(
+    percorso.includes("Explicit brief age (or band derived from etaMin/etaMax) overrides default 25-50"),
+    "brief override comment",
+  );
+  assert(percorso.includes("if (h.targetAge) setTargetAge(h.targetAge)"), "applies hydrated band");
 });
 
 console.log(`\nM9.3A result: ${passed} passed, ${failed} failed\n`);

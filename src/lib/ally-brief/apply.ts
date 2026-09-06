@@ -4,8 +4,69 @@
 
 import { rottaWizardDaObjective } from "@/data/percorsi-nuova-campagna";
 import { salvaBozzaOnboarding } from "@/data/clienti-store";
-import type { CampagnaObjective, TargetAgeBand, TargetType } from "@/types/campagne";
+import {
+  normalizzaTargetAgeBand,
+  type CampagnaObjective,
+  type TargetAgeBand,
+  type TargetType,
+} from "@/types/campagne";
 import type { AllyBriefAcceptedPayload } from "@/lib/ally-brief/types";
+
+/** Canonical wizard bands used for brief → UI mapping (no new age model). */
+const CANONICAL_AGE_BANDS: Array<{
+  band: TargetAgeBand;
+  min: number;
+  max: number;
+}> = [
+  { band: "18-35", min: 18, max: 35 },
+  { band: "25-50", min: 25, max: 50 },
+  { band: "35-65+", min: 35, max: 65 },
+];
+
+/**
+ * Map explicit age min/max from the brief onto an existing TargetAgeBand.
+ * Exact matches win; otherwise closest canonical endpoints.
+ * Returns null when age is absent (wizard default unchanged).
+ */
+export function targetAgeBandFromEtaRange(
+  etaMin: number | null | undefined,
+  etaMax: number | null | undefined,
+): TargetAgeBand | null {
+  if (
+    typeof etaMin !== "number" ||
+    typeof etaMax !== "number" ||
+    !Number.isFinite(etaMin) ||
+    !Number.isFinite(etaMax) ||
+    etaMin > etaMax
+  ) {
+    return null;
+  }
+  for (const b of CANONICAL_AGE_BANDS) {
+    if (etaMin === b.min && etaMax === b.max) return b.band;
+  }
+  let best: TargetAgeBand | null = null;
+  let bestDist = Infinity;
+  for (const b of CANONICAL_AGE_BANDS) {
+    const d = Math.abs(etaMin - b.min) + Math.abs(etaMax - b.max);
+    if (d < bestDist) {
+      bestDist = d;
+      best = b.band;
+    }
+  }
+  return best;
+}
+
+function resolveHydratedTargetAge(
+  rawTargetAge: unknown,
+  etaMin: number | null,
+  etaMax: number | null,
+): TargetAgeBand | null {
+  if (typeof rawTargetAge === "string") {
+    const normalized = normalizzaTargetAgeBand(rawTargetAge);
+    if (normalized) return normalized;
+  }
+  return targetAgeBandFromEtaRange(etaMin, etaMax);
+}
 
 export function hrefWizardFromAcceptedBrief(
   payload: AllyBriefAcceptedPayload,
@@ -38,6 +99,7 @@ export function seedBozzaFromAcceptedBrief(
     typeof payload.values.nomeCliente === "string"
       ? payload.values.nomeCliente.trim()
       : "";
+  const hydrated = hydrationFromAcceptedBrief(payload);
   // Always rewrite bozza so a previous Aurora (or other) clientId cannot linger.
   // Without an explicit client name / matched id, leave client fields empty.
   salvaBozzaOnboarding({
@@ -62,10 +124,8 @@ export function seedBozzaFromAcceptedBrief(
       payload.values.targetType === "B2B" || payload.values.targetType === "B2C"
         ? (payload.values.targetType as TargetType)
         : undefined,
-    targetAge:
-      typeof payload.values.targetAge === "string"
-        ? (payload.values.targetAge as TargetAgeBand)
-        : undefined,
+    // Prefer band derived from explicit etaMin/etaMax when targetAge omitted.
+    targetAge: hydrated.targetAge ?? undefined,
   });
 }
 
@@ -99,6 +159,9 @@ export function hydrationFromAcceptedBrief(
   const str = (x: unknown): string | null =>
     typeof x === "string" && x.trim() ? x.trim() : null;
 
+  const etaMin = num(v.etaMin);
+  const etaMax = num(v.etaMax);
+
   return {
     nomeCliente: str(v.nomeCliente),
     settore: str(v.settore),
@@ -108,14 +171,11 @@ export function hydrationFromAcceptedBrief(
     frontEndOffer: str(v.frontEndOffer),
     budgetGiornaliero: num(v.budgetGiornaliero),
     raggioKm: num(v.raggioKm),
-    etaMin: num(v.etaMin),
-    etaMax: num(v.etaMax),
+    etaMin,
+    etaMax,
     targetType:
       v.targetType === "B2B" || v.targetType === "B2C" ? v.targetType : null,
-    targetAge:
-      typeof v.targetAge === "string"
-        ? (v.targetAge as TargetAgeBand)
-        : null,
+    targetAge: resolveHydratedTargetAge(v.targetAge, etaMin, etaMax),
     scontrinoMedio: num(v.scontrinoMedio),
     tassoConversione: num(v.tassoConversione),
     productMargin: num(v.productMargin),

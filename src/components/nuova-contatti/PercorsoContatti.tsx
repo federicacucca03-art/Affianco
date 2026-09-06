@@ -799,7 +799,12 @@ export function PercorsoContatti({
         etaMin: h.etaMin != null ? h.etaMin : prev.etaMin,
         etaMax: h.etaMax != null ? h.etaMax : prev.etaMax,
       }));
-    } else if (h.budgetGiornaliero != null || h.raggioKm != null) {
+    } else if (
+      h.budgetGiornaliero != null ||
+      h.raggioKm != null ||
+      h.etaMin != null ||
+      h.etaMax != null
+    ) {
       setConfig((prev) => ({
         ...prev,
         budgetGiornaliero:
@@ -826,6 +831,7 @@ export function PercorsoContatti({
     }
     if (h.frontEndOffer) setFrontEndOffer(h.frontEndOffer);
     if (h.targetType) setTargetType(h.targetType);
+    // Explicit brief age (or band derived from etaMin/etaMax) overrides default 25-50.
     if (h.targetAge) setTargetAge(h.targetAge);
     if (h.scontrinoMedio != null) setScontrinoMedio(h.scontrinoMedio);
     if (h.tassoConversione != null) setTassoConversione(h.tassoConversione);
