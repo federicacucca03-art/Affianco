@@ -309,14 +309,15 @@ function Passo1Sezione({
   titolo: string;
   children: React.ReactNode;
 }) {
+  const match = titolo.match(/^([A-Z0-9])\s*·\s*(.+)$/i);
+  const eyebrow = match ? match[2] : titolo;
   return (
-    <div className="aff-panel-lilac space-y-[22px] p-5 sm:p-6">
-      <div>
-        <p className="text-[13px] font-medium text-[var(--primary)]">{titolo}</p>
-        <div className="mt-3 h-px bg-[rgba(80,70,130,0.1)]" />
-      </div>
-      <div className="space-y-[22px]">{children}</div>
-    </div>
+    <section className="space-y-5 border-t border-[var(--border-soft)] pt-7 first:border-t-0 first:pt-0">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--primary)]">
+        {eyebrow}
+      </p>
+      <div className="space-y-5">{children}</div>
+    </section>
   );
 }
 
@@ -329,7 +330,7 @@ function Campo({
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-[13px] font-medium text-[var(--ink)]">
+      <span className="mb-1.5 block text-[13px] font-medium text-[var(--ink)]">
         {etichetta}
       </span>
       {children}
@@ -366,12 +367,8 @@ function segClass(attivo: boolean, extra = "") {
   } ${extra}`;
 }
 
-const GANCI_PILL = [
-  "aff-badge aff-badge--danger aff-badge--pill",
-  "aff-badge aff-badge--success aff-badge--pill",
-  "aff-badge aff-badge--warning aff-badge--pill",
-  "aff-badge aff-badge--violet aff-badge--pill",
-];
+const GANCI_PILL =
+  "rounded-full border border-[var(--border)] bg-white px-3.5 py-1.5 text-[13px] font-medium text-[var(--ink)] transition-colors hover:border-[var(--primary)]/35 hover:bg-[var(--ally-violet-soft)]";
 
 export function FormConfigurazione({
   config,
@@ -1072,21 +1069,21 @@ export function FormConfigurazione({
                 ? "passo-1-prenotazioni"
                 : "passo-1-default"
         }
-        className="aff-panel-white p-5 shadow-[var(--shadow-soft)] sm:p-6"
+        className="aff-panel-white p-5 shadow-[var(--shadow-soft)] sm:p-7"
       >
-        <header className="px-1 sm:px-2">
+        <header className="space-y-2">
           <h2 className="text-[20px] font-medium tracking-tight text-[var(--ink)] sm:text-[22px]">
             {step1.stepTitle}
           </h2>
-          <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[var(--ink-muted)]">
+          <p className="max-w-2xl text-[15px] leading-relaxed text-[var(--ink-muted)]">
             {step1.stepSubtitle}
           </p>
-          <p className="mt-4 inline-flex rounded-full bg-[var(--pink-soft)] px-3 py-1 text-[13px] font-medium aff-text-danger">
+          <p className="mt-3 inline-flex rounded-full bg-[var(--ally-violet-soft)] px-3 py-1 text-[12.5px] font-medium text-[var(--primary)]">
             Obiettivo: {etichettaObiettivo(objectiveEffettivo)}
           </p>
         </header>
 
-        <div className="mt-5 space-y-5">
+        <div className="mt-7 space-y-0">
           {onCaricaClienteEsistente ? (
             <SelettoreClienteEsistente
               onSeleziona={onCaricaClienteEsistente}
@@ -1239,32 +1236,32 @@ export function FormConfigurazione({
             </div>
           ) : null}
           {settore?.trim() ? (
-            <div className="flex gap-3 rounded-[16px] bg-[var(--primary-soft)] px-4 py-3">
+            <div className="flex gap-3.5 rounded-[var(--radius)] border border-[var(--ally-violet-border)] bg-[var(--ally-violet-soft)] px-4 py-4 sm:px-5">
               <Info
                 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--primary)]"
                 strokeWidth={1.75}
               />
-              <div>
-                <p className="text-[13px] font-medium text-[var(--primary)]">
+              <div className="min-w-0 space-y-1.5">
+                <p className="text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--primary)]">
                   Consiglio di nicchia
                 </p>
-                <p className="mt-1 text-[13px] leading-relaxed text-[var(--ink)]">
+                <p className="text-[14px] leading-relaxed text-[var(--ink)]">
                   {consiglioStrategicoNicchia(settore, objectiveEffettivo)}
                 </p>
               </div>
             </div>
           ) : null}
           {settoreIntel?.policyAlert ? (
-            <div className="flex gap-3 aff-callout aff-callout--warning">
+            <div className="flex gap-3.5 aff-callout aff-callout--warning !px-4 !py-4 sm:!px-5">
               <ShieldAlert
                 className="mt-0.5 h-4 w-4 shrink-0 aff-text-warning"
                 strokeWidth={1.75}
               />
-              <div>
-                <p className="text-[13px] font-medium aff-text-warning">
+              <div className="min-w-0 space-y-1.5">
+                <p className="text-[12px] font-semibold uppercase tracking-[0.06em] aff-text-warning">
                   Policy Meta
                 </p>
-                <p className="mt-1 text-[13px] leading-relaxed text-[var(--ink)]">
+                <p className="text-[14px] leading-relaxed text-[var(--ink)]">
                   {settoreIntel.policyAlert}
                 </p>
               </div>
@@ -1275,14 +1272,14 @@ export function FormConfigurazione({
           isPercorsoInstore ||
           isPercorsoRetargeting ||
           isPercorsoAwareness ? (
-            <div className="rounded-[20px] bg-[var(--lavender-muted)] p-5 sm:p-6">
-              <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-                <p className="text-sm font-medium text-[var(--ink)]">
+            <div className="space-y-3 rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--lavender-muted)]/45 p-4 sm:p-5">
+              <div className="mb-1 flex flex-wrap items-start justify-between gap-2">
+                <p className="text-[13px] font-medium text-[var(--ink)]">
                   {step1.briefLabel}
                 </p>
                 <BottoneCompilaAffianco />
               </div>
-              <p className="mb-3 text-sm leading-relaxed text-[var(--ink-muted)]">
+              <p className="text-[13.5px] leading-relaxed text-[var(--ink-muted)]">
                 {step1.briefIntro}
               </p>
               <textarea
@@ -1333,7 +1330,7 @@ export function FormConfigurazione({
 
           {isPercorsoRetargeting ? (
             <div>
-              <p className="mb-2 text-xs font-medium text-[var(--ink-muted)]">
+              <p className="mb-2 text-[13px] font-medium text-[var(--ink)]">
                 Tipo Cliente
               </p>
               <div className="aff-seg-track flex-col sm:flex-row">
@@ -1429,17 +1426,15 @@ export function FormConfigurazione({
                 Ganci consigliati per {settoreIntel.nome}
               </p>
               <div className="flex flex-wrap gap-2">
-                {settoreIntel.ganciConsigliati.slice(0, 3).map((offerta, i) => (
+                {settoreIntel.ganciConsigliati.slice(0, 3).map((offerta) => (
                   <button
                     key={offerta}
                     type="button"
                     onClick={() => onCambiaFrontEndOffer?.(offerta)}
-                    className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-shadow ${
-                      GANCI_PILL[i % GANCI_PILL.length]
-                    } ${
+                    className={`${GANCI_PILL} ${
                       frontEndOffer.trim() === offerta
-                        ? "ring-2 ring-[var(--primary)] ring-offset-2"
-                        : "hover:shadow-[var(--shadow-card)]"
+                        ? "border-[var(--primary)]/40 bg-[var(--ally-violet-soft)] ring-2 ring-[var(--primary)]/20"
+                        : ""
                     }`}
                   >
                     {offerta}
@@ -1859,7 +1854,7 @@ export function FormConfigurazione({
           ) : null}
 
             <div>
-              <p className="mb-2 text-xs font-medium text-[var(--ink-muted)]">
+              <p className="mb-2 text-[13px] font-medium text-[var(--ink)]">
                 Tipo Cliente
               </p>
               <div className="aff-seg-track flex-col sm:flex-row">
@@ -1901,7 +1896,7 @@ export function FormConfigurazione({
                   <p className="mb-2 text-[13px] font-medium text-[var(--ink)]">
                     Fascia d&apos;Età prevalente
                   </p>
-                  <div className="flex flex-wrap gap-1.5 rounded-[22px] bg-[var(--lavender-muted)] p-1.5 sm:flex-nowrap">
+                  <div className="aff-seg-track flex-wrap sm:flex-nowrap">
                     {(
                       [
                         { value: "18-35" as const, label: "18–35" },
@@ -1916,7 +1911,7 @@ export function FormConfigurazione({
                           key={opzione.value}
                           type="button"
                           onClick={() => onCambiaTargetAge?.(opzione.value)}
-                          className={segClass(attivo)}
+                          className={segClass(attivo, "flex-1")}
                         >
                           {opzione.label}
                         </button>
@@ -1930,7 +1925,10 @@ export function FormConfigurazione({
           </Passo1Sezione>
           ) : null}
 
-          <div className="aff-panel-lilac space-y-4 p-5 sm:p-6">
+          <div className="space-y-5 border-t border-[var(--border-soft)] pt-7">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--primary)]">
+              Campagna
+            </p>
             <Campo etichetta="Nome campagna">
               <input
                 type="text"
@@ -1939,7 +1937,7 @@ export function FormConfigurazione({
                 className={inputClass}
               />
             </Campo>
-            <p className="-mt-2 text-xs text-[var(--ink-muted)]">
+            <p className="-mt-2 text-[13px] leading-relaxed text-[var(--ink-muted)]">
               Lo usiamo per organizzare la campagna in Ally — puoi
               lasciarlo com&apos;è se va bene.
             </p>
@@ -1948,14 +1946,14 @@ export function FormConfigurazione({
             !isPercorsoInstore &&
             !isPercorsoRetargeting &&
             !isPercorsoAwareness ? (
-            <div className="rounded-[20px] bg-[var(--lavender-muted)] p-5 sm:p-6">
-              <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-                <p className="text-sm font-medium text-[var(--ink)]">
+            <div className="space-y-3 rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--lavender-muted)]/45 p-4 sm:p-5">
+              <div className="mb-1 flex flex-wrap items-start justify-between gap-2">
+                <p className="text-[13px] font-medium text-[var(--ink)]">
                   {step1.briefLabel}
                 </p>
                 <BottoneCompilaAffianco />
               </div>
-              <p className="mb-3 text-sm leading-relaxed text-[var(--ink-muted)]">
+              <p className="text-[13.5px] leading-relaxed text-[var(--ink-muted)]">
                 {step1.briefIntro}
               </p>
               <textarea
@@ -1972,7 +1970,7 @@ export function FormConfigurazione({
               />
               <InlineGuidance item={guidanceBrief} />
               {erroriPasso1?.elevatorPitch ? (
-                <p className="mt-2 text-xs aff-text-danger">
+                <p className="mt-2 text-[13px] aff-text-danger">
                   Campo obbligatorio: compila il brief prodotto / collezione.
                 </p>
               ) : elevatorPitch.trim() ? (
@@ -1992,7 +1990,7 @@ export function FormConfigurazione({
                   </p>
                 )
               ) : (
-                <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
+                <p className="mt-2 text-[13px] leading-relaxed text-[var(--ink-muted)]">
                   {step1.briefHint}
                 </p>
               )}

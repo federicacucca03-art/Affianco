@@ -2,10 +2,12 @@
 
 /**
  * M9.3A — Partiamo dal brief + review (not a chat).
+ * Visual polish only in M9.3A.5 — field logic unchanged.
  */
 
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { AllyBadge, type AllyBadgeVariant } from "@/components/shell/AllyBadge";
 import { AllyPanel } from "@/components/shell/AllyPanel";
 import { readBearerToken } from "@/lib/meta-import-client";
 import {
@@ -35,35 +37,58 @@ import { OBJECTIVES_CANONICI } from "@/lib/ally-brief/types";
 const PLACEHOLDER =
   "Es. Studio dentistico a Roma. Vuole acquisire nuovi pazienti per implantologia. Prima visita gratuita. Budget 25€ al giorno. Target adulti 35–65 anni entro 15 km.";
 
-const REVIEW_ORDER: AllyBriefFieldId[] = [
-  "objective",
-  "nomeCliente",
-  "settore",
-  "frontEndOffer",
-  "citta",
+const REVIEW_GROUPS: {
+  title: string;
+  ids: AllyBriefFieldId[];
+}[] = [
+  {
+    title: "Strategia",
+    ids: ["objective", "settore", "frontEndOffer"],
+  },
+  {
+    title: "Cliente",
+    ids: ["nomeCliente"],
+  },
+  {
+    title: "Pubblico",
+    ids: ["citta", "raggioKm", "etaMin", "etaMax", "targetType"],
+  },
+  {
+    title: "Budget e monitoraggio",
+    ids: ["budgetGiornaliero", "maxSustainableCpa"],
+  },
+  {
+    title: "Messaggio",
+    ids: ["elevatorPitch", "marketingAngle"],
+  },
+  {
+    title: "Asset tecnici",
+    ids: ["sitoWeb", "pageId", "formId"],
+  },
+];
+
+const NUMERIC_FIELD_IDS: AllyBriefFieldId[] = [
+  "budgetGiornaliero",
   "raggioKm",
   "etaMin",
   "etaMax",
-  "targetType",
-  "budgetGiornaliero",
   "maxSustainableCpa",
-  "sitoWeb",
-  "elevatorPitch",
-  "marketingAngle",
-  "pageId",
-  "formId",
+  "scontrinoMedio",
+  "tassoConversione",
+  "productMargin",
+  "targetMargin",
 ];
 
-function badgeClass(p: AllyBriefProvenance): string {
+function badgeVariant(p: AllyBriefProvenance): AllyBadgeVariant {
   switch (p) {
     case "EXPLICIT":
-      return "bg-[var(--surface-hover)] text-[var(--ink)]";
+      return "success";
     case "INFERRED":
-      return "bg-[var(--ally-violet-soft)] text-[var(--ink)]";
+      return "violet";
     case "EXISTING":
-      return "bg-[var(--lavender-muted)] text-[var(--ink)]";
+      return "neutral";
     default:
-      return "border border-dashed border-[var(--border)] text-[var(--ink-muted)]";
+      return "warning";
   }
 }
 
@@ -71,6 +96,86 @@ type Props = {
   /** When true, hide manual objective grid link (already on page). */
   compactManual?: boolean;
 };
+
+function ReviewField({
+  id,
+  value,
+  provenance,
+  onChange,
+}: {
+  id: AllyBriefFieldId;
+  value: AllyBriefFieldValue | undefined;
+  provenance: AllyBriefProvenance;
+  onChange: (id: AllyBriefFieldId, value: AllyBriefFieldValue) => void;
+}) {
+  const label = ALLY_BRIEF_FIELD_LABELS[id];
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[13px] font-medium text-[var(--ink)]">
+          {label}
+        </span>
+        <AllyBadge variant={badgeVariant(provenance)} pill>
+          {provenanceLabelIt(provenance)}
+        </AllyBadge>
+      </div>
+      {id === "objective" ? (
+        <select
+          className="aff-input"
+          value={typeof value === "string" ? value : ""}
+          onChange={(e) =>
+            onChange(
+              id,
+              e.target.value ? (e.target.value as CampagnaObjective) : null,
+            )
+          }
+        >
+          <option value="">Da completare</option>
+          {OBJECTIVES_CANONICI.map((o) => (
+            <option key={o} value={o}>
+              {objectiveLabelIt(o)}
+            </option>
+          ))}
+        </select>
+      ) : id === "elevatorPitch" || id === "marketingAngle" ? (
+        <textarea
+          className="aff-input min-h-[88px]"
+          value={typeof value === "string" ? value : ""}
+          onChange={(e) =>
+            onChange(id, e.target.value.trim() ? e.target.value : null)
+          }
+          placeholder="Da completare"
+        />
+      ) : (
+        <input
+          className="aff-input"
+          type={NUMERIC_FIELD_IDS.includes(id) ? "number" : "text"}
+          value={
+            value == null
+              ? ""
+              : typeof value === "number"
+                ? String(value)
+                : value
+          }
+          onChange={(e) => {
+            const raw = e.target.value;
+            if (!raw.trim()) {
+              onChange(id, null);
+              return;
+            }
+            if (NUMERIC_FIELD_IDS.includes(id)) {
+              const n = Number(raw);
+              onChange(id, Number.isFinite(n) ? n : null);
+            } else {
+              onChange(id, raw);
+            }
+          }}
+          placeholder="Da completare"
+        />
+      )}
+    </div>
+  );
+}
 
 export function PartiamoDalBrief({ compactManual = false }: Props) {
   const router = useRouter();
@@ -201,133 +306,69 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
     ).length;
 
     return (
-      <AllyPanel className="space-y-5">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-            Ally
-          </p>
-          <h2 className="mt-1 text-lg font-medium text-[var(--ink)]">
-            Ally ha preparato una prima configurazione
-          </h2>
-          <p className="mt-1 text-sm text-[var(--ink-muted)]">
-            {proposal.summary}
-          </p>
-          {missingCount > 0 ? (
-            <p className="mt-2 text-sm text-[var(--ink)]">
-              Mi servono ancora {missingCount} informazioni — puoi
-              completarle qui o nel wizard.
+      <AllyPanel className="mx-auto max-w-[860px] space-y-8 p-5 sm:p-7">
+        <header className="space-y-3">
+          <p className="aff-eyebrow">Ally</p>
+          <div className="space-y-2">
+            <h2 className="text-[20px] font-medium tracking-tight text-[var(--ink)] sm:text-[22px]">
+              Ally ha preparato una prima configurazione
+            </h2>
+            <p className="text-[14.5px] leading-relaxed text-[var(--ink-muted)]">
+              {proposal.summary}
             </p>
+          </div>
+          {missingCount > 0 ? (
+            <div className="rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--lavender-muted)]/50 px-4 py-3">
+              <p className="text-[13.5px] leading-relaxed text-[var(--ink)]">
+                Mi servono ancora {missingCount} informazioni — puoi
+                completarle qui o nel wizard.
+              </p>
+            </div>
           ) : null}
-        </div>
+        </header>
 
-        <div className="space-y-4">
-          {REVIEW_ORDER.map((id) => {
-            const prov = provenanceById.get(id) ?? "MISSING";
-            const value = edits[id] ?? null;
-            const label = ALLY_BRIEF_FIELD_LABELS[id];
-            return (
-              <div key={id} className="space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-medium text-[var(--ink-muted)]">
-                    {label}
-                  </span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[11px] ${badgeClass(prov)}`}
-                  >
-                    {provenanceLabelIt(prov)}
-                  </span>
-                </div>
-                {id === "objective" ? (
-                  <select
-                    className="aff-input"
-                    value={typeof value === "string" ? value : ""}
-                    onChange={(e) =>
-                      setField(
-                        id,
-                        e.target.value
-                          ? (e.target.value as CampagnaObjective)
-                          : null,
-                      )
-                    }
-                  >
-                    <option value="">Da completare</option>
-                    {OBJECTIVES_CANONICI.map((o) => (
-                      <option key={o} value={o}>
-                        {objectiveLabelIt(o)}
-                      </option>
-                    ))}
-                  </select>
-                ) : id === "elevatorPitch" || id === "marketingAngle" ? (
-                  <textarea
-                    className="aff-input min-h-[72px]"
-                    value={typeof value === "string" ? value : ""}
-                    onChange={(e) =>
-                      setField(id, e.target.value.trim() ? e.target.value : null)
-                    }
-                    placeholder="Da completare"
-                  />
-                ) : (
-                  <input
-                    className="aff-input"
-                    type={
-                      [
-                        "budgetGiornaliero",
-                        "raggioKm",
-                        "etaMin",
-                        "etaMax",
-                        "maxSustainableCpa",
-                        "scontrinoMedio",
-                        "tassoConversione",
-                        "productMargin",
-                        "targetMargin",
-                      ].includes(id)
-                        ? "number"
-                        : "text"
-                    }
-                    value={
-                      value == null
-                        ? ""
-                        : typeof value === "number"
-                          ? String(value)
-                          : value
-                    }
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      if (!raw.trim()) {
-                        setField(id, null);
-                        return;
-                      }
-                      if (
-                        [
-                          "budgetGiornaliero",
-                          "raggioKm",
-                          "etaMin",
-                          "etaMax",
-                          "maxSustainableCpa",
-                          "scontrinoMedio",
-                          "tassoConversione",
-                          "productMargin",
-                          "targetMargin",
-                        ].includes(id)
-                      ) {
-                        const n = Number(raw);
-                        setField(id, Number.isFinite(n) ? n : null);
-                      } else {
-                        setField(id, raw);
-                      }
-                    }}
-                    placeholder="Da completare"
-                  />
-                )}
+        <div className="space-y-0">
+          {REVIEW_GROUPS.map((group) => (
+            <section
+              key={group.title}
+              className="space-y-5 border-t border-[var(--border-soft)] py-7 first:border-t-0 first:pt-0 last:pb-0"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--primary)]">
+                {group.title}
+              </p>
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                {group.ids.map((id) => {
+                  const spanFull =
+                    id === "elevatorPitch" ||
+                    id === "marketingAngle" ||
+                    id === "frontEndOffer" ||
+                    id === "sitoWeb" ||
+                    group.ids.length === 1;
+                  return (
+                    <div
+                      key={id}
+                      className={spanFull ? "sm:col-span-2" : undefined}
+                    >
+                      <ReviewField
+                        id={id}
+                        value={edits[id]}
+                        provenance={provenanceById.get(id) ?? "MISSING"}
+                        onChange={setField}
+                      />
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </section>
+          ))}
         </div>
 
         {proposal.assumptions.length > 0 ? (
-          <div className="rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--surface-hover)]/40 px-3 py-2 text-xs text-[var(--ink-muted)]">
-            <p className="font-medium text-[var(--ink)]">Assunzioni</p>
-            <ul className="mt-1 list-disc pl-4">
+          <div className="rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--surface-hover)]/40 px-4 py-3.5 text-[13.5px] leading-relaxed text-[var(--ink-muted)]">
+            <p className="text-[13px] font-medium text-[var(--ink)]">
+              Assunzioni
+            </p>
+            <ul className="mt-2 list-disc space-y-1 pl-4">
               {proposal.assumptions.map((a) => (
                 <li key={a}>{a}</li>
               ))}
@@ -335,17 +376,17 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
           </div>
         ) : null}
 
-        <div className="flex flex-col gap-2 sm:flex-row-reverse">
+        <div className="flex flex-col gap-3 border-t border-[var(--border-soft)] pt-6 sm:flex-row-reverse sm:items-center">
           <button
             type="button"
-            className="aff-btn-primary flex-1"
+            className="aff-btn-primary min-h-11 flex-1 px-5 text-[14px]"
             onClick={usaConfigurazione}
           >
             Usa questa configurazione
           </button>
           <button
             type="button"
-            className="aff-btn-secondary"
+            className="aff-btn-secondary min-h-11 px-5"
             onClick={() => {
               setProposal(null);
               setEdits({});
@@ -360,42 +401,42 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
   }
 
   return (
-    <AllyPanel className="space-y-4">
-      <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-          Ally
-        </p>
-        <h2 className="mt-1 text-lg font-medium text-[var(--ink)]">
+    <AllyPanel className="mx-auto max-w-[860px] space-y-6 p-5 sm:p-7">
+      <header className="space-y-2">
+        <p className="aff-eyebrow">Ally</p>
+        <h2 className="text-[20px] font-medium tracking-tight text-[var(--ink)] sm:text-[22px]">
           Partiamo dal brief
         </h2>
-        <p className="mt-1 text-sm text-[var(--ink-muted)]">
+        <p className="text-[14.5px] leading-relaxed text-[var(--ink-muted)]">
           Descrivi il cliente, cosa vuole ottenere e tutto quello che sai già.
           Ally preparerà una prima configurazione che potrai rivedere.
         </p>
-      </div>
+      </header>
 
-      <label className="block">
+      <label className="block space-y-2">
         <span className="sr-only">Brief campagna</span>
         <textarea
-          className="aff-input min-h-[140px] text-[14px] leading-relaxed"
+          className="aff-input min-h-[152px] text-[14.5px] leading-relaxed"
           value={brief}
           maxLength={ALLY_BRIEF_MAX_CHARS}
           onChange={(e) => setBrief(e.target.value)}
           placeholder={PLACEHOLDER}
           disabled={loading}
         />
-        <span className="mt-1 block text-right text-[11px] text-[var(--ink-muted)]">
+        <span className="block text-right text-[12.5px] text-[var(--ink-muted)]">
           {brief.length}/{ALLY_BRIEF_MAX_CHARS}
         </span>
       </label>
 
       {error ? (
-        <div className="space-y-3" role="alert">
-          <p className="text-sm text-[var(--ink-muted)]">{error}</p>
-          <div className="flex flex-col gap-2 sm:flex-row-reverse">
+        <div className="space-y-4" role="alert">
+          <p className="text-[14px] leading-relaxed text-[var(--ink-muted)]">
+            {error}
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row-reverse">
             <button
               type="button"
-              className="aff-btn-primary flex-1 disabled:opacity-60"
+              className="aff-btn-primary min-h-11 flex-1 disabled:opacity-60"
               disabled={loading || !brief.trim()}
               onClick={() => void preparaConAlly()}
             >
@@ -403,7 +444,7 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
             </button>
             <button
               type="button"
-              className="aff-btn-secondary"
+              className="aff-btn-secondary min-h-11"
               disabled={loading}
               onClick={vaiManuale}
             >
@@ -412,10 +453,10 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-2 sm:flex-row-reverse sm:items-center">
+        <div className="flex flex-col gap-3 sm:flex-row-reverse sm:items-center">
           <button
             type="button"
-            className="aff-btn-primary flex-1 disabled:opacity-60"
+            className="aff-btn-primary min-h-11 flex-1 disabled:opacity-60"
             disabled={loading || !brief.trim()}
             onClick={() => void preparaConAlly()}
           >
@@ -423,7 +464,7 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
           </button>
           <button
             type="button"
-            className="aff-btn-secondary"
+            className="aff-btn-secondary min-h-11"
             disabled={loading}
             onClick={vaiManuale}
           >
@@ -432,7 +473,7 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
         </div>
       )}
       {showManualHint ? (
-        <p className="text-xs text-[var(--ink-muted)]">
+        <p className="text-[13px] text-[var(--ink-muted)]">
           Scegli un obiettivo qui sotto per aprire il wizard classico.
         </p>
       ) : null}

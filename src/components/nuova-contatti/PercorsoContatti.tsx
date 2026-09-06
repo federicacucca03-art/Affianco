@@ -2453,7 +2453,7 @@ export function PercorsoContatti({
 
   return (
     <div className="aff-page py-2">
-      <div className={`mx-auto w-full ${wizardStep === 1 ? "max-w-[1120px]" : "max-w-7xl"}`}>
+      <div className={`mx-auto w-full ${wizardStep === 1 ? "max-w-[900px]" : "max-w-7xl"}`}>
         <Link
           href="/campagne"
           className="aff-btn-tertiary min-h-8 gap-1.5 px-0"
@@ -2462,15 +2462,15 @@ export function PercorsoContatti({
           Torna alle campagne
         </Link>
 
-        <div className="mt-5 mb-8 flex flex-wrap items-start justify-between gap-4">
-          <div>
+        <div className="mt-6 mb-7 flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-1.5">
             <p className="aff-eyebrow">Ally / Campagna</p>
             {config.nomeCliente?.trim() ? (
-              <p className="mt-1 text-[17px] font-semibold tracking-[-0.02em] text-[var(--ink)]">
+              <p className="text-[17px] font-semibold tracking-[-0.02em] text-[var(--ink)]">
                 {config.nomeCliente.trim()}
               </p>
             ) : null}
-            <h1 className="aff-page-title mt-2 text-[28px] sm:text-[32px]">
+            <h1 className="aff-page-title mt-1 text-[28px] sm:text-[32px]">
               {titoloPagina}
             </h1>
             <p className="aff-page-subtitle max-w-2xl text-[15px]">
@@ -2494,8 +2494,8 @@ export function PercorsoContatti({
           ) : null}
         </div>
 
-        <div className="mb-6 aff-panel-white p-1.5 sm:p-2">
-          <div className="rounded-full bg-[var(--lavender-muted)] px-1 py-1 sm:px-1.5">
+        <div className="mb-8 aff-panel-white p-2 sm:p-2.5">
+          <div className="rounded-full bg-[var(--lavender-muted)] px-1.5 py-1.5 sm:px-2">
             <WizardStepper
               step={wizardStep}
               titoliOverride={
@@ -2509,15 +2509,15 @@ export function PercorsoContatti({
             />
           </div>
           {stepAttuale ? (
-            <div className="px-3 pb-2 pt-2.5 sm:px-4">
-              <p className="text-[12px] font-medium text-[var(--primary)]">
+            <div className="px-3 pb-3 pt-3 sm:px-4">
+              <p className="text-[12px] font-medium uppercase tracking-[0.06em] text-[var(--primary)]">
                 Passo {wizardStep} di {WIZARD_STEPS.length}
               </p>
-              <p className="mt-0.5 text-sm font-medium text-[var(--ink)]">
+              <p className="mt-1 text-[15px] font-medium text-[var(--ink)]">
                 {titoloStepWizard}
               </p>
               {sottotitoloStepWizard ? (
-                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-[var(--ink-muted)]">
+                <p className="mt-1.5 max-w-2xl text-[14px] leading-relaxed text-[var(--ink-muted)]">
                   {sottotitoloStepWizard}
                 </p>
               ) : null}

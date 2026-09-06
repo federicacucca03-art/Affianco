@@ -66,9 +66,9 @@ export function WizardStepper({
                 onClick={() => onVaiAStep?.(s.id)}
                 aria-current={attivo ? "step" : undefined}
                 aria-label={`Passo ${s.id}, ${label}${ariaExtra}`}
-                className={`inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-1 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2 ${
+                className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-2.5 py-1.5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2 ${
                   attivo
-                    ? "bg-white shadow-[var(--shadow-card)]"
+                    ? "bg-white shadow-[var(--shadow-card)] ring-1 ring-[var(--primary)]/15"
                     : fatto
                       ? "bg-transparent hover:bg-white/70"
                       : "bg-transparent"
@@ -90,7 +90,7 @@ export function WizardStepper({
                   </span>
                 )}
                 <span
-                  className={`whitespace-nowrap text-[13px] font-medium leading-none ${
+                  className={`whitespace-nowrap text-[13.5px] font-medium leading-none ${
                     attivo
                       ? "text-[var(--ink)]"
                       : fatto
