@@ -5,8 +5,9 @@
  * Visual polish only in M9.3A.5 — field logic unchanged.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Info } from "lucide-react";
 import { AllyBadge, type AllyBadgeVariant } from "@/components/shell/AllyBadge";
 import { AllyPanel } from "@/components/shell/AllyPanel";
 import { readBearerToken } from "@/lib/meta-import-client";
@@ -95,6 +96,11 @@ function badgeVariant(p: AllyBriefProvenance): AllyBadgeVariant {
 type Props = {
   /** When true, hide manual objective grid link (already on page). */
   compactManual?: boolean;
+  /**
+   * Manual objective chooser — shown only when AI review is not active,
+   * so it does not compete with the prepared configuration.
+   */
+  manualChooser?: ReactNode;
 };
 
 function ReviewField({
@@ -111,7 +117,7 @@ function ReviewField({
   const label = ALLY_BRIEF_FIELD_LABELS[id];
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2.5">
         <span className="text-[13px] font-medium text-[var(--ink)]">
           {label}
         </span>
@@ -177,7 +183,10 @@ function ReviewField({
   );
 }
 
-export function PartiamoDalBrief({ compactManual = false }: Props) {
+export function PartiamoDalBrief({
+  compactManual = false,
+  manualChooser,
+}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const clienteId = searchParams.get("clienteId")?.trim() || null;
@@ -196,6 +205,9 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
     for (const f of proposal?.fields ?? []) m.set(f.id, f.provenance);
     return m;
   }, [proposal]);
+
+  const canAccept =
+    proposal != null && isMeaningfulAllyBriefProposal(proposal);
 
   async function preparaConAlly() {
     const text = brief.trim();
@@ -290,10 +302,7 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
     }
   }
 
-  const canAccept =
-    proposal != null && isMeaningfulAllyBriefProposal(proposal);
-
-  if (proposal && canAccept) {
+  if (canAccept && proposal) {
     const missingCount = proposal.fields.filter(
       (f) =>
         (edits[f.id] == null || edits[f.id] === "") &&
@@ -318,7 +327,12 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
             </p>
           </div>
           {missingCount > 0 ? (
-            <div className="rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--lavender-muted)]/50 px-4 py-3">
+            <div className="flex gap-3 rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--lavender-muted)]/55 px-4 py-3.5">
+              <Info
+                className="mt-0.5 h-4 w-4 shrink-0 text-[var(--primary)]"
+                strokeWidth={1.75}
+                aria-hidden
+              />
               <p className="text-[13.5px] leading-relaxed text-[var(--ink)]">
                 Mi servono ancora {missingCount} informazioni — puoi
                 completarle qui o nel wizard.
@@ -401,6 +415,7 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
   }
 
   return (
+    <>
     <AllyPanel className="mx-auto max-w-[860px] space-y-6 p-5 sm:p-7">
       <header className="space-y-2">
         <p className="aff-eyebrow">Ally</p>
@@ -478,5 +493,7 @@ export function PartiamoDalBrief({ compactManual = false }: Props) {
         </p>
       ) : null}
     </AllyPanel>
+    {manualChooser}
+    </>
   );
 }

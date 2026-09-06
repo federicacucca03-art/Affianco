@@ -1331,7 +1331,7 @@ export function FormConfigurazione({
           {isPercorsoRetargeting ? (
             <div>
               <p className="mb-2 text-[13px] font-medium text-[var(--ink)]">
-                Tipo Cliente
+                Tipo cliente
               </p>
               <div className="aff-seg-track flex-col sm:flex-row">
                 {(
@@ -1456,7 +1456,7 @@ export function FormConfigurazione({
                 ? "Scrivi solo condizioni realmente disponibili."
                 : isPercorsoRetargeting
                   ? "Indica solo un incentivo o un vantaggio realmente disponibile. Se non esiste una promozione, descrivi semplicemente il motivo per tornare."
-                : "L'offerta che useremo nei testi dell'annuncio."}
+                : "L'offerta che useremo nell'annuncio."}
             </p>
           )}
 
@@ -1855,7 +1855,7 @@ export function FormConfigurazione({
 
             <div>
               <p className="mb-2 text-[13px] font-medium text-[var(--ink)]">
-                Tipo Cliente
+                Tipo cliente
               </p>
               <div className="aff-seg-track flex-col sm:flex-row">
                 {(
@@ -1894,7 +1894,7 @@ export function FormConfigurazione({
               ) : (
                 <>
                   <p className="mb-2 text-[13px] font-medium text-[var(--ink)]">
-                    Fascia d&apos;Età prevalente
+                    Fascia d&apos;età prevalente
                   </p>
                   <div className="aff-seg-track flex-wrap sm:flex-nowrap">
                     {(
@@ -1946,8 +1946,8 @@ export function FormConfigurazione({
             !isPercorsoInstore &&
             !isPercorsoRetargeting &&
             !isPercorsoAwareness ? (
-            <div className="space-y-3 rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--lavender-muted)]/45 p-4 sm:p-5">
-              <div className="mb-1 flex flex-wrap items-start justify-between gap-2">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
                 <p className="text-[13px] font-medium text-[var(--ink)]">
                   {step1.briefLabel}
                 </p>

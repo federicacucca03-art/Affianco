@@ -29,17 +29,20 @@ export function CreaCampagnaConCliente() {
         </p>
       ) : null}
 
-      <PartiamoDalBrief compactManual />
-
-      <div id="obiettivi-manuali" className="mt-10 scroll-mt-6">
-        <h2 className="aff-section-title text-[17px] tracking-[-0.02em]">
-          Oppure compila manualmente
-        </h2>
-        <p className="aff-section-sub mb-4">
-          Scegli l&apos;obiettivo e apri il wizard classico.
-        </p>
-        <GrigliaSituazioni clienteId={clienteId} />
-      </div>
+      <PartiamoDalBrief
+        compactManual
+        manualChooser={
+          <div id="obiettivi-manuali" className="mt-10 scroll-mt-6">
+            <h2 className="aff-section-title text-[17px] tracking-[-0.02em]">
+              Oppure compila manualmente
+            </h2>
+            <p className="aff-section-sub mb-4">
+              Scegli l&apos;obiettivo e apri il wizard classico.
+            </p>
+            <GrigliaSituazioni clienteId={clienteId} />
+          </div>
+        }
+      />
     </>
   );
 }

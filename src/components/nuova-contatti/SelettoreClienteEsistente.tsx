@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Search } from "lucide-react";
+import { FolderOpen, Search } from "lucide-react";
 import type { Cliente } from "@/types/clienti";
 import { cercaClienti, getClients } from "@/utils/clientStorage";
 
@@ -44,8 +44,9 @@ export function SelettoreClienteEsistente({
 
   return (
     <div ref={rootRef} className="relative">
-      <p className="mb-1.5 text-xs font-medium text-[var(--ink-muted)]">
-        📂 Carica da Cliente Esistente
+      <p className="mb-1.5 flex items-center gap-1.5 text-[13px] font-medium text-[var(--ink-muted)]">
+        <FolderOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+        Carica da cliente esistente
       </p>
       <div className="relative">
         <Search

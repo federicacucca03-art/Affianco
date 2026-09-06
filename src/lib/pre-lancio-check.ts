@@ -2576,6 +2576,6 @@ export function etichettaObiettivo(
     case "AWARENESS":
       return "Awareness / Apertura";
     default:
-      return "Lead Generation";
+      return "Più richieste di contatto";
   }
 }

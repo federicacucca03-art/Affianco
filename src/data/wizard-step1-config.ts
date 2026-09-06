@@ -42,7 +42,7 @@ export const WIZARD_CONFIG: Record<WizardStep1Slug, WizardStep1Texts> = {
     nichePlaceholder: "Es. Settore",
     locationLabel: "Città",
     locationPlaceholder: "Es. Milano",
-    offerLabel: "Offerta d'Ingresso / Gancio (Front-End Offer) *",
+    offerLabel: "Offerta principale *",
     offerPlaceholder: "Es. Prima visita con igiene inclusa a 39€",
     briefLabel: "Brief cliente",
     briefPlaceholder:
@@ -65,7 +65,7 @@ export const WIZARD_CONFIG: Record<WizardStep1Slug, WizardStep1Texts> = {
     nichePlaceholder: "Es. Salone di Bellezza / Ristorante",
     locationLabel: "Città",
     locationPlaceholder: "Es. Torino",
-    offerLabel: "Offerta d'Ingresso / Gancio (Front-End Offer) *",
+    offerLabel: "Offerta principale *",
     offerPlaceholder:
       "Es. Taglio + Piega + Trattamento a 29€ per nuovi clienti",
     briefLabel: "Brief cliente",
