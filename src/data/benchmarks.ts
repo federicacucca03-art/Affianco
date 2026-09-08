@@ -1,4 +1,6 @@
 import { getBenchmarkForNiche } from "@/lib/benchmarks";
+import { matchCanonicalSettore } from "@/lib/settore-canonico";
+import { SETTORE_ALTRO_LABEL } from "@/data/settoriPresets";
 
 export type ChiaveSettore =
   | "dentista"
@@ -60,28 +62,58 @@ export const BENCHMARK_SETTORI: Record<ChiaveSettore, BenchmarkSettore> = {
   },
 };
 
+/**
+ * Map a sector string to the legacy monthly-contacts bucket.
+ * OLD: unknown → "dentista" (UNSAFE).
+ * NEW: unknown / Altro / unmapped → null (no dental inheritance).
+ */
 export function normalizzaSettore(
   settore: string | null | undefined,
-): ChiaveSettore {
-  const grezzo = (settore ?? "").toLowerCase().trim();
-  if (grezzo.includes("palestra")) return "palestra";
-  if (grezzo.includes("estet")) return "estetista";
-  if (grezzo.includes("ristor")) return "ristorante";
+): ChiaveSettore | null {
+  const grezzo = (settore ?? "").trim();
+  if (!grezzo) return null;
+
+  const match = matchCanonicalSettore(grezzo);
+  if (!match.matched || match.label === SETTORE_ALTRO_LABEL || match.id === "altro") {
+    return null;
+  }
+
+  const id = match.id;
+  if (id === "dentista" || id === "implantologia" || id === "ortodontista") {
+    return "dentista";
+  }
+  if (id === "palestra" || id === "personal-trainer" || id === "yoga") {
+    return "palestra";
+  }
+  if (id === "estetista" || id === "parrucchiere" || id === "dermatologia") {
+    return "estetista";
+  }
   if (
-    grezzo.includes("artigian") ||
-    grezzo.includes("locale") ||
-    grezzo.includes("agenzia") ||
-    grezzo.includes("broker") ||
-    grezzo.includes("servizi") ||
-    grezzo.includes("avvocat")
+    id === "ristorante" ||
+    id === "pizzeria" ||
+    id === "bar-caffe" ||
+    id === "catering"
+  ) {
+    return "ristorante";
+  }
+  if (
+    id === "idraulico" ||
+    id === "elettricista" ||
+    id === "serramenti" ||
+    id === "ristrutturazioni" ||
+    id === "pulizie" ||
+    id === "avvocato" ||
+    id === "commercialista" ||
+    id === "consulenza-b2b"
   ) {
     return "artigiano";
   }
-  if (grezzo.includes("dentist") || grezzo.includes("dent")) return "dentista";
-  return "dentista";
+
+  // Known canonical niches without a legacy monthly bucket → unavailable
+  return null;
 }
 
-/** Budget giornaliero = recommendedDailyBudgetMin del motore nicchia. */
+/** Budget giornaliero = recommendedDailyBudgetMin del motore nicchia (0 se unavailable). */
 export function budgetGiornalieroDaSettore(
   settore: string | null | undefined,
   citta = "",
@@ -89,19 +121,44 @@ export function budgetGiornalieroDaSettore(
   return getBenchmarkForNiche(settore ?? "", citta).recommendedDailyBudgetMin;
 }
 
+export type StimaBenchmarkResult = {
+  chiave: ChiaveSettore | null;
+  available: boolean;
+  budgetMensile: number;
+  contattiMin: number;
+  contattiMax: number;
+  costoMin: number;
+  costoMax: number;
+  etichettaCategoria: string;
+  budgetRiferimento: number;
+};
+
 /**
  * Budget mensile = budget giornaliero × 30.
- * Contatti e costo restano i riferimenti del settore.
+ * Contatti e costo: solo se esiste un bucket legacy sicuro; altrimenti unavailable.
  */
 export function stimaBenchmark(
   budgetGiornaliero: number,
   settore?: string | null,
-) {
+): StimaBenchmarkResult {
   const chiave = normalizzaSettore(settore);
+  if (!chiave) {
+    return {
+      chiave: null,
+      available: false,
+      budgetMensile: Math.round(budgetGiornaliero * 30),
+      contattiMin: 0,
+      contattiMax: 0,
+      costoMin: 0,
+      costoMax: 0,
+      etichettaCategoria: SETTORE_ALTRO_LABEL,
+      budgetRiferimento: 0,
+    };
+  }
   const base = BENCHMARK_SETTORI[chiave];
-
   return {
     chiave,
+    available: true,
     budgetMensile: Math.round(budgetGiornaliero * 30),
     contattiMin: base.contattiMin,
     contattiMax: base.contattiMax,

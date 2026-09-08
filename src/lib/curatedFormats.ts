@@ -266,7 +266,13 @@ function daMacro(macro: string): NicchiaFormatiKey {
   if (macro.includes("Artigiani") || macro.includes("Servizi Locali")) {
     return "artigiani";
   }
-  if (macro.includes("B2B") || macro.includes("Professionisti")) return "b2b";
+  if (
+    macro.includes("B2B") ||
+    macro.includes("Professionisti") ||
+    macro.includes("Industria")
+  ) {
+    return "b2b";
+  }
   if (macro.includes("Fitness") || macro.includes("Palestre")) return "fitness";
   return "artigiani";
 }
@@ -285,7 +291,7 @@ export function nicchiaFormatiDaSettore(settore: string): NicchiaFormatiKey {
     return "ecommerce";
   }
   if (/palestr|fitness|crossfit|personal trainer/.test(q)) return "fitness";
-  if (/b2b|consulenz|saas|agenzia|avvocat|commercialist/.test(q)) {
+  if (/b2b|consulenz|saas|agenzia|avvocat|commercialist|industrial|distribut|logist|manifatt/.test(q)) {
     return "b2b";
   }
   if (/idraul|edil|infiss|artig|ristruttur|impiant/.test(q)) return "artigiani";

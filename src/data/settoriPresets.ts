@@ -10,6 +10,7 @@ export type MacroCategoria =
   | "Servizi Locali/Artigiani"
   | "Fitness/Palestre"
   | "B2B/Professionisti"
+  | "Industria/Distribuzione"
   | "Real Estate"
   | "Formazione"
   | "Automotive"
@@ -20,6 +21,9 @@ export type BenchmarkRange = {
   max: number;
 };
 
+/** Soft B2B/B2C hint — never overrides explicit user/brief target. */
+export type TargetTypeHint = "B2B" | "B2C" | "MIXED";
+
 export type SettorePreset = {
   id: string;
   nome: string;
@@ -29,11 +33,14 @@ export type SettorePreset = {
   margineDefault: number;
   benchmarkCPL: BenchmarkRange;
   benchmarkCPA: BenchmarkRange;
+  /** When false, do not auto-apply invented CPL/AOV economics. */
+  benchmarkKnown: boolean;
   ganciConsigliati: string[];
   formatoVisualConsigliato: string;
   policyAlert: string;
   raggioKmConsigliato: number;
   budgetGiornalieroMin: number;
+  targetTypeHint?: TargetTypeHint;
 };
 
 export const MACRO_CATEGORIE: MacroCategoria[] = [
@@ -43,11 +50,16 @@ export const MACRO_CATEGORIE: MacroCategoria[] = [
   "Servizi Locali/Artigiani",
   "Fitness/Palestre",
   "B2B/Professionisti",
+  "Industria/Distribuzione",
   "Real Estate",
   "Formazione",
   "Automotive",
   "Eventi/Turismo",
 ];
+
+/** Safe fallback label when no canonical sector matches (not a DB key migration). */
+export const SETTORE_ALTRO_ID = "altro";
+export const SETTORE_ALTRO_LABEL = "Altro";
 
 const FORMATO_VISUAL: Record<MacroCategoria, string> = {
   "Salute/Dentale":
@@ -62,6 +74,8 @@ const FORMATO_VISUAL: Record<MacroCategoria, string> = {
     "4:5 e 9:16 — allievi veri in sala, trainer, struttura. Evita fisici irreali; overlay sulla prova gratuita.",
   "B2B/Professionisti":
     "1:1 e 4:5 — ufficio, team, caso studio visivo. Tono sobrio, niente stock da handshake.",
+  "Industria/Distribuzione":
+    "1:1 e 4:5 — prodotto/applicazione reale, ambiente operativo, dettaglio tecnico. Evita stock generici e handshake.",
   "Real Estate":
     "1:1, 4:5 e 9:16 — interni luminosi e tour verticale del quartiere. Niente watermark di portali.",
   Formazione:
@@ -85,6 +99,8 @@ const POLICY: Record<MacroCategoria, string> = {
     "Dimagrimento e body image: no 'perdi X kg in Y giorni', no before/after estremi.",
   "B2B/Professionisti":
     "Servizi finanziari/credito possono cadere in Special Ad Categories (Credit).",
+  "Industria/Distribuzione":
+    "Niente claim di sicurezza non supportati su DPI o materiali. Preferisci applicazione e specifica tecnica.",
   "Real Estate":
     "Obbligo Special Ad Category Housing: niente targeting su età, sesso, CAP o interessi demografici.",
   Formazione:
@@ -107,6 +123,9 @@ type Draft = {
   cpa: [number, number, number];
   radiusKm: number;
   budgetMin: number;
+  /** Defaults true for legacy niches with established ranges. */
+  benchmarkKnown?: boolean;
+  targetTypeHint?: TargetTypeHint;
   policyExtra?: string[];
   visualExtra?: string;
 };
@@ -124,6 +143,7 @@ function preset(d: Draft): SettorePreset {
     margineDefault: d.defaultMargin,
     benchmarkCPL: { min: d.cpl[0], max: d.cpl[2] },
     benchmarkCPA: { min: d.cpa[0], max: d.cpa[2] },
+    benchmarkKnown: d.benchmarkKnown !== false,
     ganciConsigliati: [...d.typicalOffers],
     formatoVisualConsigliato: d.visualExtra
       ? `${FORMATO_VISUAL[d.macro]} ${d.visualExtra}`
@@ -131,6 +151,7 @@ function preset(d: Draft): SettorePreset {
     policyAlert: policy,
     raggioKmConsigliato: d.radiusKm,
     budgetGiornalieroMin: d.budgetMin,
+    targetTypeHint: d.targetTypeHint,
   };
 }
 
@@ -239,6 +260,30 @@ const MACRO_PRESETS: Draft[] = [
     budgetMin: 28,
   },
   {
+    key: "macro-industria",
+    label: "Industria / Distribuzione",
+    aliases: [
+      "industria",
+      "manifattura",
+      "distribuzione tecnica",
+      "forniture industriali",
+    ],
+    macro: "Industria/Distribuzione",
+    defaultAov: 2500,
+    defaultMargin: 35,
+    typicalOffers: [
+      "Campione tecnico / scheda applicazione",
+      "Sopralluogo tecnico in stabilimento",
+      "Preventivo su specifica entro 48 ore",
+    ],
+    cpl: [0, 0, 0],
+    cpa: [0, 0, 0],
+    radiusKm: 60,
+    budgetMin: 30,
+    benchmarkKnown: false,
+    targetTypeHint: "B2B",
+  },
+  {
     key: "macro-real-estate",
     label: "Real Estate",
     aliases: ["immobiliare", "case", "immobili"],
@@ -312,7 +357,7 @@ const NICCHIE: Draft[] = [
   {
     key: "dentista",
     label: "Studio dentistico",
-    aliases: ["dentista", "odontoiatra", "studio dentistico"],
+    aliases: ["dentista", "odontoiatra", "odontoiatria", "studio dentistico"],
     macro: "Salute/Dentale",
     defaultAov: 1500,
     defaultMargin: 55,
@@ -777,7 +822,7 @@ const NICCHIE: Draft[] = [
   {
     key: "consulenza-b2b",
     label: "Consulenza / Agenzia",
-    aliases: ["consulenza", "agenzia marketing", "saas", "software b2b"],
+    aliases: ["consulenza", "consulenza aziendale", "servizi professionali b2b"],
     macro: "B2B/Professionisti",
     defaultAov: 2500,
     defaultMargin: 70,
@@ -790,6 +835,60 @@ const NICCHIE: Draft[] = [
     cpa: [150, 320, 600],
     radiusKm: 50,
     budgetMin: 30,
+    targetTypeHint: "B2B",
+  },
+  {
+    key: "software-b2b",
+    label: "Software / SaaS B2B",
+    aliases: [
+      "software b2b",
+      "saas",
+      "saas b2b",
+      "software gestionale",
+      "erp",
+      "crm b2b",
+      "it solutions",
+      "soluzioni software",
+    ],
+    macro: "B2B/Professionisti",
+    defaultAov: 0,
+    defaultMargin: 0,
+    typicalOffers: [
+      "Demo guidata su un caso d'uso reale",
+      "Pilot 14 giorni su un team",
+      "Assessment gratuito del processo attuale",
+    ],
+    cpl: [0, 0, 0],
+    cpa: [0, 0, 0],
+    radiusKm: 80,
+    budgetMin: 30,
+    benchmarkKnown: false,
+    targetTypeHint: "B2B",
+  },
+  {
+    key: "agenzia-marketing",
+    label: "Agenzia marketing / comunicazione",
+    aliases: [
+      "agenzia marketing",
+      "agenzia di comunicazione",
+      "agenzia creativa",
+      "servizi creativi b2b",
+      "comunicazione b2b",
+    ],
+    macro: "B2B/Professionisti",
+    defaultAov: 0,
+    defaultMargin: 0,
+    typicalOffers: [
+      "Audit creativo / media gratuito",
+      "Workshop di posizionamento 45 minuti",
+      "Pilot creativo su una campagna",
+    ],
+    cpl: [0, 0, 0],
+    cpa: [0, 0, 0],
+    radiusKm: 50,
+    budgetMin: 28,
+    benchmarkKnown: false,
+    targetTypeHint: "B2B",
   },
   {
     key: "agenzia-immobiliare",
@@ -928,6 +1027,36 @@ const NICCHIE: Draft[] = [
     budgetMin: 28,
   },
   {
+    key: "noleggio-auto",
+    label: "Noleggio / mobilità",
+    aliases: [
+      "noleggio auto",
+      "noleggio a lungo termine",
+      "noleggio lungo termine",
+      "broker noleggio",
+      "fleet",
+      "mobilita automotive",
+      "noleggio business",
+      "automotive rental",
+    ],
+    macro: "Automotive",
+    defaultAov: 0,
+    defaultMargin: 0,
+    typicalOffers: [
+      "Consulenza noleggio su misura senza impegno",
+      "Confronto 3 soluzioni su un caso reale",
+      "Preventivo flotta / lungo termine in 48 ore",
+    ],
+    cpl: [0, 0, 0],
+    cpa: [0, 0, 0],
+    radiusKm: 40,
+    budgetMin: 25,
+    benchmarkKnown: false,
+    targetTypeHint: "MIXED",
+    visualExtra:
+      "Mostra veicoli reali e contesto d'uso (privato o flotta), non stock generici.",
+  },
+  {
     key: "hotel",
     label: "Hotel / B&B",
     aliases: ["hotel", "b&b", "bed and breakfast", "albergo"],
@@ -977,6 +1106,237 @@ const NICCHIE: Draft[] = [
     cpa: [120, 280, 500],
     radiusKm: 40,
     budgetMin: 22,
+  },
+  // --- M9.3C B2B / industrial niches (benchmarkKnown: false — no invented CPL) ---
+  {
+    key: "manifattura-industriale",
+    label: "Manifattura industriale",
+    aliases: [
+      "manifattura",
+      "produzione industriale",
+      "fabbrica",
+      "componentistica industriale",
+      "manufacturing",
+      "produzione componenti",
+    ],
+    macro: "Industria/Distribuzione",
+    defaultAov: 0,
+    defaultMargin: 0,
+    typicalOffers: [
+      "Scheda tecnica + campione su richiesta",
+      "Sopralluogo produttivo / capabilità",
+      "Preventivo su distinta entro 48 ore",
+    ],
+    cpl: [0, 0, 0],
+    cpa: [0, 0, 0],
+    radiusKm: 80,
+    budgetMin: 30,
+    benchmarkKnown: false,
+    targetTypeHint: "B2B",
+  },
+  {
+    key: "distribuzione-tecnica",
+    label: "Distribuzione tecnica industriale",
+    aliases: [
+      "distribuzione tecnica industriale",
+      "distributore tecnico",
+      "distributore industriale",
+      "distributore 3m",
+      "nastri industriali",
+      "nastri 3m",
+      "adesivi industriali",
+      "sistemi adesivi",
+      "materiali tecnici",
+      "forniture industriali",
+      "soluzioni adesive",
+      "pellicole tecniche",
+      "pellicole protettive",
+      "dpi industriali",
+      "floor marking",
+      "nastri vhb",
+      "technical supplier",
+      "forniture tecniche b2b",
+    ],
+    macro: "Industria/Distribuzione",
+    defaultAov: 0,
+    defaultMargin: 0,
+    typicalOffers: [
+      "Campione tecnico sulla vostra applicazione",
+      "Consulenza su specifica / scheda tecnica",
+      "Preventivo materiali entro 48 ore",
+    ],
+    cpl: [0, 0, 0],
+    cpa: [0, 0, 0],
+    radiusKm: 80,
+    budgetMin: 30,
+    benchmarkKnown: false,
+    targetTypeHint: "B2B",
+    visualExtra:
+      "Mostra applicazione reale (nastro, adesivo, DPI in uso), non claim generici.",
+  },
+  {
+    key: "contract-materiali",
+    label: "Contract / materiali per spazi",
+    aliases: [
+      "contract",
+      "pavimenti tecnici",
+      "rivestimenti",
+      "pellicole per vetri",
+      "pellicole vetri",
+      "forniture per hotel",
+      "materiali per uffici",
+      "interior surfaces",
+      "moquette",
+      "linoleum",
+      "edilizia b2b",
+      "finiture contract",
+      "forniture architettura",
+      "segnaletica spazi",
+    ],
+    macro: "Industria/Distribuzione",
+    defaultAov: 0,
+    defaultMargin: 0,
+    typicalOffers: [
+      "Sopralluogo / campionario per il progetto",
+      "Preventivo su metrature entro 48 ore",
+      "Consulenza materiali per hospitality/uffici",
+    ],
+    cpl: [0, 0, 0],
+    cpa: [0, 0, 0],
+    radiusKm: 60,
+    budgetMin: 28,
+    benchmarkKnown: false,
+    targetTypeHint: "B2B",
+  },
+  {
+    key: "logistica-b2b",
+    label: "Logistica / supply chain",
+    aliases: [
+      "logistica",
+      "trasporti b2b",
+      "supply chain",
+      "spedizioni industriali",
+      "magazzino logistico",
+      "trasporto merci",
+    ],
+    macro: "Industria/Distribuzione",
+    defaultAov: 0,
+    defaultMargin: 0,
+    typicalOffers: [
+      "Analisi del flusso logistico senza impegno",
+      "Preventivo tratta / magazzino in 48 ore",
+      "Pilot operativo su un lane critico",
+    ],
+    cpl: [0, 0, 0],
+    cpa: [0, 0, 0],
+    radiusKm: 100,
+    budgetMin: 30,
+    benchmarkKnown: false,
+    targetTypeHint: "B2B",
+  },
+  {
+    key: "energia-impianti",
+    label: "Energia / impiantistica",
+    aliases: [
+      "impiantistica",
+      "energia",
+      "fotovoltaico b2b",
+      "fotovoltaico industriale",
+      "hvac",
+      "climatizzazione professionale",
+      "impianti industriali",
+    ],
+    macro: "Industria/Distribuzione",
+    defaultAov: 0,
+    defaultMargin: 0,
+    typicalOffers: [
+      "Sopralluogo tecnico gratuito",
+      "Studio di fattibilità entro 7 giorni",
+      "Preventivo impianto a specifica",
+    ],
+    cpl: [0, 0, 0],
+    cpa: [0, 0, 0],
+    radiusKm: 50,
+    budgetMin: 28,
+    benchmarkKnown: false,
+    targetTypeHint: "B2B",
+  },
+  {
+    key: "engineering-industriale",
+    label: "Ingegneria / automazione",
+    aliases: [
+      "ingegneria",
+      "progettazione tecnica",
+      "automazione industriale",
+      "manutenzione industriale",
+      "engineering",
+      "servizi tecnici industriali",
+    ],
+    macro: "Industria/Distribuzione",
+    defaultAov: 0,
+    defaultMargin: 0,
+    typicalOffers: [
+      "Assessment tecnico sul processo",
+      "Studio di fattibilità / layout",
+      "Pilot di automazione su una linea",
+    ],
+    cpl: [0, 0, 0],
+    cpa: [0, 0, 0],
+    radiusKm: 80,
+    budgetMin: 30,
+    benchmarkKnown: false,
+    targetTypeHint: "B2B",
+  },
+  {
+    key: "grossista-b2b",
+    label: "Grossista / distributore B2B",
+    aliases: [
+      "distributore b2b",
+      "grossista",
+      "importatore",
+      "wholesale",
+      "distribuzione b2b",
+      "commercio all'ingrosso",
+    ],
+    macro: "Industria/Distribuzione",
+    defaultAov: 0,
+    defaultMargin: 0,
+    typicalOffers: [
+      "Listino e condizioni per rivenditori",
+      "Campionario / starter kit partner",
+      "Onboarding account in 48 ore",
+    ],
+    cpl: [0, 0, 0],
+    cpa: [0, 0, 0],
+    radiusKm: 80,
+    budgetMin: 28,
+    benchmarkKnown: false,
+    targetTypeHint: "B2B",
+  },
+  {
+    key: "forniture-hospitality",
+    label: "Forniture hospitality B2B",
+    aliases: [
+      "forniture per hotel",
+      "forniture hospitality",
+      "servizi b2b hospitality",
+      "forniture strutture ricettive",
+      "hospitality supplier",
+    ],
+    macro: "Industria/Distribuzione",
+    defaultAov: 0,
+    defaultMargin: 0,
+    typicalOffers: [
+      "Sopralluogo / campionario per la struttura",
+      "Preventivo fornitura entro 48 ore",
+      "Pacchetto avvio stagione per hotel",
+    ],
+    cpl: [0, 0, 0],
+    cpa: [0, 0, 0],
+    radiusKm: 60,
+    budgetMin: 25,
+    benchmarkKnown: false,
+    targetTypeHint: "B2B",
   },
 ];
 

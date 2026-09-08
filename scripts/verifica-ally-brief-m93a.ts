@@ -91,7 +91,7 @@ test("A rich brief → fields extracted (explicit)", () => {
   const byId = Object.fromEntries(p.fields.map((f) => [f.id, f]));
   assert(byId.nomeCliente?.value == null, "descriptor is not client name");
   assert(byId.nomeCliente?.provenance === "MISSING", "client missing");
-  assert(byId.settore?.value === "Dentista", "sector kept");
+  assert(byId.settore?.value === "Studio dentistico", "sector canonicalized");
   assert(byId.citta?.value === "Roma", "city");
   assert(byId.citta?.provenance === "EXPLICIT", "city explicit");
   assert(byId.budgetGiornaliero?.value === 25, "budget");
@@ -455,6 +455,10 @@ test("M9.3A.1 partial enum failure preserves explicit facts", () => {
   assert(p.fields.find((f) => f.id === "citta")?.value === "Roma", "city kept");
   assert(p.fields.find((f) => f.id === "budgetGiornaliero")?.value === 25, "budget kept");
   assert(p.fields.find((f) => f.id === "objective")?.value == null, "bad objective dropped");
+  assert(
+    p.fields.find((f) => f.id === "settore")?.value === "Altro",
+    "unknown sector → Altro",
+  );
 });
 
 test("M9.3A.1 truncated JSON repair keeps prior fields, drops incomplete", () => {
@@ -749,7 +753,7 @@ test("M9.3A.4 client identity vs business descriptor", () => {
     null,
   );
   assert(descriptor.fields.find((f) => f.id === "nomeCliente")?.value == null, "A client missing");
-  assert(descriptor.fields.find((f) => f.id === "settore")?.value === "odontoiatria", "A sector");
+  assert(descriptor.fields.find((f) => f.id === "settore")?.value === "Studio dentistico", "A sector");
 
   const named = parseAllyBriefProposal(
     JSON.stringify({
@@ -776,7 +780,7 @@ test("M9.3A.4 client identity vs business descriptor", () => {
   assert(!/[?&]nomeCliente=/.test(href), "no fake client in url");
   const h = hydrationFromAcceptedBrief(accepted!);
   assert(h.nomeCliente == null, "hydrate empty client");
-  assert(h.settore === "odontoiatria", "sector hydrated");
+  assert(h.settore === "Studio dentistico", "sector hydrated");
   assert(h.citta === "Roma", "city hydrated");
 
   assert(ALLY_BRIEF_SYSTEM_PROMPT.includes("NON usare tipi di business"), "prompt guard");

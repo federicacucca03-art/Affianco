@@ -108,6 +108,7 @@ const CATEGORIA_BENCHMARK: Record<
   "Servizi Locali/Artigiani": "Casa & Servizi",
   "Fitness/Palestre": "Fitness & Sport",
   "B2B/Professionisti": "Servizi Professionali",
+  "Industria/Distribuzione": "Servizi Professionali",
   "Real Estate": "Servizi Professionali",
   Formazione: "Altro",
   Automotive: "Automotive",
@@ -118,6 +119,15 @@ export function overlayBenchmarkDaIntel(
   base: NicheBenchmark,
   intel: SettoreIntel,
 ): NicheBenchmark {
+  if (intel.benchmarkKnown === false) {
+    return {
+      ...base,
+      key: intel.id,
+      label: intel.nome,
+      category: CATEGORIA_BENCHMARK[intel.macroCategoria],
+      explanationText: `${intel.macroCategoria} · benchmark di mercato non disponibile per questa nicchia (nessun CPL inventato).`,
+    };
+  }
   const ticket: NicheBenchmark["ticketLevel"] =
     intel.aovDefault >= 800 ? "high" : intel.aovDefault >= 80 ? "medium" : "low";
   const cplMid = Math.round(
@@ -143,7 +153,7 @@ export function riferimentoAstaMeta(
   intel: SettoreIntel | null | undefined,
   usaCpa: boolean,
 ): { min: number; max: number; etichetta: string } | null {
-  if (!intel) return null;
+  if (!intel || intel.benchmarkKnown === false) return null;
   const r = usaCpa ? intel.benchmarkCPA : intel.benchmarkCPL;
   if (!r || r.min <= 0 || r.max <= 0) return null;
   return { min: r.min, max: r.max, etichetta: intel.nome };

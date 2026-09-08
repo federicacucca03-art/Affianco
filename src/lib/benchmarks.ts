@@ -2,6 +2,8 @@ import {
   overlayBenchmarkDaIntel,
   risolviSettoreIntel,
 } from "@/lib/sector-intel";
+import { matchCanonicalSettore } from "@/lib/settore-canonico";
+import { SETTORE_ALTRO_LABEL } from "@/data/settoriPresets";
 
 export type TicketLevel = "high" | "medium" | "low";
 
@@ -600,37 +602,83 @@ function trovaNelDatabase(settore: string): NicheBenchmark | null {
   return parziale ?? null;
 }
 
-function fallbackBenchmark(settore: string): NicheBenchmark {
-  const ticket = stimaTicketDaTesto(settore);
-  const valori = FALLBACK_BY_TICKET[ticket];
-  const label = settore.trim() || "Attività locale";
-
+function unavailableBenchmark(label: string): NicheBenchmark {
+  const nome = label.trim() || SETTORE_ALTRO_LABEL;
   return {
-    key: `fallback-${ticket}`,
-    label,
+    key: "unavailable",
+    label: nome,
     category: "Altro",
-    ticketLevel: ticket,
-    ...valori,
-    explanationText: `Nessun benchmark dedicato per “${label}”. Usiamo valori medi per ticket ${ticket}: budget e CPL di riferimento tipici delle attività locali italiane.`,
+    ticketLevel: "medium",
+    recommendedDailyBudgetMin: 0,
+    recommendedDailyBudgetOptimal: 0,
+    cplMin: 0,
+    cplOptimal: 0,
+    cplMax: 0,
+    recommendedRadiusKm: 15,
+    targetCtrMin: 0,
+    leadFormType: "balanced",
+    explanationText: `Benchmark di mercato non disponibile per “${nome}”. Nessun CPL/CPA inventato.`,
   };
+}
+
+function fallbackBenchmark(settore: string): NicheBenchmark {
+  // M9.3C.2 — never invent industry economics for unknown niches.
+  return unavailableBenchmark(settore);
 }
 
 /**
  * Restituisce il benchmark per nicchia + città, con moltiplicatore metropoli.
- * Se la nicchia è nel Sector Intelligence Engine, sovrascrive CPL, raggio e budget.
+ * Canonical mapping decides WHAT the sector is; this table decides WHETHER data exists.
+ * Unknown / Altro / benchmarkKnown=false → unavailable (no dental/ticket inheritance).
  */
 export function getBenchmarkForNiche(
   settore: string,
   citta: string,
 ): NicheBenchmark {
-  const trovato = trovaNelDatabase(settore) ?? fallbackBenchmark(settore);
-  const intel = risolviSettoreIntel(settore);
-  const arricchito = intel
-    ? overlayBenchmarkDaIntel(trovato, intel)
-    : trovato;
+  const raw = (settore ?? "").trim();
+  if (!raw) {
+    return unavailableBenchmark(SETTORE_ALTRO_LABEL);
+  }
+
+  const match = matchCanonicalSettore(raw);
+  if (!match.matched || match.id === "altro") {
+    return unavailableBenchmark(
+      raw === SETTORE_ALTRO_LABEL ? SETTORE_ALTRO_LABEL : raw,
+    );
+  }
+
+  const intel =
+    match.preset != null
+      ? { ...match.preset, source: "preset" as const }
+      : risolviSettoreIntel(match.label);
+
+  if (intel && intel.benchmarkKnown === false) {
+    return unavailableBenchmark(intel.nome);
+  }
+
+  const trovato =
+    trovaNelDatabase(match.id) ??
+    trovaNelDatabase(match.label) ??
+    (intel ? null : unavailableBenchmark(match.label));
+
+  if (!trovato && !intel) {
+    return unavailableBenchmark(match.label);
+  }
+
+  const base = trovato ?? unavailableBenchmark(match.label);
+  const arricchito = intel ? overlayBenchmarkDaIntel(base, intel) : base;
+
+  // overlay for unknown-benchmark niches returns base with unavailable text —
+  // ensure we never keep invented fallback CPL when overlay marks unavailable.
+  if (
+    intel?.benchmarkKnown === false ||
+    /non disponibile/i.test(arricchito.explanationText)
+  ) {
+    return unavailableBenchmark(match.label);
+  }
+
   return applicaCityMultiplier(arricchito, citta);
 }
-
 /**
  * Valuta la performance post-lancio rispetto al benchmark di nicchia.
  */

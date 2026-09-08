@@ -56,6 +56,10 @@ import { useRevocaObjectUrls } from "@/hooks/useRevocaObjectUrls";
 import { useSettoreIntel } from "@/hooks/useSettoreIntel";
 import { presetDaChiave, type SettoreIntel } from "@/lib/sector-intel";
 import {
+  resolveSettoreLabelForNewWrite,
+} from "@/lib/settore-canonico";
+import { SETTORE_ALTRO_LABEL } from "@/data/settoriPresets";
+import {
   creativitaToMeta,
   type CreativitaAsset,
   type EcommerceCreativoFormato,
@@ -474,6 +478,7 @@ export function PercorsoContatti({
 
   function applicaEconomiaSettore(intel: SettoreIntel) {
     if (isEditMode) return;
+    if (intel.benchmarkKnown === false) return;
     if (intelApplicatoRef.current === intel.id) return;
     intelApplicatoRef.current = intel.id;
     setScontrinoMedio(intel.aovDefault);
@@ -2660,12 +2665,19 @@ export function PercorsoContatti({
                   setContesto((prev) => ({ ...prev, citta: valore }))
                 }
                 onCambiaSettore={(valore) =>
-                  setContesto((prev) => ({ ...prev, settore: valore }))
+                  setContesto((prev) => ({
+                    ...prev,
+                    settore: resolveSettoreLabelForNewWrite(valore),
+                  }))
                 }
                 settoreIntel={settoreIntel}
                 sectorIntelLoading={sectorIntelLoading}
                 onSelezionaSettore={(item) => {
-                  setContesto((prev) => ({ ...prev, settore: item.nome }));
+                  const label =
+                    item.id === "altro"
+                      ? SETTORE_ALTRO_LABEL
+                      : item.nome;
+                  setContesto((prev) => ({ ...prev, settore: label }));
                   const preset = presetDaChiave(item.id);
                   if (preset) applicaEconomiaSettore(preset);
                 }}

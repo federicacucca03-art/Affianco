@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
-import type { Cliente, SettoreCliente } from "@/types/clienti";
+import type { Cliente } from "@/types/clienti";
 import { SETTORI } from "@/types/clienti";
 import {
   aggiungiCliente,
@@ -27,7 +27,7 @@ export function ModaleConfiguraCampagna({ aperta, onChiudi }: Props) {
   const [selezione, setSelezione] = useState("");
   const [nomeCampagna, setNomeCampagna] = useState("");
   const [nomeAttivita, setNomeAttivita] = useState("");
-  const [settore, setSettore] = useState<SettoreCliente | "">("");
+  const [settore, setSettore] = useState("");
   const [citta, setCitta] = useState("");
 
   const modalitaNuovo = selezione === NUOVO;
@@ -264,9 +264,7 @@ export function ModaleConfiguraCampagna({ aperta, onChiudi }: Props) {
                 </span>
                 <select
                   value={settore}
-                  onChange={(e) =>
-                    setSettore(e.target.value as SettoreCliente | "")
-                  }
+                  onChange={(e) => setSettore(e.target.value)}
                   className={inputClass}
                   required
                 >

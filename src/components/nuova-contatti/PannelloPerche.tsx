@@ -528,8 +528,8 @@ export function PannelloPerche({
                   ? impressionsAwareness > 0
                     ? `~${impressionsAwareness.toLocaleString("it-IT")}`
                     : "—"
-                  : categoriaAmpia
-                    ? "N/D (Categoria ampia)"
+                  : categoriaAmpia || !benchmark.available
+                    ? "N/D"
                     : `${benchmark.contattiMin}-${benchmark.contattiMax}`}
               </dd>
             </div>
@@ -546,8 +546,8 @@ export function PannelloPerche({
                   ? `${cpmLocale}€`
                   : riferimentoMercato
                     ? `${riferimentoMercato.min}–${riferimentoMercato.max}€`
-                    : categoriaAmpia
-                      ? "N/D (Categoria ampia)"
+                    : categoriaAmpia || !benchmark.available
+                      ? "N/D"
                       : `${benchmark.costoMin}-${benchmark.costoMax}€`}
               </dd>
             </div>
@@ -559,8 +559,8 @@ export function PannelloPerche({
               ? `Con ${budgetLancio}€ di budget di lancio e CPM ${cpmLocale}€ stimiamo circa ${impressionsAwareness.toLocaleString("it-IT")} visualizzazioni e ${personeUnicheAwareness.toLocaleString("it-IT")} persone uniche nel raggio${cittaPulita ? ` di ${cittaPulita}` : ""}.`
               : isInStore
                 ? "Basato su budget e benchmark interni. Non rappresenta una previsione delle visite reali in negozio."
-              : categoriaAmpia
-                ? "Per questa categoria non pubblichiamo stime numeriche di CPL: il rischio di errore è troppo alto senza un servizio specifico nel brief."
+              : categoriaAmpia || !benchmark.available
+                ? "Per questa nicchia non pubblichiamo stime numeriche di CPL/contatti: benchmark di mercato non disponibile (nessun valore inventato)."
                 : `Con ${budgetGiornaliero}€ al giorno (${budgetMensile}€ al mese) il riferimento per ${benchmark.etichettaCategoria} è questo intervallo (tipicamente intorno a ${benchmark.budgetRiferimento}€/mese). Non è una promessa: è un ordine di grandezza da tenere a mente.`}
           </p>
           <p className="mt-3 border-t border-[var(--border)] pt-3 text-xs leading-relaxed text-[var(--ink-muted)]">

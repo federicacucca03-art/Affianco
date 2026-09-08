@@ -1,12 +1,11 @@
 import type { TargetAgeBand, TargetType } from "@/types/campagne";
+import {
+  SETTORI_PRESETS,
+  SETTORE_ALTRO_LABEL,
+} from "@/data/settoriPresets";
 
-export type SettoreCliente =
-  | "Dentista"
-  | "Estetista"
-  | "Palestra"
-  | "Ristorante"
-  | "Artigiano/Attività Locale"
-  | "Servizi locali / Agenzia / Broker";
+/** Client sector is a display string: canonical catalog label, Altro, or legacy free-text. */
+export type SettoreCliente = string;
 
 export type Cliente = {
   id: string;
@@ -35,20 +34,20 @@ export type BozzaCampagnaOnboarding = {
   targetAge?: TargetAgeBand;
 };
 
-export const SETTORI: SettoreCliente[] = [
-  "Dentista",
-  "Estetista",
-  "Palestra",
-  "Ristorante",
-  "Artigiano/Attività Locale",
-  "Servizi locali / Agenzia / Broker",
+/**
+ * Onboarding select options — derived from the authoritative catalog only.
+ * Not an independent taxonomy.
+ */
+export const SETTORI: string[] = [
+  ...SETTORI_PRESETS.filter((p) => !p.id.startsWith("macro-")).map((p) => p.nome),
+  SETTORE_ALTRO_LABEL,
 ];
 
 export const clientiMock: Cliente[] = [
   {
     id: "rossi",
     nome: "Studio Dentistico Rossi",
-    settore: "Dentista",
+    settore: "Studio dentistico",
     citta: "Roma",
   },
   {

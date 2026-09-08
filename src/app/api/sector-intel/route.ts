@@ -115,6 +115,7 @@ function normalizzaIntel(parsed: Record<string, unknown>, niche: string): Settor
       8,
       Number(parsed.budgetGiornalieroMin) || 18,
     ),
+    benchmarkKnown: true,
     source: "ai",
   };
 }

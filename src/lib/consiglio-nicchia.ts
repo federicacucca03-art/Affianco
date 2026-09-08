@@ -65,10 +65,23 @@ export function consiglioStrategicoNicchia(
   }
 
   if (
-    /industrial|b2b|consulenz|software|saas|agenzia|professionist|avvocat|commercialist|notar/.test(
+    /industrial|b2b|consulenz|software|saas|agenzia|professionist|avvocat|commercialist|notar|distribuzion|manifattur|logistica|impiantistic|engineering|grossista|contract|noleggio/.test(
       s,
     )
   ) {
+    if (
+      /distribuzion\w*\s*tecnic|nastri|adesiv|materiali tecnic|dpi|3m|forniture industriali|tecnica industriale/.test(
+        s,
+      )
+    ) {
+      return "Nei mercati B2B tecnici funzionano meglio messaggi che partono da applicazione, problema operativo e specifica tecnica, non da claim generici.";
+    }
+    if (/noleggio|fleet|mobilita|lungo termine/.test(s)) {
+      return "Per noleggio e mobilità, chiarisci subito il caso d'uso (privato, flotta o business) e il confronto tra soluzioni — evita claim generici sul prezzo.";
+    }
+    if (/contract|paviment|rivestiment|hospitality|hotel.*fornit/.test(s)) {
+      return "Nel contract e nelle forniture per spazi, mostra ambienti reali e specifica il materiale: hotel, uffici o retail capiscono prima l'applicazione che il catalogo.";
+    }
     return "Nel B2B il raggio locale deve essere più ampio (almeno 30-50 km). Evita offerte sconto e punta sulla risoluzione di un problema operativo.";
   }
 

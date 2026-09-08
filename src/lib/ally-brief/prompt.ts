@@ -1,7 +1,21 @@
 /**
- * M9.3A/B — prompt for brief (+ optional website) → structured campaign proposal.
+ * M9.3A/B/C — prompt for brief (+ optional website) → structured campaign proposal.
  * Compact JSON: omit MISSING fields (server fills them).
  */
+
+import { formatCanonicalSettoreEnumForPrompt } from "@/lib/settore-canonico";
+import { SETTORE_ALTRO_LABEL } from "@/data/settoriPresets";
+
+function buildSettoreRules(): string {
+  return `Settore (OBBLIGO ENUM — niente free-form come valore canonico):
+Scegli UNA sola etichetta dal catalogo Affianco (o ${SETTORE_ALTRO_LABEL} se fuori catalogo):
+${formatCanonicalSettoreEnumForPrompt()}
+| ${SETTORE_ALTRO_LABEL}
+- Usa l'etichetta utente esatta del catalogo (es. "Distribuzione tecnica industriale", non "Distributore di nastri 3M").
+- Dettagli prodotto/servizio → elevatorPitch / marketingAngle / brief, NON nel campo settore.
+- Se non sai → ometti settore oppure usa ${SETTORE_ALTRO_LABEL}.
+- targetType NON è determinato solo dal settore: brief/sito evidence prima; settore può al massimo suggerire B2B quando evidente.`;
+}
 
 export const ALLY_BRIEF_SYSTEM_PROMPT = `Sei Ally, setup campagne Meta Affianco (IT).
 Analizza UN brief utente e, se presente, un blocco UNTRUSTED WEBSITE CONTENT.
@@ -33,6 +47,8 @@ L'obiettivo è INTENZIONE UTENTE: non decidere l'obiettivo solo perché esiste u
 Se c'è brief con intento chiaro, puoi inferire objective (INFERRED).
 Se c'è solo sito senza goal campagna → ometti objective.
 
+${buildSettoreRules()}
+
 VIETATO inventare (ometti se non espliciti nel brief / non EXISTING / non WEBSITE dove consentito):
 ticket, margine, conversione, soglia CPL/CPA, page_id, form_id, performance, indirizzo completo, volumi.
 
@@ -44,7 +60,7 @@ Prezzi prodotto sul sito ≠ budget campagna.
 
 WEBSITE consentito tipicamente per:
 nomeCliente (solo nome proprio/brand chiaro, mai "studio dentistico" generico),
-settore, citta, frontEndOffer se offerta esplicita sul sito,
+settore (solo etichetta catalogo), citta, frontEndOffer se offerta esplicita sul sito,
 elevatorPitch / marketingAngle come descrizione business,
 servizi/contesto.
 
@@ -60,7 +76,7 @@ Schema (COMPATTO — ometti campi sconosciuti):
   "summary": "1 frase",
   "fields": {
     "nomeCliente": {"value":"...","provenance":"WEBSITE","confidence":"HIGH"},
-    "settore": {"value":"...","provenance":"WEBSITE","confidence":"HIGH"},
+    "settore": {"value":"Distribuzione tecnica industriale","provenance":"WEBSITE","confidence":"HIGH"},
     "objective": {"value":"LEADS","provenance":"INFERRED","confidence":"MEDIUM"},
     "frontEndOffer": {"value":"...","provenance":"EXPLICIT","confidence":"HIGH"},
     "citta": {"value":"...","provenance":"WEBSITE","confidence":"HIGH"},
@@ -68,7 +84,7 @@ Schema (COMPATTO — ometti campi sconosciuti):
     "etaMin": {"value":35,"provenance":"EXPLICIT","confidence":"HIGH"},
     "etaMax": {"value":65,"provenance":"EXPLICIT","confidence":"HIGH"},
     "budgetGiornaliero": {"value":25,"provenance":"EXPLICIT","confidence":"HIGH"},
-    "targetType": {"value":"B2C","provenance":"INFERRED","confidence":"MEDIUM"},
+    "targetType": {"value":"B2B","provenance":"INFERRED","confidence":"MEDIUM"},
     "elevatorPitch": {"value":"...","provenance":"WEBSITE","confidence":"HIGH"}
   },
   "missing_information": ["Soglia sostenibile"],

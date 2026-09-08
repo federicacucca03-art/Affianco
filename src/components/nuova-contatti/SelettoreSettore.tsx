@@ -3,6 +3,11 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ChevronsUpDown } from "lucide-react";
 import { suggerisciSettori, type SuggerimentoSettore } from "@/lib/sector-intel";
+import {
+  matchCanonicalSettore,
+  resolveSettoreLabelForNewWrite,
+} from "@/lib/settore-canonico";
+import { SETTORE_ALTRO_LABEL } from "@/data/settoriPresets";
 
 type Props = {
   value: string;
@@ -25,15 +30,21 @@ export function SelettoreSettore({
   const rootRef = useRef<HTMLDivElement>(null);
   const [aperto, setAperto] = useState(false);
   const [indice, setIndice] = useState(0);
+  /** Draft while typing to search/filter — committed value is always canonical. */
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
 
   const suggerimenti = useMemo(
-    () => suggerisciSettori(value, 8),
-    [value],
+    () => suggerisciSettori(draft, 8),
+    [draft],
   );
 
   useEffect(() => {
     setIndice(0);
-  }, [value, aperto]);
+  }, [draft, aperto]);
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {
@@ -45,8 +56,28 @@ export function SelettoreSettore({
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
+  function commitResolved(raw: string) {
+    const label = resolveSettoreLabelForNewWrite(raw);
+    if (!label) {
+      onChange("");
+      setDraft("");
+      return;
+    }
+    const match = matchCanonicalSettore(label);
+    onChange(label);
+    setDraft(label);
+    onSeleziona({
+      id: match.matched ? match.id : "altro",
+      nome: label,
+      macroCategoria: match.preset?.macroCategoria ?? "B2B/Professionisti",
+      score: match.matched ? 100 : 0,
+    });
+  }
+
   function scegli(item: SuggerimentoSettore) {
     onSeleziona(item);
+    onChange(item.nome);
+    setDraft(item.nome);
     setAperto(false);
   }
 
@@ -59,15 +90,20 @@ export function SelettoreSettore({
           aria-expanded={aperto}
           aria-controls={listId}
           aria-autocomplete="list"
-          value={value}
+          value={draft}
           disabled={disabled}
           placeholder={placeholder}
           autoComplete="off"
           className={`${inputClassName} pr-10`}
           onFocus={() => setAperto(true)}
           onChange={(e) => {
-            onChange(e.target.value);
+            setDraft(e.target.value);
             setAperto(true);
+          }}
+          onBlur={() => {
+            // Commit canonical (or Altro) — typing alone never persists free-form.
+            commitResolved(draft);
+            setAperto(false);
           }}
           onKeyDown={(e) => {
             if (!aperto && (e.key === "ArrowDown" || e.key === "Enter")) {
@@ -86,9 +122,14 @@ export function SelettoreSettore({
               e.preventDefault();
               setIndice((i) => Math.max(0, i - 1));
             }
-            if (e.key === "Enter" && aperto && suggerimenti[indice]) {
+            if (e.key === "Enter") {
               e.preventDefault();
-              scegli(suggerimenti[indice]);
+              if (aperto && suggerimenti[indice]) {
+                scegli(suggerimenti[indice]);
+              } else {
+                commitResolved(draft);
+                setAperto(false);
+              }
             }
           }}
         />
@@ -105,8 +146,8 @@ export function SelettoreSettore({
         >
           {suggerimenti.length === 0 ? (
             <li className="px-3.5 py-2.5 text-sm text-[var(--ink-muted)]">
-              Nessuna nicchia in archivio — continua a digitare: stimiamo i
-              benchmark in background.
+              Nessuna corrispondenza nel catalogo — alla conferma useremo «
+              {SETTORE_ALTRO_LABEL}».
             </li>
           ) : (
             suggerimenti.map((s, i) => (

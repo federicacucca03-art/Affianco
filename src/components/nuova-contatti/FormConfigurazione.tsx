@@ -1168,11 +1168,17 @@ export function FormConfigurazione({
                 !isPercorsoAwareness ? (
                 <p className="mt-1.5 text-xs text-[var(--ink-muted)]">
                   {settoreIntel.macroCategoria}
-                  {" · "}
-                  scontrino tipico {settoreIntel.aovDefault}€
-                  {" · "}
-                  CPL {settoreIntel.benchmarkCPL.min}–
-                  {settoreIntel.benchmarkCPL.max}€
+                  {settoreIntel.benchmarkKnown === false ? (
+                    <> · benchmark di mercato non disponibile</>
+                  ) : (
+                    <>
+                      {" · "}
+                      scontrino tipico {settoreIntel.aovDefault}€
+                      {" · "}
+                      CPL {settoreIntel.benchmarkCPL.min}–
+                      {settoreIntel.benchmarkCPL.max}€
+                    </>
+                  )}
                   {settoreIntel.source === "ai" ? " · stima AI" : ""}
                 </p>
               ) : settoreIntel &&
@@ -1182,8 +1188,14 @@ export function FormConfigurazione({
                   isPercorsoAwareness) ? (
                 <p className="mt-1.5 text-xs text-[var(--ink-muted)]">
                   {settoreIntel.macroCategoria}
-                  {" · "}
-                  scontrino tipico {settoreIntel.aovDefault}€
+                  {settoreIntel.benchmarkKnown === false ? (
+                    <> · benchmark di mercato non disponibile</>
+                  ) : (
+                    <>
+                      {" · "}
+                      scontrino tipico {settoreIntel.aovDefault}€
+                    </>
+                  )}
                   {settoreIntel.source === "ai" ? " · stima AI" : ""}
                 </p>
               ) : null}

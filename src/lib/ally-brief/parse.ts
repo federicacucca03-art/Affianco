@@ -21,6 +21,7 @@ import {
   type AllyBriefProvenance,
 } from "@/lib/ally-brief/types";
 import { WEBSITE_FORBIDDEN_FIELD_IDS } from "@/lib/ally-brief/website-safety";
+import { canonicalizeAllyBriefSettore } from "@/lib/settore-canonico";
 
 const FIELD_IDS = Object.keys(ALLY_BRIEF_FIELD_LABELS) as AllyBriefFieldId[];
 
@@ -587,6 +588,39 @@ export function parseAllyBriefProposal(
   // already enforced by AI rules; server also drops WEBSITE on forbidden ids above.
 
   fields = mergeExistingClient(fields, existing);
+
+  // M9.3C — canonical settore only (catalog label or Altro). Free-form → pitch.
+  let discardedSettoreText: string | null = null;
+  fields = fields.map((f) => {
+    if (f.id !== "settore" || f.value == null || typeof f.value !== "string") {
+      return f;
+    }
+    if (f.provenance === "EXISTING") return f;
+    const canon = canonicalizeAllyBriefSettore(f.value, f.provenance);
+    if (canon.discardedFreeForm && canon.discardedFreeForm !== canon.value) {
+      discardedSettoreText = canon.discardedFreeForm;
+    }
+    if (canon.value === f.value) return f;
+    return {
+      ...f,
+      value: canon.value,
+      note: canon.note ?? f.note,
+    };
+  });
+
+  if (discardedSettoreText) {
+    fields = fields.map((f) => {
+      if (f.id !== "elevatorPitch") return f;
+      if (f.value != null && String(f.value).trim()) return f;
+      return {
+        ...f,
+        value: discardedSettoreText!.slice(0, 2000),
+        provenance: f.provenance === "MISSING" ? "EXPLICIT" : f.provenance,
+        confidence: f.confidence === "UNKNOWN" ? "HIGH" : f.confidence,
+        note: f.note ?? "Descrizione business dal brief (settore → Altro)",
+      };
+    });
+  }
 
   const userUrl = options?.userWebsiteUrl?.trim();
   if (userUrl) {
