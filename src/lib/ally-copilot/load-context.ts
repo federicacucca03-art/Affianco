@@ -20,6 +20,10 @@ import {
 } from "@/lib/ally-copilot/build-context";
 import type { AllyCampaignCopilotContext } from "@/lib/ally-copilot/types";
 import type { AllyCopilotNativePlanningSnapshot } from "@/lib/ally-copilot/configuration-inventory";
+import {
+  creativeSemanticNoteForAlly,
+  currentPrincipalSemanticSnapshot,
+} from "@/lib/creative-semantic-fit";
 
 function admin() {
   try {
@@ -77,6 +81,7 @@ type NativeRow = {
   max_sustainable_cpa: number | null;
   target_margin: number | null;
   front_end_offer: string | null;
+  elevator_pitch: string | null;
   settore: string | null;
   citta: string | null;
   raggio_km: number | null;
@@ -129,6 +134,16 @@ function snapshotFromNativeRow(row: NativeRow): {
       copyVariants,
       hasCreativeAsset: hasCreativeFromJson(row.creativita),
       creativeFormatHint: formatHintFromJson(row.creativita),
+      creativeSemanticNote: creativeSemanticNoteForAlly(
+        currentPrincipalSemanticSnapshot({
+          creativita: row.creativita,
+          settore: row.settore?.trim() || "",
+          offerta: row.front_end_offer?.trim() || "",
+          brief: row.elevator_pitch?.trim() || "",
+          nomeCliente: clientName,
+          objective: row.objective ?? undefined,
+        }),
+      ),
       pageId: row.page_id?.trim() || null,
       formId: row.form_id?.trim() || null,
       website: clientJoin?.website?.trim() || null,
@@ -140,7 +155,7 @@ function snapshotFromNativeRow(row: NativeRow): {
 }
 
 const NATIVE_SELECT =
-  "id, user_id, name, objective, status, daily_budget, max_sustainable_cpa, target_margin, front_end_offer, settore, citta, raggio_km, awareness_radius_km, eta_min, eta_max, target_type, target_age, titolo_annuncio, variante_a, variante_b, variante_c, page_id, form_id, booking_channel, approved_at, creativita, clients(name, website)";
+  "id, user_id, name, objective, status, daily_budget, max_sustainable_cpa, target_margin, front_end_offer, elevator_pitch, settore, citta, raggio_km, awareness_radius_km, eta_min, eta_max, target_type, target_age, titolo_annuncio, variante_a, variante_b, variante_c, page_id, form_id, booking_channel, approved_at, creativita, clients(name, website)";
 
 async function loadNativePlanning(
   userId: string,

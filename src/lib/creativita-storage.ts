@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import type { CreativitaAsset, CreativitaMeta } from "@/lib/creativita";
 import { creativitaToMeta } from "@/lib/creativita";
+import { parseCreativitaSemanticSnapshot } from "@/lib/creative-semantic-fit";
 
 const BUCKET = "campaign-creatives";
 
@@ -34,6 +35,7 @@ function metaDaCreativitaJson(raw: unknown): CreativitaMeta[] | undefined {
           : typeof o.storage_path === "string"
             ? o.storage_path
             : undefined,
+      semanticFit: parseCreativitaSemanticSnapshot(o.semanticFit),
     });
   }
   return out.length > 0 ? out : undefined;
@@ -193,6 +195,7 @@ export async function anteprimeDaCreativitaMeta(
       formatoOrizzontale: Boolean(m.formatoOrizzontale),
       isVideo: m.isVideo,
       storagePath: path || undefined,
+      semanticFit: m.semanticFit ?? null,
     });
   }
   return out;

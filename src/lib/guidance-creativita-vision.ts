@@ -82,8 +82,8 @@ export function generaGuidanceVisionCreativita(input: {
       id: idPerAsset(ID_CREATIVE_VISION_RELEVANCE_LOW, "x", false),
       level: "WARNING",
       title: multi
-        ? `${label}: il visual sembra poco coerente con l'offerta.`
-        : "Il visual sembra poco coerente con l'offerta.",
+        ? `${label}: la creatività sembra poco coerente con questa campagna.`
+        : "La creatività sembra poco coerente con questa campagna.",
       description:
         analysis.relevanceReason?.trim() ||
         "Il contenuto visibile non sembra allineato al servizio descritto.",

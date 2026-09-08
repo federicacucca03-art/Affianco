@@ -111,6 +111,10 @@ type Props = {
   indiceAnteprimaCreativita: number;
   onCambiaCreativita: (lista: CreativitaAsset[]) => void;
   onCambiaIndiceAnteprimaCreativita: (indice: number) => void;
+  /** M9.3D — semantic fit from Studio Creativo. */
+  onSemanticFitChange?: (
+    fit: import("@/lib/creative-semantic-fit").CreativeSemanticFit | null,
+  ) => void;
   pageId: string;
   formId: string;
   onCambiaPageId: (valore: string) => void;
@@ -382,6 +386,7 @@ export function FormConfigurazione({
   indiceAnteprimaCreativita,
   onCambiaCreativita,
   onCambiaIndiceAnteprimaCreativita,
+  onSemanticFitChange,
   pageId = "",
   formId = "",
   onCambiaPageId,
@@ -3757,6 +3762,7 @@ export function FormConfigurazione({
           isPercorsoBookings ? postiDisponibiliSettimana : undefined
         }
         haCopy={(config.varianteA ?? "").trim().length > 0}
+        onSemanticFitChange={onSemanticFitChange}
       />
       ) : null}
 

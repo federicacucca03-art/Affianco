@@ -92,6 +92,8 @@ export type AllyCopilotPlanning = {
   hasPageId: boolean;
   hasFormId: boolean;
   hasWebsite: boolean;
+  /** Present when a current semantic creative analysis exists. */
+  creativeSemanticNote: string | null;
 };
 
 export type AllyCopilotEconomics = {

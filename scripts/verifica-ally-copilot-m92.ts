@@ -76,6 +76,7 @@ function baseSnapshot(
     copyVariants: ["Variante A", "Variante B"],
     hasCreativeAsset: true,
     creativeFormatHint: "1080×1080",
+    creativeSemanticNote: null,
     pageId: null,
     formId: null,
     website: null,
@@ -492,7 +493,7 @@ test("Confidence does not masquerade as Control Room; creative/visual safety", (
   const prompt = read("src/lib/ally-copilot/prompt.ts");
   assert(/NON sostituisce/i.test(prompt), "CR confidence");
   assert(/confidence UNKNOWN|UNKNOWN/i.test(prompt), "UNKNOWN");
-  assert(/immagine non funziona/i.test(prompt), "no fake visual");
+  assert(/immagine non funzioner/i.test(prompt), "no fake visual");
 });
 
 // ——— M9.2A configuration inventory ———

@@ -205,10 +205,11 @@ mark(
   extraFields.relevance === "HIGH" &&
     !("score" in extraFields) &&
     !("ctr" in extraFields) &&
-    !("confidence" in extraFields) &&
-    Object.keys(extraFields).sort().join(",") ===
-      "relevance,relevanceReason,visibleText",
-  "solo i 3 campi del contract",
+    extraFields.confidence === "HIGH" &&
+    extraFields.semanticStatus === "MATCH" &&
+    Object.keys(extraFields).includes("relevance") &&
+    Object.keys(extraFields).includes("visibleText"),
+  "campi contract + semantic M9.3D; ignora score/ctr numerici",
 );
 
 mark(
@@ -276,7 +277,8 @@ mark(
   "RELEVANCE",
   gLow.p1b.length === 1 &&
     gLow.p1b[0]?.id === ID_CREATIVE_VISION_RELEVANCE_LOW &&
-    gLow.p1b[0]?.title === "Il visual sembra poco coerente con l'offerta.",
+    gLow.p1b[0]?.title ===
+      "La creatività sembra poco coerente con questa campagna.",
   "CASE F: LOW: warning coerenza",
 );
 
@@ -388,7 +390,7 @@ mark(
 mark(
   "ERROR NON-BLOCKING",
   studio.includes(
-    "Non sono riuscito ad analizzare il visual. Puoi continuare comunque.",
+    "Non sono riuscito a verificare automaticamente la coerenza della creatività.",
   ) &&
     !studio.includes("BLOCKER") &&
     studio.includes('"IDLE" | "ANALYZING" | "SUCCESS" | "UNKNOWN" | "ERROR"'),
@@ -439,7 +441,8 @@ mark(
   "NO PERFORMANCE CLAIMS",
   !haPerformance(testi) &&
     !FORBIDDEN_UX.some((p) => testi.toLowerCase().includes(p)) &&
-    routeSrc.includes("Vietato: performance, CTR, CPL, estetica"),
+    routeSrc.includes("Vietato:") &&
+    routeSrc.includes("CTR/CPL/performance"),
   "no CTR/CPL/performance/hype copy in P1B UI/helper",
 );
 
@@ -450,8 +453,9 @@ mark(
     studio.includes("analizzaCreativitaAsset") &&
     studio.includes("visionById") &&
     !studio.includes("Analizza tutto") &&
-    !studio.includes("Promise.all"),
-  "trigger per asset, non auto-run, no batch",
+    !studio.includes("Promise.all") &&
+    studio.includes("creativeSemanticContextFingerprint"),
+  "trigger per asset + fingerprint budget (max 1 call per versione)",
 );
 
 const form = src("src/components/nuova-contatti/FormConfigurazione.tsx");
@@ -505,7 +509,8 @@ mark(
   lowSecondario.some(
     (i) =>
       i.id.startsWith(ID_CREATIVE_VISION_RELEVANCE_LOW) &&
-      i.title === "Creatività 2: il visual sembra poco coerente con l'offerta.",
+      i.title ===
+        "Creatività 2: la creatività sembra poco coerente con questa campagna.",
   ) && !lowSecondario.some((i) => i.id === ID_CREATIVE_VISION_RELEVANCE_HIGH),
   "CASE A2: LOW su creatività 2, niente positivo globale",
 );
@@ -579,9 +584,10 @@ mark(
 mark(
   "COST CONTROL",
   maxCreativitaPerContesto("LEADS") === 3 &&
-    !studio.includes("retry") &&
+    studio.includes("analyzingFpRef") &&
+    studio.includes("fingerprint") &&
     dropzoneSrc.includes("disabled={inCorso}"),
-  "max 3 LEADS, 1 click = 1 chiamata, no retry/batch",
+  "max 3 LEADS, fingerprint gate, no batch",
 );
 
 console.log("\n=== ESITI ===");

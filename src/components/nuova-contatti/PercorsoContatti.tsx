@@ -97,7 +97,11 @@ import {
 import { calculateStrategicScore } from "@/lib/strategic-score";
 import { raccomandaLancio, copyHeaderStep6, etichettaStepperStep6 } from "@/lib/guidance";
 import { RaccomandazioneLancio } from "@/components/nuova-contatti/AffiancoSuggerisce";
-import { calculateLaunchReadiness } from "@/lib/launch-readiness";
+import {
+  calculateLaunchReadinessWithSemantic,
+  emptyCreativeSemanticFit,
+  type CreativeSemanticFit,
+} from "@/lib/creative-semantic-fit";
 import { estraiServizioPrincipale } from "@/lib/extract-service";
 import { etaDaTargetAgeBand } from "@/types/campagne";
 import {
@@ -391,6 +395,8 @@ export function PercorsoContatti({
     citta?: string;
   }>(() => leggiContestoIniziale(searchParams, objectiveEffettivo).contesto);
   const [creativita, setCreativita] = useState<CreativitaAsset[]>([]);
+  const [creativeSemanticFit, setCreativeSemanticFit] =
+    useState<CreativeSemanticFit | null>(null);
   const [indiceAnteprimaCreativita, setIndiceAnteprimaCreativita] =
     useState(0);
   const [formatoEcommerce, setFormatoEcommerce] =
@@ -1361,22 +1367,30 @@ export function PercorsoContatti({
         (config.varianteB ?? "").trim() ||
         (config.varianteC ?? "").trim(),
     );
-    return calculateLaunchReadiness({
-      fotoCaricata: creativita.length > 0,
-      clienteHaApprovato: statoApprovazioneLeads === "approvata",
-      paginaFacebookId: pageId,
-      moduloContattiId: formId,
-      destinationUrl:
-        isEcommerce || isInStore || isRetargeting || isAwareness
-          ? sitoWeb
-          : undefined,
-      objective: objectiveEffettivo,
-      bookingChannel: isBookings ? bookingChannel : undefined,
-      haCopySelezionato,
-      haTitoloAnnuncio: Boolean((config.titoloAnnuncio ?? "").trim()),
-    });
+    const fit =
+      creativita.length === 0
+        ? emptyCreativeSemanticFit()
+        : (creativeSemanticFit ?? null);
+    return calculateLaunchReadinessWithSemantic(
+      {
+        fotoCaricata: creativita.length > 0,
+        clienteHaApprovato: statoApprovazioneLeads === "approvata",
+        paginaFacebookId: pageId,
+        moduloContattiId: formId,
+        destinationUrl:
+          isEcommerce || isInStore || isRetargeting || isAwareness
+            ? sitoWeb
+            : undefined,
+        objective: objectiveEffettivo,
+        bookingChannel: isBookings ? bookingChannel : undefined,
+        haCopySelezionato,
+        haTitoloAnnuncio: Boolean((config.titoloAnnuncio ?? "").trim()),
+      },
+      fit,
+    );
   }, [
     creativita.length,
+    creativeSemanticFit,
     statoApprovazioneLeads,
     pageId,
     formId,
@@ -2692,6 +2706,7 @@ export function PercorsoContatti({
                 creativita={creativita}
                 indiceAnteprimaCreativita={indiceAnteprimaCreativita}
                 onCambiaCreativita={setCreativita}
+                onSemanticFitChange={setCreativeSemanticFit}
                 onCambiaIndiceAnteprimaCreativita={
                   setIndiceAnteprimaCreativita
                 }

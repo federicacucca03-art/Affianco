@@ -49,6 +49,8 @@ export type AllyCopilotNativePlanningSnapshot = {
   copyVariants: string[];
   hasCreativeAsset: boolean;
   creativeFormatHint: string | null;
+  /** M9.3D — short Italian note when semantic analysis is persisted. */
+  creativeSemanticNote: string | null;
   pageId: string | null;
   formId: string | null;
   website: string | null;

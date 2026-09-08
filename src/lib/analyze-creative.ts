@@ -24,16 +24,42 @@ export const RELEVANCE_VALUES = [
 
 export type CreativeRelevance = (typeof RELEVANCE_VALUES)[number];
 
+export const SEMANTIC_STATUS_VALUES = [
+  "MATCH",
+  "POSSIBLE_MISMATCH",
+  "CLEAR_MISMATCH",
+  "INSUFFICIENT_EVIDENCE",
+] as const;
+
+export type CreativeSemanticStatusVision =
+  (typeof SEMANTIC_STATUS_VALUES)[number];
+
+export const SEMANTIC_CONFIDENCE_VALUES = ["LOW", "MEDIUM", "HIGH"] as const;
+
+export type CreativeSemanticConfidenceVision =
+  (typeof SEMANTIC_CONFIDENCE_VALUES)[number];
+
 export type CreativeVisionAnalysis = {
   relevance: CreativeRelevance;
   relevanceReason: string | null;
   visibleText: string[];
+  /** M9.3D — structured semantic fit (optional for backward compat). */
+  semanticStatus?: CreativeSemanticStatusVision;
+  confidence?: CreativeSemanticConfidenceVision;
+  creativeSummary?: string | null;
+  campaignContextSummary?: string | null;
+  evidence?: string[];
 };
 
 export const VISION_UNKNOWN: CreativeVisionAnalysis = {
   relevance: "UNKNOWN",
   relevanceReason: null,
   visibleText: [],
+  semanticStatus: "INSUFFICIENT_EVIDENCE",
+  confidence: "LOW",
+  creativeSummary: null,
+  campaignContextSummary: null,
+  evidence: [],
 };
 
 export type ImageParseOk = {
@@ -187,11 +213,33 @@ function isRelevance(v: unknown): v is CreativeRelevance {
   );
 }
 
+function isSemanticStatus(v: unknown): v is CreativeSemanticStatusVision {
+  return (
+    v === "MATCH" ||
+    v === "POSSIBLE_MISMATCH" ||
+    v === "CLEAR_MISMATCH" ||
+    v === "INSUFFICIENT_EVIDENCE"
+  );
+}
+
+function isSemanticConfidence(
+  v: unknown,
+): v is CreativeSemanticConfidenceVision {
+  return v === "LOW" || v === "MEDIUM" || v === "HIGH";
+}
+
 function pulisciReason(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const t = raw.trim().replace(/\s+/g, " ");
   if (!t) return null;
   return t.slice(0, 220);
+}
+
+function pulisciShort(raw: unknown, max = 180): string | null {
+  if (typeof raw !== "string") return null;
+  const t = raw.trim().replace(/\s+/g, " ");
+  if (!t) return null;
+  return t.slice(0, max);
 }
 
 function pulisciVisibleText(raw: unknown): string[] {
@@ -205,6 +253,31 @@ function pulisciVisibleText(raw: unknown): string[] {
     if (out.length >= 20) break;
   }
   return out;
+}
+
+function pulisciEvidence(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const t = item.trim().replace(/\s+/g, " ");
+    if (!t) continue;
+    out.push(t.slice(0, 160));
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+/** Map semanticStatus → legacy relevance for P1B guidance. */
+export function relevanceFromParsedSemantic(
+  status: CreativeSemanticStatusVision | undefined,
+  fallback: CreativeRelevance,
+): CreativeRelevance {
+  if (!status) return fallback;
+  if (status === "MATCH") return "HIGH";
+  if (status === "POSSIBLE_MISMATCH") return "MEDIUM";
+  if (status === "CLEAR_MISMATCH") return "LOW";
+  return "UNKNOWN";
 }
 
 export function parseCreativeVisionAnalysis(
@@ -222,11 +295,53 @@ export function parseCreativeVisionAnalysis(
       string,
       unknown
     >;
-    if (!isRelevance(parsed.relevance)) return { ...VISION_UNKNOWN };
+
+    const semanticStatus = isSemanticStatus(parsed.semanticStatus)
+      ? parsed.semanticStatus
+      : isSemanticStatus(parsed.status)
+        ? parsed.status
+        : undefined;
+    const confidence = isSemanticConfidence(parsed.confidence)
+      ? parsed.confidence
+      : undefined;
+
+    let relevance: CreativeRelevance | undefined = isRelevance(parsed.relevance)
+      ? parsed.relevance
+      : undefined;
+    if (!relevance && semanticStatus) {
+      relevance = relevanceFromParsedSemantic(semanticStatus, "UNKNOWN");
+    }
+    if (!relevance) return { ...VISION_UNKNOWN };
+
+    const reason =
+      pulisciReason(parsed.relevanceReason) ??
+      pulisciReason(parsed.reason);
+
     return {
-      relevance: parsed.relevance,
-      relevanceReason: pulisciReason(parsed.relevanceReason),
+      relevance,
+      relevanceReason: reason,
       visibleText: pulisciVisibleText(parsed.visibleText),
+      semanticStatus:
+        semanticStatus ??
+        (relevance === "HIGH"
+          ? "MATCH"
+          : relevance === "MEDIUM"
+            ? "POSSIBLE_MISMATCH"
+            : relevance === "LOW"
+              ? "CLEAR_MISMATCH"
+              : "INSUFFICIENT_EVIDENCE"),
+      confidence:
+        confidence ??
+        (relevance === "HIGH"
+          ? "HIGH"
+          : relevance === "LOW"
+            ? "MEDIUM"
+            : relevance === "MEDIUM"
+              ? "MEDIUM"
+              : "LOW"),
+      creativeSummary: pulisciShort(parsed.creativeSummary),
+      campaignContextSummary: pulisciShort(parsed.campaignContextSummary),
+      evidence: pulisciEvidence(parsed.evidence),
     };
   } catch {
     return { ...VISION_UNKNOWN };

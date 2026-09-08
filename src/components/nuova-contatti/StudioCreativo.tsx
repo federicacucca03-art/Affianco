@@ -46,6 +46,15 @@ import type { GuidanceItem } from "@/lib/guidance";
 import { generaGuidanceCreativita } from "@/lib/qualita-creativita";
 import type { CreativeVisionAnalysis } from "@/lib/analyze-creative";
 import { dataUrlDaBytesImmagine } from "@/lib/analyze-creative";
+import {
+  creativeSemanticContextFingerprint,
+  deriveCreativeSemanticFit,
+  fitToSnapshot,
+  labelSemanticFitIt,
+  recommendationForMismatch,
+  snapshotToFit,
+  type CreativeSemanticFit,
+} from "@/lib/creative-semantic-fit";
 import { generaGuidanceP1bCreativita, pruneStatoVisionPerAsset } from "@/lib/guidance-creativita-vision";
 import { supabase } from "@/lib/supabase";
 
@@ -97,6 +106,8 @@ type Props = {
   /** BOOKINGS: posti settimana (solo UI) per esempi coerenti negli suggerimenti. */
   postiDisponibiliSettimana?: string;
   haCopy?: boolean;
+  /** M9.3D — principal creative semantic fit for Launch Readiness. */
+  onSemanticFitChange?: (fit: CreativeSemanticFit | null) => void;
 };
 
 function badgeClass(tag: CuratedFormat["tag"][number]): string {
@@ -140,8 +151,10 @@ export function StudioCreativo({
   raggioKm = 0,
   postiDisponibiliSettimana = "",
   haCopy = false,
+  onSemanticFitChange,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const analyzingFpRef = useRef<string | null>(null);
   const [anteprimaCompetitor, setAnteprimaCompetitor] = useState<string | null>(
     null,
   );
@@ -158,6 +171,7 @@ export function StudioCreativo({
         status: "IDLE" | "ANALYZING" | "SUCCESS" | "UNKNOWN" | "ERROR";
         analysis: CreativeVisionAnalysis | null;
         errore: string | null;
+        fingerprint?: string;
       }
     >
   >({});
@@ -167,6 +181,81 @@ export function StudioCreativo({
     const ids = idsCreativita === "" ? [] : idsCreativita.split("|");
     setVisionById((prev) => pruneStatoVisionPerAsset(prev, ids));
   }, [idsCreativita]);
+
+  function fingerprintForAsset(assetId: string): string {
+    const asset = creativita.find((c) => c.id === assetId);
+    return creativeSemanticContextFingerprint({
+      assetId,
+      storagePath: asset?.storagePath ?? "",
+      settore,
+      offerta,
+      brief: elevatorPitch,
+      nomeCliente: nomeAzienda,
+      objective,
+    });
+  }
+
+  const principaleAsset =
+    creativita.find((c) => c.ruolo === "principale") ?? creativita[0] ?? null;
+
+  const principalFit = useMemo((): CreativeSemanticFit | null => {
+    if (!principaleAsset || principaleAsset.isVideo) {
+      return creativita.length === 0
+        ? { status: "NOT_AVAILABLE", confidence: "LOW", creativeSummary: null, campaignContextSummary: null, reason: null, evidence: [] }
+        : {
+            status: "INSUFFICIENT_EVIDENCE",
+            confidence: "LOW",
+            creativeSummary: null,
+            campaignContextSummary: null,
+            reason: "Analisi visual disponibile per immagini in questa versione.",
+            evidence: [],
+          };
+    }
+    const fp = fingerprintForAsset(principaleAsset.id);
+    const slot = visionById[principaleAsset.id];
+    if (slot?.status === "ERROR") {
+      return {
+        status: "INSUFFICIENT_EVIDENCE",
+        confidence: "LOW",
+        creativeSummary: null,
+        campaignContextSummary: null,
+        reason:
+          "Non sono riuscito a verificare automaticamente la coerenza della creatività.",
+        evidence: [],
+      };
+    }
+    if (slot?.analysis && slot.fingerprint === fp) {
+      return deriveCreativeSemanticFit(slot.analysis, { hasCreative: true });
+    }
+    const snap = principaleAsset.semanticFit;
+    if (snap && snap.fingerprint === fp) {
+      return snapshotToFit(snap);
+    }
+    if (creativita.length === 0) {
+      return {
+        status: "NOT_AVAILABLE",
+        confidence: "LOW",
+        creativeSummary: null,
+        campaignContextSummary: null,
+        reason: null,
+        evidence: [],
+      };
+    }
+    return null;
+  }, [
+    principaleAsset,
+    visionById,
+    creativita.length,
+    settore,
+    offerta,
+    elevatorPitch,
+    nomeAzienda,
+    objective,
+  ]);
+
+  useEffect(() => {
+    onSemanticFitChange?.(principalFit);
+  }, [principalFit, onSemanticFitChange]);
 
   const analysesVision = useMemo(() => {
     const out: {
@@ -203,9 +292,31 @@ export function StudioCreativo({
       }),
     [analysesVision, immaginiTotali, offerta, elevatorPitch],
   );
+  const guidanceMismatchExtra = useMemo((): GuidanceItem[] => {
+    if (
+      !principalFit ||
+      (principalFit.status !== "CLEAR_MISMATCH" &&
+        principalFit.status !== "POSSIBLE_MISMATCH")
+    ) {
+      return [];
+    }
+    return [
+      {
+        id: "creative-semantic-guidance",
+        level: principalFit.status === "CLEAR_MISMATCH" ? "WARNING" : "SUGGESTION",
+        title:
+          principalFit.status === "CLEAR_MISMATCH"
+            ? "La creatività sembra poco coerente con questa campagna."
+            : "Verifica che la creatività rappresenti bene l'offerta.",
+        description: recommendationForMismatch(settore),
+        field: "creativita",
+        step: 4,
+      },
+    ];
+  }, [principalFit, settore]);
   const guidanceCreativita = useMemo(
-    () => [...guidanceP1b, ...guidanceP1a],
-    [guidanceP1b, guidanceP1a],
+    () => [...guidanceMismatchExtra, ...guidanceP1b, ...guidanceP1a],
+    [guidanceMismatchExtra, guidanceP1b, guidanceP1a],
   );
 
   async function blobUrlToDataUrl(url: string): Promise<string> {
@@ -227,15 +338,73 @@ export function StudioCreativo({
     return dataUrl;
   }
 
-  async function analizzaCreativitaAsset(assetId: string) {
+  async function analizzaCreativitaAsset(
+    assetId: string,
+    opts?: { force?: boolean },
+  ) {
     const asset = creativita.find((c) => c.id === assetId);
     if (!asset || asset.isVideo) return;
+    const fp = fingerprintForAsset(assetId);
+    if (!opts?.force && analyzingFpRef.current === fp) return;
+    const existing = visionById[assetId];
+    if (
+      !opts?.force &&
+      existing?.fingerprint === fp &&
+      (existing.status === "SUCCESS" ||
+        existing.status === "UNKNOWN" ||
+        existing.status === "ANALYZING")
+    ) {
+      return;
+    }
+
+    if (
+      !opts?.force &&
+      asset.semanticFit?.fingerprint === fp &&
+      !existing?.analysis
+    ) {
+      const fit = snapshotToFit(asset.semanticFit);
+      if (fit) {
+        setVisionById((prev) => ({
+          ...prev,
+          [assetId]: {
+            status:
+              fit.status === "INSUFFICIENT_EVIDENCE" ? "UNKNOWN" : "SUCCESS",
+            analysis: {
+              relevance:
+                fit.status === "MATCH"
+                  ? "HIGH"
+                  : fit.status === "POSSIBLE_MISMATCH"
+                    ? "MEDIUM"
+                    : fit.status === "CLEAR_MISMATCH"
+                      ? "LOW"
+                      : "UNKNOWN",
+              relevanceReason: fit.reason,
+              visibleText: [],
+              semanticStatus:
+                fit.status === "NOT_AVAILABLE"
+                  ? "INSUFFICIENT_EVIDENCE"
+                  : fit.status,
+              confidence: fit.confidence,
+              creativeSummary: fit.creativeSummary,
+              campaignContextSummary: fit.campaignContextSummary,
+              evidence: fit.evidence,
+            },
+            errore: null,
+            fingerprint: fp,
+          },
+        }));
+        return;
+      }
+    }
+
+    analyzingFpRef.current = fp;
     setVisionById((prev) => ({
       ...prev,
       [assetId]: {
         status: "ANALYZING",
         analysis: null,
         errore: null,
+        fingerprint: fp,
       },
     }));
     try {
@@ -249,7 +418,8 @@ export function StudioCreativo({
             status: "ERROR",
             analysis: null,
             errore:
-              "Non sono riuscito ad analizzare il visual. Puoi continuare comunque.",
+              "Non sono riuscito a verificare automaticamente la coerenza della creatività.",
+            fingerprint: fp,
           },
         }));
         return;
@@ -265,6 +435,8 @@ export function StudioCreativo({
           offerta,
           brief: elevatorPitch,
           settore,
+          nomeCliente: nomeAzienda,
+          objective,
         }),
       });
       const data = (await res.json()) as CreativeVisionAnalysis & {
@@ -277,15 +449,28 @@ export function StudioCreativo({
         relevance: data.relevance ?? "UNKNOWN",
         relevanceReason: data.relevanceReason ?? null,
         visibleText: Array.isArray(data.visibleText) ? data.visibleText : [],
+        semanticStatus: data.semanticStatus,
+        confidence: data.confidence,
+        creativeSummary: data.creativeSummary ?? null,
+        campaignContextSummary: data.campaignContextSummary ?? null,
+        evidence: Array.isArray(data.evidence) ? data.evidence : [],
       };
+      const fit = deriveCreativeSemanticFit(analysis, { hasCreative: true });
+      const snap = fitToSnapshot(fit, fp);
       setVisionById((prev) => ({
         ...prev,
         [assetId]: {
           status: analysis.relevance === "UNKNOWN" ? "UNKNOWN" : "SUCCESS",
           analysis,
           errore: null,
+          fingerprint: fp,
         },
       }));
+      onCambiaCreativita(
+        creativita.map((c) =>
+          c.id === assetId ? { ...c, semanticFit: snap } : c,
+        ),
+      );
     } catch {
       setVisionById((prev) => ({
         ...prev,
@@ -293,11 +478,46 @@ export function StudioCreativo({
           status: "ERROR",
           analysis: null,
           errore:
-            "Non sono riuscito ad analizzare il visual. Puoi continuare comunque.",
+            "Non sono riuscito a verificare automaticamente la coerenza della creatività.",
+          fingerprint: fp,
         },
       }));
+    } finally {
+      if (analyzingFpRef.current === fp) analyzingFpRef.current = null;
     }
   }
+
+  // Auto: hydrate persisted current result (0 AI) OR analyze new principal once.
+  // Context edits invalidate via fingerprint mismatch — no AI on every keystroke.
+  useEffect(() => {
+    if (!principaleAsset || principaleAsset.isVideo || !principaleAsset.url) {
+      return;
+    }
+    const fp = fingerprintForAsset(principaleAsset.id);
+    const slot = visionById[principaleAsset.id];
+    if (slot?.status === "ANALYZING") return;
+    if (slot?.fingerprint === fp && (slot.status === "SUCCESS" || slot.status === "UNKNOWN" || slot.status === "ERROR")) {
+      return;
+    }
+    const snap = principaleAsset.semanticFit;
+    if (snap?.fingerprint === fp) {
+      if (!slot?.analysis) {
+        void analizzaCreativitaAsset(principaleAsset.id);
+      }
+      return;
+    }
+    // New creative (no current snap): one analysis. Stale snap → wait for Analizza.
+    if (!snap) {
+      void analizzaCreativitaAsset(principaleAsset.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- creative identity only
+  }, [
+    principaleAsset?.id,
+    principaleAsset?.url,
+    principaleAsset?.storagePath,
+    principaleAsset?.isVideo,
+    principaleAsset?.semanticFit?.fingerprint,
+  ]);
 
   const nicchia = nicchiaFormatiDaSettore(settore);
   const formati = formatiPerSettore(settore);
@@ -822,13 +1042,40 @@ export function StudioCreativo({
         percorsoAwareness
       }
       analisiVision={visionById}
-      onAnalizzaCreativita={(id) => void analizzaCreativitaAsset(id)}
+      onAnalizzaCreativita={(id) => void analizzaCreativitaAsset(id, { force: true })}
     />
   );
+
+  const badgeSemantic =
+    principalFit &&
+    principalFit.status !== "NOT_AVAILABLE" &&
+    (principalFit.status === "MATCH" ||
+      principalFit.status === "POSSIBLE_MISMATCH" ||
+      principalFit.status === "CLEAR_MISMATCH" ||
+      visionById[principaleAsset?.id ?? ""]?.status === "ANALYZING") ? (
+      <p className="mt-2 text-[12px] text-[var(--ink-muted)]">
+        {visionById[principaleAsset?.id ?? ""]?.status === "ANALYZING" ? (
+          <span>Verifica coerenza creatività…</span>
+        ) : (
+          <span>
+            Coerenza visual:{" "}
+            <span className="font-medium text-[var(--ink)]">
+              {labelSemanticFitIt(principalFit.status)}
+            </span>
+          </span>
+        )}
+      </p>
+    ) : visionById[principaleAsset?.id ?? ""]?.status === "ERROR" ? (
+      <p className="mt-2 text-[12px] text-[var(--ink-muted)]">
+        Non sono riuscito a verificare automaticamente la coerenza della
+        creatività.
+      </p>
+    ) : null;
 
   const dropzoneConGuidance = (
     <>
       {dropzone}
+      {badgeSemantic}
       <AffiancoSuggerisce items={guidanceCreativita as GuidanceItem[]} />
     </>
   );

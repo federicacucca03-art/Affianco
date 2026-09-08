@@ -1,4 +1,5 @@
 import type { CampagnaObjective } from "@/types/campagne";
+import type { CreativitaSemanticSnapshot } from "@/lib/creative-semantic-fit";
 
 export type CreativitaRuolo =
   | "principale"
@@ -26,6 +27,8 @@ export type CreativitaAsset = {
   isVideo?: boolean;
   /** Path Storage esistente (edit mode): re-save senza re-upload. */
   storagePath?: string;
+  /** M9.3D — semantic fit snapshot (JSONB, no migration). */
+  semanticFit?: CreativitaSemanticSnapshot | null;
 };
 
 /** Metadata persistibile (senza blob). */
@@ -40,6 +43,8 @@ export type CreativitaMeta = {
   isVideo?: boolean;
   /** Path privato in Supabase Storage (signed URL generato server-side). */
   storagePath?: string;
+  /** M9.3D — nested on campaigns.creativita JSONB. */
+  semanticFit?: CreativitaSemanticSnapshot | null;
 };
 
 export const ETICHETTE_CREATIVITA: Record<CreativitaRuolo, string> = {
@@ -212,6 +217,7 @@ export function creativitaToMeta(lista: CreativitaAsset[]): CreativitaMeta[] {
     formatoOrizzontale: c.formatoOrizzontale,
     isVideo: c.isVideo,
     storagePath: c.storagePath,
+    semanticFit: c.semanticFit ?? null,
   }));
 }
 

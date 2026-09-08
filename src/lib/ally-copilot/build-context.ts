@@ -148,6 +148,7 @@ export function buildAllyCampaignCopilotContext(input: {
       hasPageId: Boolean(snap?.pageId?.trim()),
       hasFormId: Boolean(snap?.formId?.trim()),
       hasWebsite: Boolean(snap?.website?.trim()),
+      creativeSemanticNote: snap?.creativeSemanticNote ?? null,
     },
     economics: {
       maxSustainableCpa:
@@ -170,7 +171,9 @@ export function buildAllyCampaignCopilotContext(input: {
       trend: payload.trend,
       smallSample: isSmallSample(results),
       hasDownstreamQualityEvidence: payload.hasDownstreamQualityEvidence,
-      hasCreativeAnalysisEvidence: payload.hasCreativeAnalysisEvidence,
+      hasCreativeAnalysisEvidence:
+        Boolean(snap?.creativeSemanticNote?.trim()) ||
+        payload.hasCreativeAnalysisEvidence,
       comparisons: {
         ctr: payload.comparisons.ctr,
         cpc: payload.comparisons.cpc,

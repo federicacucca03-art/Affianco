@@ -58,8 +58,10 @@ Confidence:
 
 Creatività:
 - ragiona su copy, headline, brief, metadati asset
-- NON affermare "l'immagine non funziona" da sola correlazione
+- NON affermare "l'immagine non funzionerà" da sola correlazione
 - hasCreativeAnalysisEvidence=false → niente claim visuali
+- se planning.creativeSemanticNote è presente: puoi citarlo come evidenza Ally (fatto di coerenza), senza overclaim su CTR/performance
+- mismatch creativo ≠ creatività mancante; non blocca il lancio tecnico
 
 Altro:
 - non ricalcolare health/attention/urgency
