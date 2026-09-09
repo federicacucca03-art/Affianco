@@ -1,5 +1,5 @@
 import {
-  SETTORI_POPOLARI,
+  MACRO_CATEGORIE,
   SETTORI_PRESETS,
   type MacroCategoria,
   type SettorePreset,
@@ -64,24 +64,30 @@ export type SuggerimentoSettore = {
 
 export function suggerisciSettori(
   query: string,
-  limite = 8,
+  /** Optional cap. Empty browse returns the full canonical niche catalog. */
+  limite?: number,
 ): SuggerimentoSettore[] {
   const q = normalizzaChiaveSettore(query);
   const base = SETTORI_PRESETS.filter((p) => !p.id.startsWith("macro-"));
 
   if (!q) {
-    const popolari = SETTORI_POPOLARI.map((id) =>
-      SETTORI_PRESETS.find((p) => p.id === id),
-    ).filter((p): p is SettorePreset => Boolean(p));
-    return popolari.slice(0, limite).map((p) => ({
+    // Full catalog ordered by macro (canonical order) then label — not popular subset.
+    const ordered = [...base].sort((a, b) => {
+      const mi = MACRO_CATEGORIE.indexOf(a.macroCategoria);
+      const mj = MACRO_CATEGORIE.indexOf(b.macroCategoria);
+      if (mi !== mj) return mi - mj;
+      return a.nome.localeCompare(b.nome, "it");
+    });
+    const mapped = ordered.map((p) => ({
       id: p.id,
       nome: p.nome,
       macroCategoria: p.macroCategoria,
       score: 100,
     }));
+    return limite != null ? mapped.slice(0, Math.max(0, limite)) : mapped;
   }
 
-  return base
+  const ranked = base
     .map((p) => ({
       id: p.id,
       nome: p.nome,
@@ -89,8 +95,9 @@ export function suggerisciSettori(
       score: punteggioMatch(query, p),
     }))
     .filter((s) => s.score > 20)
-    .sort((a, b) => b.score - a.score || a.nome.localeCompare(b.nome, "it"))
-    .slice(0, limite);
+    .sort((a, b) => b.score - a.score || a.nome.localeCompare(b.nome, "it"));
+
+  return limite != null ? ranked.slice(0, Math.max(0, limite)) : ranked;
 }
 
 export function presetDaChiave(id: string): SettoreIntel | null {

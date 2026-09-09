@@ -13,8 +13,13 @@ import {
   canonicalizeAllyBriefSettore,
   listCanonicalSettoreOptions,
   legacySettoreStillRenderable,
+  resolveSettoreLabelForNewWrite,
 } from "../src/lib/settore-canonico";
-import { risolviSettoreIntel, overlayBenchmarkDaIntel } from "../src/lib/sector-intel";
+import {
+  risolviSettoreIntel,
+  overlayBenchmarkDaIntel,
+  suggerisciSettori,
+} from "../src/lib/sector-intel";
 import { parseAllyBriefProposal, assertNoInventedEconomics } from "../src/lib/ally-brief/parse";
 import { ALLY_BRIEF_SYSTEM_PROMPT } from "../src/lib/ally-brief/prompt";
 import { consiglioStrategicoNicchia } from "../src/lib/consiglio-nicchia";
@@ -23,8 +28,9 @@ import { provenanceLabelIt } from "../src/lib/ally-brief/types";
 import type { NicheBenchmark } from "../src/lib/benchmarks";
 import { getBenchmarkForNiche } from "../src/lib/benchmarks";
 import { normalizzaSettore, stimaBenchmark } from "../src/data/benchmarks";
-import { resolveSettoreLabelForNewWrite } from "../src/lib/settore-canonico";
 import { SETTORI } from "../src/types/clienti";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 let passed = 0;
 let failed = 0;
@@ -339,6 +345,72 @@ function main() {
       assert(p!.benchmarkKnown === false, "no invented bench");
     });
   }
+
+  // ——— M9.3C.3 selector browse / search ———
+
+  test("M9.3C.3 empty browse returns full canonical niche catalog", () => {
+    const browse = suggerisciSettori("");
+    const niches = SETTORI_PRESETS.filter((p) => !p.id.startsWith("macro-"));
+    assert(browse.length === niches.length, `${browse.length} vs ${niches.length}`);
+    assert(
+      browse.some((s) => s.id === "distribuzione-tecnica"),
+      "distribuzione-tecnica in browse",
+    );
+    assert(browse.some((s) => s.id === "dentista"), "legacy dentista");
+    assert(browse.some((s) => s.id === "palestra"), "legacy palestra");
+    assert(browse.some((s) => s.id === "ristorante"), "legacy ristorante");
+    assert(browse.some((s) => s.id === "manifattura-industriale"), "manifattura");
+    assert(browse.some((s) => s.id === "contract-materiali"), "contract");
+    assert(browse.some((s) => s.id === "software-b2b"), "software");
+    assert(browse.some((s) => s.id === "noleggio-auto"), "noleggio");
+  });
+
+  test("M9.3C.3 search aliases find industrial niches", () => {
+    const cases: Array<[string, string]> = [
+      ["Distribuzione tecnica", "distribuzione-tecnica"],
+      ["nastri industriali", "distribuzione-tecnica"],
+      ["distributore tecnico", "distribuzione-tecnica"],
+      ["contract", "contract-materiali"],
+      ["noleggio", "noleggio-auto"],
+      ["software", "software-b2b"],
+      ["logistica", "logistica-b2b"],
+      ["manifattura", "manifattura-industriale"],
+    ];
+    for (const [q, id] of cases) {
+      const hits = suggerisciSettori(q);
+      assert(
+        hits.some((h) => h.id === id),
+        `${q} → missing ${id} (got ${hits.map((h) => h.id).join(",")})`,
+      );
+    }
+  });
+
+  test("M9.3C.3 Technon manual selection writes canonical label", () => {
+    const label = resolveSettoreLabelForNewWrite(
+      "Distribuzione tecnica industriale",
+    );
+    assert(label === "Distribuzione tecnica industriale", String(label));
+    const m = matchCanonicalSettore(label);
+    assert(m.matched && m.id === "distribuzione-tecnica", m.id);
+    assert(m.label !== SETTORE_ALTRO_LABEL, "not Altro");
+  });
+
+  test("M9.3C.3 SelettoreSettore uses full catalog helper, not popular-8", () => {
+    const src = readFileSync(
+      join(process.cwd(), "src/components/nuova-contatti/SelettoreSettore.tsx"),
+      "utf8",
+    );
+    const intel = readFileSync(
+      join(process.cwd(), "src/lib/sector-intel.ts"),
+      "utf8",
+    );
+    assert(src.includes("suggerisciSettori(draft)"), "no limite 8");
+    assert(!src.includes("suggerisciSettori(draft, 8)"), "old cap gone");
+    assert(src.includes("MACRO_CATEGORIE"), "grouped browse");
+    assert(src.includes("max-h-[min(24rem,50vh)]"), "scrollable");
+    assert(!intel.includes("SETTORI_POPOLARI"), "empty browse not popular subset");
+    assert(listCanonicalSettoreOptions().length === suggerisciSettori("").length, "same source count");
+  });
 
   console.log(`\nM9.3C result: ${passed} passed, ${failed} failed\n`);
   if (failed > 0) process.exit(1);
