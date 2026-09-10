@@ -98,8 +98,10 @@ import { calculateStrategicScore } from "@/lib/strategic-score";
 import { raccomandaLancio, copyHeaderStep6, etichettaStepperStep6 } from "@/lib/guidance";
 import { RaccomandazioneLancio } from "@/components/nuova-contatti/AffiancoSuggerisce";
 import {
+  appendCreativeSemanticFitToDiagnosi,
   calculateLaunchReadinessWithSemantic,
   emptyCreativeSemanticFit,
+  resolveCurrentCreativeSemanticFit,
   type CreativeSemanticFit,
 } from "@/lib/creative-semantic-fit";
 import { estraiServizioPrincipale } from "@/lib/extract-service";
@@ -1361,6 +1363,28 @@ export function PercorsoContatti({
     wizardStep,
   ]);
 
+  const currentCreativeSemanticFit = useMemo(
+    () =>
+      resolveCurrentCreativeSemanticFit({
+        creativita,
+        settore: contesto.settore ?? "",
+        offerta: frontEndOffer,
+        brief: elevatorPitch,
+        nomeCliente: config.nomeCliente,
+        objective: objectiveEffettivo,
+        sessionFit: creativeSemanticFit,
+      }),
+    [
+      creativita,
+      contesto.settore,
+      frontEndOffer,
+      elevatorPitch,
+      config.nomeCliente,
+      objectiveEffettivo,
+      creativeSemanticFit,
+    ],
+  );
+
   const launchReadiness = useMemo(() => {
     const haCopySelezionato = Boolean(
       (config.varianteA ?? "").trim() ||
@@ -1370,7 +1394,7 @@ export function PercorsoContatti({
     const fit =
       creativita.length === 0
         ? emptyCreativeSemanticFit()
-        : (creativeSemanticFit ?? null);
+        : currentCreativeSemanticFit;
     return calculateLaunchReadinessWithSemantic(
       {
         fotoCaricata: creativita.length > 0,
@@ -1390,7 +1414,7 @@ export function PercorsoContatti({
     );
   }, [
     creativita.length,
-    creativeSemanticFit,
+    currentCreativeSemanticFit,
     statoApprovazioneLeads,
     pageId,
     formId,
@@ -1495,7 +1519,7 @@ export function PercorsoContatti({
           )
         : 0;
 
-      return isPercorsoLeads
+      const baseDiagnosi = isPercorsoLeads
         ? calcolaDiagnosiPreLancioLeads({
             raggioKm: config.raggioKm ?? 0,
             titoloAnnuncio: config.titoloAnnuncio ?? "",
@@ -1668,6 +1692,10 @@ export function PercorsoContatti({
         breakEvenRoas: isEcommerce ? breakEvenRoasEcommerce : undefined,
         cpaMax: isEcommerce ? cpaMaxEcommerce : undefined,
       });
+      return appendCreativeSemanticFitToDiagnosi(
+        baseDiagnosi,
+        currentCreativeSemanticFit,
+      );
     },
     [
       config.raggioKm,
@@ -1679,6 +1707,7 @@ export function PercorsoContatti({
       formId,
       frontEndOffer,
       creativita,
+      currentCreativeSemanticFit,
       isPercorsoLeads,
       isPercorsoBookings,
       isPercorsoEcommerce,

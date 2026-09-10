@@ -10,6 +10,11 @@ import type {
   LaunchReadinessResult,
 } from "@/lib/launch-readiness";
 import { calculateLaunchReadiness } from "@/lib/launch-readiness";
+import type {
+  PreLancioCheckItem,
+  PreLancioDiagnosi,
+} from "@/lib/pre-lancio-check";
+import type { CampagnaObjective } from "@/types/campagne";
 
 export const CREATIVE_SEMANTIC_STATUSES = [
   "NOT_AVAILABLE",
@@ -244,6 +249,122 @@ export function calculateLaunchReadinessWithSemantic(
     warnings: adapted.warnings,
     semanticPenaltyPoints: 0,
   };
+}
+
+/**
+ * Additive Pre-lancio checks — does NOT mutate Creatività OK / score / blockers.
+ */
+export function appendCreativeSemanticFitToDiagnosi(
+  diagnosi: PreLancioDiagnosi,
+  fit: CreativeSemanticFit | null,
+): PreLancioDiagnosi {
+  const { warnings } = creativeSemanticFitToReadiness(
+    fit ?? emptyCreativeSemanticFit(),
+  );
+  if (warnings.length === 0) return diagnosi;
+
+  const extra: PreLancioCheckItem[] = warnings.map((w) => {
+    const clear = w.id.includes("clear-mismatch");
+    const titolo = clear
+      ? "Coerenza creatività — Da verificare"
+      : "Coerenza creatività";
+    const motivazione = [w.title, w.description].filter(Boolean).join(" ");
+    return {
+      id: w.id,
+      level: "tip",
+      severita: "consiglio",
+      titolo,
+      motivazione,
+      messaggio: `🟡 ${titolo}: ${motivazione}`,
+      azione: {
+        tipo: "vai-passo-4",
+        etichetta: w.cta ?? "Controlla creatività",
+      },
+    };
+  });
+
+  const checks = [...diagnosi.checks, ...extra];
+  let ok = 0;
+  let consigli = 0;
+  let errori = 0;
+  for (const c of checks) {
+    const s =
+      c.severita ??
+      (c.level === "ok" ? "ok" : c.level === "tip" ? "consiglio" : "consiglio");
+    if (s === "ok") ok += 1;
+    else if (s === "consiglio") consigli += 1;
+    else if (s === "errore") errori += 1;
+  }
+
+  return {
+    ...diagnosi,
+    checks,
+    // score / haErroriBloccanti unchanged — semantic is non-blocking
+    riepilogo: diagnosi.riepilogo
+      ? { ok, consigli, errori }
+      : diagnosi.riepilogo,
+  };
+}
+
+/** Resolve current fit from persisted creativita snap (preferred) or session. */
+export function resolveCurrentCreativeSemanticFit(input: {
+  creativita: Array<{
+    id: string;
+    ruolo?: string;
+    storagePath?: string;
+    semanticFit?: CreativitaSemanticSnapshot | null;
+  }>;
+  settore: string;
+  offerta: string;
+  brief: string;
+  nomeCliente?: string;
+  objective?: CampagnaObjective | string;
+  sessionFit?: CreativeSemanticFit | null;
+}): CreativeSemanticFit | null {
+  if (input.creativita.length === 0) {
+    return emptyCreativeSemanticFit();
+  }
+  const principale =
+    input.creativita.find((c) => c.ruolo === "principale") ??
+    input.creativita[0];
+  if (!principale) return null;
+
+  const fingerprintInput = {
+    assetId: principale.id,
+    storagePath: principale.storagePath ?? "",
+    settore: input.settore,
+    offerta: input.offerta,
+    brief: input.brief,
+    nomeCliente: input.nomeCliente,
+    objective:
+      typeof input.objective === "string" ? input.objective : undefined,
+  };
+
+  if (
+    principale.semanticFit &&
+    isSemanticSnapshotCurrent(principale.semanticFit, fingerprintInput)
+  ) {
+    return snapshotToFit(principale.semanticFit);
+  }
+
+  // Session fit only when no stale snap — Studio may have analyzed before persist flush
+  if (
+    input.sessionFit &&
+    input.sessionFit.status !== "NOT_AVAILABLE" &&
+    !principale.semanticFit
+  ) {
+    return input.sessionFit;
+  }
+
+  return null;
+}
+
+/** True when sector guidance should prefer industrial/product visuals over local-business tips. */
+export function isIndustrialProductSettore(settore: string): boolean {
+  const s = settore.toLowerCase();
+  return /distribuzion|industrial|tecnica|manifattur|nastro|adesiv|logistica|ingegner|contract|grossista|energia|impiant|software b2b|forniture hospitality/.test(
+    s,
+  );
 }
 
 /** True only when persisted snapshot matches current creative+context fingerprint. */

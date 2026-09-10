@@ -11,6 +11,7 @@ import {
   type CreativeVisionAnalysis,
 } from "../src/lib/analyze-creative";
 import {
+  appendCreativeSemanticFitToDiagnosi,
   calculateLaunchReadinessWithSemantic,
   creativeSemanticContextFingerprint,
   creativeSemanticFitToReadiness,
@@ -20,13 +21,16 @@ import {
   emptyCreativeSemanticFit,
   extractPrincipalSemanticSnapshot,
   fitToSnapshot,
+  isIndustrialProductSettore,
   isSemanticSnapshotCurrent,
   labelSemanticFitIt,
   recommendationForMismatch,
+  resolveCurrentCreativeSemanticFit,
   snapshotToFit,
   type CreativeSemanticFit,
 } from "../src/lib/creative-semantic-fit";
 import { calculateLaunchReadiness } from "../src/lib/launch-readiness";
+import type { PreLancioDiagnosi } from "../src/lib/pre-lancio-check";
 import { matchCanonicalSettore } from "../src/lib/settore-canonico";
 
 let passed = 0;
@@ -518,6 +522,201 @@ function main() {
       { hasCreative: true },
     );
     assert(fit.status === "INSUFFICIENT_EVIDENCE", fit.status);
+  });
+
+  test("M9.3D.2 Pre-lancio: semantic warning additive; Creatività OK; score unchanged", () => {
+    const fit: CreativeSemanticFit = {
+      status: "CLEAR_MISMATCH",
+      confidence: "HIGH",
+      creativeSummary: "Auto sportiva / contesto automotive.",
+      campaignContextSummary: "Distribuzione tecnica industriale.",
+      reason:
+        "La campagna riguarda distribuzione tecnica industriale, mentre l'immagine sembra mostrare un contesto automotive.",
+      evidence: ["sports car"],
+    };
+    const base: PreLancioDiagnosi = {
+      score: 61,
+      label: "Campagna migliorabile",
+      tone: "yellow",
+      saturazione: null,
+      stimaAppuntamenti: null,
+      stimaOrdini: null,
+      stimaCoperturaRetargeting: false,
+      checks: [
+        {
+          id: "creativita",
+          level: "ok",
+          titolo: "Creatività",
+          severita: "ok",
+          messaggio: "Creatività OK",
+          motivazione: "Immagine caricata.",
+        },
+        {
+          id: "formato",
+          level: "tip",
+          titolo: "Formato creativo",
+          severita: "consiglio",
+          messaggio: "Formato orizzontale",
+          motivazione: "Preferisci 4:5.",
+        },
+      ],
+      layoutOperativo: true,
+      riepilogo: { ok: 1, consigli: 1, errori: 0 },
+      haErroriBloccanti: false,
+    };
+    const out = appendCreativeSemanticFitToDiagnosi(base, fit);
+    assert(out.score === 61, `score ${out.score}`);
+    assert(out.haErroriBloccanti === false, "no hard block");
+    assert(
+      out.checks.find((c) => c.id === "creativita")?.severita === "ok",
+      "Creatività still OK",
+    );
+    const sem = out.checks.find((c) =>
+      c.id.includes("creative-semantic-clear-mismatch"),
+    );
+    assert(Boolean(sem), "semantic check present");
+    assert(sem?.severita === "consiglio", "warning not error");
+    assert(
+      sem?.titolo?.includes("Coerenza creatività"),
+      sem?.titolo ?? "missing title",
+    );
+    assert(
+      (sem?.motivazione ?? "").includes("poco coerente"),
+      sem?.motivazione ?? "",
+    );
+    assert(
+      out.checks.some((c) => c.id === "formato"),
+      "format tip preserved",
+    );
+    assert(out.riepilogo?.consigli === 2, "extra consiglio counted");
+  });
+
+  test("M9.3D.2 Pre-lancio MATCH → no semantic tip", () => {
+    const fit: CreativeSemanticFit = {
+      status: "MATCH",
+      confidence: "HIGH",
+      creativeSummary: "Nastro adesivo industriale.",
+      campaignContextSummary: "Distribuzione tecnica industriale.",
+      reason: null,
+      evidence: ["tape"],
+    };
+    const base: PreLancioDiagnosi = {
+      score: 61,
+      label: "ok",
+      tone: "yellow",
+      saturazione: null,
+      stimaAppuntamenti: null,
+      stimaOrdini: null,
+      stimaCoperturaRetargeting: false,
+      checks: [
+        {
+          id: "creativita",
+          level: "ok",
+          titolo: "Creatività",
+          severita: "ok",
+          messaggio: "OK",
+        },
+      ],
+      riepilogo: { ok: 1, consigli: 0, errori: 0 },
+      haErroriBloccanti: false,
+    };
+    const out = appendCreativeSemanticFitToDiagnosi(base, fit);
+    assert(out.checks.length === 1, "no extra");
+    assert(out.score === 61, "score");
+  });
+
+  test("M9.3D.2 resolve prefers current snap; session fallback without snap", () => {
+    const fit: CreativeSemanticFit = {
+      status: "CLEAR_MISMATCH",
+      confidence: "HIGH",
+      creativeSummary: "Porsche.",
+      campaignContextSummary: "Distribuzione tecnica industriale.",
+      reason: "Mismatch.",
+      evidence: ["car"],
+    };
+    const fp = creativeSemanticContextFingerprint({
+      assetId: "a1",
+      storagePath: "u/a1.jpg",
+      settore: "Distribuzione tecnica industriale",
+      offerta: "Nastri 3M",
+      brief: "B2B",
+      nomeCliente: "Technon",
+      objective: "LEADS",
+    });
+    const snap = fitToSnapshot(fit, fp);
+    const fromSnap = resolveCurrentCreativeSemanticFit({
+      creativita: [
+        {
+          id: "a1",
+          ruolo: "principale",
+          storagePath: "u/a1.jpg",
+          semanticFit: snap,
+        },
+      ],
+      settore: "Distribuzione tecnica industriale",
+      offerta: "Nastri 3M",
+      brief: "B2B",
+      nomeCliente: "Technon",
+      objective: "LEADS",
+      sessionFit: null,
+    });
+    assert(fromSnap?.status === "CLEAR_MISMATCH", String(fromSnap?.status));
+
+    const fromSession = resolveCurrentCreativeSemanticFit({
+      creativita: [
+        { id: "a1", ruolo: "principale", storagePath: "u/a1.jpg" },
+      ],
+      settore: "Distribuzione tecnica industriale",
+      offerta: "Nastri 3M",
+      brief: "B2B",
+      nomeCliente: "Technon",
+      objective: "LEADS",
+      sessionFit: fit,
+    });
+    assert(fromSession?.status === "CLEAR_MISMATCH", "session fallback");
+
+    const stale = resolveCurrentCreativeSemanticFit({
+      creativita: [
+        {
+          id: "a1",
+          ruolo: "principale",
+          storagePath: "u/a1.jpg",
+          semanticFit: snap,
+        },
+      ],
+      settore: "Studio dentistico",
+      offerta: "Nastri 3M",
+      brief: "B2B",
+      nomeCliente: "Technon",
+      objective: "LEADS",
+      sessionFit: fit,
+    });
+    assert(stale === null, "stale snap blocks; no weak session override");
+  });
+
+  test("M9.3D.2 industrial tip helper + Studio dedupe wiring", () => {
+    assert(
+      isIndustrialProductSettore("Distribuzione tecnica industriale"),
+      "technon sector",
+    );
+    assert(!isIndustrialProductSettore("Pizzeria"), "local food stays local");
+    const studio = src("src/components/nuova-contatti/StudioCreativo.tsx");
+    assert(
+      studio.includes("guidanceP1bSenzaDuplicati"),
+      "filters P1B relevance dup",
+    );
+    assert(
+      studio.includes("creative-semantic-suggestion"),
+      "separate suggestion",
+    );
+    const drop = src("src/components/nuova-contatti/DropzoneCreativita.tsx");
+    assert(drop.includes("isIndustrialProductSettore"), "industrial tip");
+    assert(drop.includes("tipIndustriale"), "branch");
+    const percorso = src("src/components/nuova-contatti/PercorsoContatti.tsx");
+    assert(
+      percorso.includes("appendCreativeSemanticFitToDiagnosi"),
+      "step 5 wiring",
+    );
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

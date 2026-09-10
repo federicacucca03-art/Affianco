@@ -17,6 +17,7 @@ import {
   prossimoRuolo,
   RUOLI_IN_ORDINE,
 } from "@/lib/creativita";
+import { isIndustrialProductSettore } from "@/lib/creative-semantic-fit";
 import { StatoChip } from "@/components/nuova-contatti/StatoChip";
 
 type Props = {
@@ -35,6 +36,8 @@ type Props = {
   onCambiaFormatoEcommerce?: (formato: EcommerceCreativoFormato) => void;
   /** Testo linee guida visive dalla nicchia (Passo 4). */
   creativeGuidelines?: string | null;
+  /** Settore campagna — sceglie tip locale vs industriale. */
+  settore?: string;
   /** Titolo sezione upload (layout LEADS). */
   titoloSezione?: string;
   /** Rimuove card esterna quando annidato in StudioCreativo LEADS. */
@@ -144,6 +147,7 @@ export function DropzoneCreativita({
   formatoEcommerce = "SINGLE",
   onCambiaFormatoEcommerce,
   creativeGuidelines = null,
+  settore = "",
   titoloSezione,
   embedded = false,
   analisiVision,
@@ -158,6 +162,7 @@ export function DropzoneCreativita({
   const isInStore = objective === "IN_STORE";
   const isRetargeting = objective === "RETARGETING";
   const isAwareness = objective === "AWARENESS";
+  const tipIndustriale = isIndustrialProductSettore(settore);
   const usaFormatiCreativi =
     isEcommerce || isInStore || isRetargeting || isAwareness;
   const maxAsset = maxCreativitaPerContesto(objective, formatoEcommerce);
@@ -733,9 +738,9 @@ export function DropzoneCreativita({
       ) : isInStore ? (
         <div className="mt-4 aff-callout aff-callout--info">
           <p className="text-sm leading-relaxed text-[var(--ink)]">
-            💡 Regola d&apos;oro per il Business Locale: Le foto reali della
-            vetrina/ingresso, del titolare, del team o dei prodotti/piatti
-            puntano su autenticità e credibilità rispetto a grafiche generiche.
+            {tipIndustriale
+              ? "💡 Per industria e distribuzione: mostra prodotto, applicazione tecnica o contesto operativo reale — più credibile di grafiche generiche."
+              : "💡 Regola d'oro per il Business Locale: Le foto reali della vetrina/ingresso, del titolare, del team o dei prodotti/piatti puntano su autenticità e credibilità rispetto a grafiche generiche."}
           </p>
         </div>
       ) : isBookings ? (
@@ -760,9 +765,9 @@ export function DropzoneCreativita({
       ) : (
         <div className="mt-4 aff-callout aff-callout--info">
           <p className="text-sm leading-relaxed text-[var(--ink)]">
-            💡 Regola d&apos;oro per il Business Locale: Le foto reali del
-            titolare, del team, della sede o dei lavori finiti (prima/dopo)
-            possono risultare più credibili rispetto a immagini generiche.
+            {tipIndustriale
+              ? "💡 Per industria e distribuzione: usa una creatività con prodotto, applicazione tecnica o ambiente operativo — evita stock generici o contesti non correlati."
+              : "💡 Regola d'oro per il Business Locale: Le foto reali del titolare, del team, della sede o dei lavori finiti (prima/dopo) possono risultare più credibili rispetto a immagini generiche."}
           </p>
         </div>
       )}

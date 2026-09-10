@@ -300,23 +300,57 @@ export function StudioCreativo({
     ) {
       return [];
     }
+    const clear = principalFit.status === "CLEAR_MISMATCH";
+    const explanation =
+      [
+        principalFit.reason?.trim(),
+        principalFit.campaignContextSummary && principalFit.creativeSummary
+          ? `Campagna: ${principalFit.campaignContextSummary}. Creatività: ${principalFit.creativeSummary}.`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" ") ||
+      "Il visual non sembra allineato al settore o all'offerta.";
     return [
       {
         id: "creative-semantic-guidance",
-        level: principalFit.status === "CLEAR_MISMATCH" ? "WARNING" : "SUGGESTION",
-        title:
-          principalFit.status === "CLEAR_MISMATCH"
-            ? "La creatività sembra poco coerente con questa campagna."
-            : "Verifica che la creatività rappresenti bene l'offerta.",
-        description: recommendationForMismatch(settore),
+        level: clear ? "WARNING" : "SUGGESTION",
+        title: clear
+          ? "La creatività sembra poco coerente con questa campagna."
+          : "Verifica che la creatività rappresenti bene l'offerta.",
+        description: explanation,
+        field: "creativita",
+        step: 4,
+      },
+      {
+        id: "creative-semantic-suggestion",
+        level: "SUGGESTION",
+        title: recommendationForMismatch(settore),
+        description:
+          "Allinea il visual al prodotto, all'applicazione o al contesto operativo della campagna.",
         field: "creativita",
         step: 4,
       },
     ];
   }, [principalFit, settore]);
+  const guidanceP1bSenzaDuplicati = useMemo(() => {
+    if (
+      !principalFit ||
+      (principalFit.status !== "CLEAR_MISMATCH" &&
+        principalFit.status !== "POSSIBLE_MISMATCH")
+    ) {
+      return guidanceP1b;
+    }
+    // Avoid repeating the same coherence sentence from legacy relevance guidance.
+    return guidanceP1b.filter(
+      (i) =>
+        !i.id.includes("creative-vision-relevance-low") &&
+        !i.id.includes("creative-vision-relevance-medium"),
+    );
+  }, [guidanceP1b, principalFit]);
   const guidanceCreativita = useMemo(
-    () => [...guidanceMismatchExtra, ...guidanceP1b, ...guidanceP1a],
-    [guidanceMismatchExtra, guidanceP1b, guidanceP1a],
+    () => [...guidanceMismatchExtra, ...guidanceP1bSenzaDuplicati, ...guidanceP1a],
+    [guidanceMismatchExtra, guidanceP1bSenzaDuplicati, guidanceP1a],
   );
 
   async function blobUrlToDataUrl(url: string): Promise<string> {
@@ -1025,6 +1059,7 @@ export function StudioCreativo({
       formatoEcommerce={formatoEcommerce}
       onCambiaFormatoEcommerce={onCambiaFormatoEcommerce}
       creativeGuidelines={creativeGuidelines}
+      settore={settore}
       titoloSezione={
         prioritaCampagna ||
         percorsoEcommerce ||
