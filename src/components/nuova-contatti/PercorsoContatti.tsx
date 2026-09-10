@@ -1534,6 +1534,7 @@ export function PercorsoContatti({
             formId,
             frontEndOffer: frontEndOffer.trim(),
             varianteA: config.varianteA ?? "",
+            targetType,
             creativita: creativita.map((c) => ({
               avvisoFormato: c.avvisoFormato,
               formatoOrizzontale: c.formatoOrizzontale,
@@ -1562,6 +1563,7 @@ export function PercorsoContatti({
               whatsappNumber,
               bookingLinkUrl:
                 bookingChannel === "BOOKING_LINK" ? sitoWeb : undefined,
+              targetType,
               creativita: creativita.map((c) => ({
                 avvisoFormato: c.avvisoFormato,
                 formatoOrizzontale: c.formatoOrizzontale,
@@ -1613,6 +1615,7 @@ export function PercorsoContatti({
                   elevatorPitch: elevatorPitch.trim(),
                   nomeCliente: config.nomeCliente ?? "",
                   cpaMax: cpaMaxInstore,
+                  targetType,
                   creativita: creativita.map((c) => ({
                     avvisoFormato: c.avvisoFormato,
                     formatoOrizzontale: c.formatoOrizzontale,
@@ -1691,6 +1694,7 @@ export function PercorsoContatti({
         mercatoLabel: isEcommerce ? contesto.citta : undefined,
         breakEvenRoas: isEcommerce ? breakEvenRoasEcommerce : undefined,
         cpaMax: isEcommerce ? cpaMaxEcommerce : undefined,
+        targetType,
       });
       return appendCreativeSemanticFitToDiagnosi(
         baseDiagnosi,

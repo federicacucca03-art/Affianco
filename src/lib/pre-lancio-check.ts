@@ -1,3 +1,4 @@
+import type { MacroCategoria } from "@/data/settoriPresets";
 import {
   calculateImpressionsAwareness,
   calculatePersoneUnicheAwareness,
@@ -9,6 +10,10 @@ import { analizzaControlloMessaggioEcommerce } from "@/lib/controllo-messaggio-e
 import { analizzaControlloMessaggioInstore } from "@/lib/controllo-messaggio-instore";
 import { analizzaControlloMessaggioRetargeting } from "@/lib/controllo-messaggio-retargeting";
 import { analizzaControlloMessaggioAwareness } from "@/lib/controllo-messaggio-awareness";
+import {
+  SETTORE_ALTRO_ID,
+  matchCanonicalSettore,
+} from "@/lib/settore-canonico";
 import type {
   BookingChannel,
   CampagnaObjective,
@@ -225,7 +230,7 @@ export type PreLancioInput = {
   heroProduct?: string;
   /** INSTORE: nome negozio / attività per controllo messaggio. */
   nomeCliente?: string;
-  /** RETARGETING: fork copy/export B2C vs B2B. */
+  /** RETARGETING: fork copy/export B2C vs B2B. Also gates local saturation model. */
   targetType?: TargetType;
   /** BOOKINGS: numero WhatsApp (canale WHATSAPP). */
   whatsappNumber?: string;
@@ -313,7 +318,68 @@ export function stimaAppuntamentiSettimanali(input: {
 }
 
 /**
+ * Macros for which the residential-density (~900 ab/km²) local-consumer
+ * saturation heuristic was intentionally designed. Not a B2B model.
+ */
+const LOCAL_CONSUMER_SATURATION_MACROS: ReadonlySet<MacroCategoria> = new Set([
+  "Salute/Dentale",
+  "Fitness/Palestre",
+  "Servizi Locali/Artigiani",
+  "Ristorazione",
+  "Real Estate",
+  "Eventi/Turismo",
+]);
+
+/** Catalog niches that must never use residential-density saturation. */
+const UNSUPPORTED_LOCAL_SATURATION_SECTOR_IDS = new Set([
+  "distribuzione-tecnica",
+  "manifattura-industriale",
+  "contract-materiali",
+  "software-b2b",
+  "logistica-b2b",
+  "engineering-industriale",
+  "energia-impianti",
+  "grossista-b2b",
+  "forniture-hospitality",
+  "noleggio-auto",
+  SETTORE_ALTRO_ID,
+]);
+
+/**
+ * M9.3E — Explicit gate for the local residential-density saturation model.
+ * Supported only for clearly local-consumer / B2C contexts.
+ * City + radius + budget alone are NOT sufficient.
+ */
+export function isLocalAudienceSaturationModelSupported(input: {
+  settore?: string;
+  targetType?: TargetType;
+}): boolean {
+  if (input.targetType === "B2B") return false;
+
+  const match = matchCanonicalSettore(input.settore);
+  if (!match.matched || !match.preset) return false;
+  if (UNSUPPORTED_LOCAL_SATURATION_SECTOR_IDS.has(match.id)) return false;
+
+  const hint = match.preset.targetTypeHint;
+  if (hint === "B2B") return false;
+  // Mixed niches (e.g. noleggio): never force consumer density without B2C —
+  // catalog id already blocks noleggio; keep hint rule for any future MIXED.
+  if (hint === "MIXED") return false;
+
+  const macro = match.preset.macroCategoria;
+  if (
+    macro === "Industria/Distribuzione" ||
+    macro === "B2B/Professionisti"
+  ) {
+    return false;
+  }
+
+  return LOCAL_CONSUMER_SATURATION_MACROS.has(macro);
+}
+
+/**
  * Popolazione unica indicativa raggiungibile in un raggio (densità Meta locale ~900 ab/km²).
+ * Only meaningful when {@link isLocalAudienceSaturationModelSupported} is true.
  */
 export function stimaPopolazioneUnicaPerRaggio(raggioKm: number): number {
   const r = Math.abs(Number(raggioKm) || 0);
@@ -325,12 +391,26 @@ export function stimaPopolazioneUnicaPerRaggio(raggioKm: number): number {
 /**
  * Giorni prima della saturazione del pubblico locale.
  * Giorni = Popolazione / (Budget giornaliero / CPM × 1000)
+ *
+ * Returns null when the local-consumer density model is unsupported
+ * (B2B / industrial / unknown / mixed) — no invented fallback.
  */
 export function stimaSaturazionePubblico(input: {
   raggioKm: number;
   budgetGiornaliero: number;
   cpmStimato?: number;
+  settore?: string;
+  targetType?: TargetType;
 }): StimaSaturazione | null {
+  if (
+    !isLocalAudienceSaturationModelSupported({
+      settore: input.settore,
+      targetType: input.targetType,
+    })
+  ) {
+    return null;
+  }
+
   const cpmRaw =
     input.cpmStimato && input.cpmStimato !== 0 ? input.cpmStimato : 7;
   const cpm = Math.abs(Number(cpmRaw) || 7);
@@ -618,6 +698,8 @@ export function calcolaDiagnosiPreLancio(
           raggioKm: input.raggioKm,
           budgetGiornaliero: input.budgetGiornaliero,
           cpmStimato: input.cpmStimato,
+          settore: input.settore,
+          targetType: input.targetType,
         });
 
   const stimaAppuntamenti = isBookings
@@ -1011,6 +1093,8 @@ export function calcolaDiagnosiPreLancioLeads(
     raggioKm: input.raggioKm,
     budgetGiornaliero: input.budgetGiornaliero,
     cpmStimato: input.cpmStimato,
+    settore: input.settore,
+    targetType: input.targetType,
   });
 
   return {
@@ -1277,6 +1361,8 @@ export function calcolaDiagnosiPreLancioBookings(
     raggioKm: input.raggioKm,
     budgetGiornaliero: input.budgetGiornaliero,
     cpmStimato: input.cpmStimato,
+    settore: input.settore,
+    targetType: input.targetType,
   });
   if (saturazione) {
     checks.push(
@@ -1980,6 +2066,8 @@ export function calcolaDiagnosiPreLancioInstore(
     raggioKm: raggio,
     budgetGiornaliero: budgetGiorno,
     cpmStimato: input.cpmStimato,
+    settore: input.settore,
+    targetType: input.targetType,
   });
 
   score = Math.max(0, Math.min(100, score));
