@@ -504,16 +504,18 @@ export function DashboardHome() {
                       />
                       Risultati
                     </Link>
-                    <Link
-                      href="/impostazioni/integrazioni"
+                    <button
+                      type="button"
                       className="aff-tool-chip"
+                      onClick={() => void chooseMeta()}
+                      disabled={importBusy}
                     >
                       <Link2
                         className="h-3.5 w-3.5"
                         strokeWidth={STROKE_NAV}
                       />
-                      Importa Meta
-                    </Link>
+                      {importBusy ? "Preparazione…" : "Importa da Meta"}
+                    </button>
                     <button
                       type="button"
                       className="aff-tool-chip"

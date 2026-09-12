@@ -31,7 +31,7 @@ import {
   tassoConversioneLeadsValido,
 } from "@/lib/conversion-rate";
 import { leggiBozzaOnboarding } from "@/data/clienti-store";
-import { saveClient, getClientById, getCampaigns } from "@/utils/clientStorage";
+import { saveClient, getClientById } from "@/utils/clientStorage";
 import type { Cliente } from "@/types/clienti";
 import type { DeconstructAdResult } from "@/types/deconstruct-ad";
 import {
@@ -564,21 +564,23 @@ export function PercorsoContatti({
     const targetId = id ?? campagnaIdSalvata;
     if (!targetId) {
       setStatusApprovazioneGrezzo(null);
+      setRevisionNotesCliente(null);
       return;
     }
     try {
       const campagna = await leggiCampagnaDaSupabase(targetId);
-      if (campagna?.status) {
-        setStatusApprovazioneGrezzo(campagna.status);
+      if (campagna) {
+        setStatusApprovazioneGrezzo(campagna.status ?? "DRAFT");
         setRevisionNotesCliente(campagna.revisionNotes ?? null);
         return;
       }
+      /* Supabase is canonical — no localStorage approval-status authority. */
+      setStatusApprovazioneGrezzo(null);
+      setRevisionNotesCliente(null);
     } catch {
-      // Fallback localStorage.
+      setStatusApprovazioneGrezzo(null);
+      setRevisionNotesCliente(null);
     }
-    const locale = getCampaigns().find((c) => c.id === targetId);
-    setStatusApprovazioneGrezzo(locale?.status ?? "DRAFT");
-    setRevisionNotesCliente(locale?.revisionNotes ?? null);
   }, [campagnaIdSalvata]);
 
   useEffect(() => {

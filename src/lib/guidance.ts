@@ -502,12 +502,6 @@ export function raccomandaLancio(
       actionsNotReady.push(blockers[0].actionLabel);
     }
   }
-  if (!economiaOk) {
-    reasonsNotReady.push("L'economia non è ancora calcolabile.");
-    actionsNotReady.push(
-      "Completa ticket, tasso di conversione e margine nello step Economia.",
-    );
-  }
   for (const item of tecniciMancanti) {
     reasonsNotReady.push(item.mancante ?? `${item.label} mancante`);
     if (item.id === "pageId") {
@@ -528,15 +522,13 @@ export function raccomandaLancio(
   const notReadyTecnicoOBlocco =
     input.haErroriBloccantiPreLancio ||
     blockers.length > 0 ||
-    !economiaOk ||
     tecniciMancanti.length > 0;
 
   if (notReadyTecnicoOBlocco) {
     const soloTecnico =
       tecniciMancanti.length > 0 &&
       !input.haErroriBloccantiPreLancio &&
-      blockers.length === 0 &&
-      economiaOk;
+      blockers.length === 0;
     return {
       stato: "NOT_READY",
       title: "Non lancerei ancora.",
@@ -563,6 +555,15 @@ export function raccomandaLancio(
     actionsCaution.push("Completa gli elementi ancora aperti in Prontezza al lancio.");
   }
 
+  if (!economiaOk) {
+    reasonsCaution.push(
+      "I dati economici non sono ancora completi per il monitoraggio Ally.",
+    );
+    actionsCaution.push(
+      "Completa ticket, tasso di conversione e margine nello step Economia.",
+    );
+  }
+
   if (warningCriticiAperti(strategicScore)) {
     if (strategicScore.economia.conversionRateSource === "ESTIMATED") {
       reasonsCaution.push(
@@ -587,15 +588,25 @@ export function raccomandaLancio(
 
   const caution =
     !launchReadiness.isReady ||
+    !economiaOk ||
     warningCriticiAperti(strategicScore) ||
     !strategiaSolida;
 
   if (caution) {
+    const soloGapMonitoraggio =
+      !economiaOk &&
+      tecniciMancanti.length === 0 &&
+      !input.haErroriBloccantiPreLancio &&
+      blockers.length === 0 &&
+      launchReadiness.isReady;
     return {
       stato: "READY_WITH_CAUTION",
-      title: "Quasi pronta.",
-      description:
-        "La strategia è solida, ma ci sono ancora elementi da completare o verificare.",
+      title: soloGapMonitoraggio
+        ? "Puoi procedere con il lancio."
+        : "Quasi pronta.",
+      description: soloGapMonitoraggio
+        ? "Completa i dati economici per permettere ad Ally di monitorare correttamente i risultati."
+        : "La strategia è solida, ma ci sono ancora elementi da completare o verificare.",
       reasons: tagliaTre(reasonsCaution),
       actions: tagliaTre(actionsCaution),
     };

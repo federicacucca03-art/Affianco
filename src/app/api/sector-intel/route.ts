@@ -32,32 +32,19 @@ Rispondi SOLO con JSON valido, senza markdown.
 
 Schema esatto:
 {
-  "aovDefault": 120,
-  "margineDefault": 50,
-  "benchmarkCPL": { "min": 10, "max": 40 },
   "ganciConsigliati": ["gancio 1", "gancio 2", "gancio 3"],
   "formatoVisualConsigliato": "descrizione formato e stile visivo per il Passo 4",
-  "policyAlert": "nota policy Meta, oppure stringa vuota"
+  "policyAlert": "nota policy Meta, oppure stringa vuota",
+  "macroCategoria": "Servizi Locali/Artigiani"
 }
 
 Regole:
-- aovDefault = scontrino / AOV tipico Italia in euro.
-- margineDefault = margine lordo % stimato (10–80).
 - ganciConsigliati: esattamente 3 offerte front-end concrete, in italiano, senza gergo da agenzia.
-- benchmarkCPL: range realistico asta Meta Italia (lead o contatto equivalente).
 - formatoVisualConsigliato: una frase su formato (1:1, 4:5, 9:16) e stile visivo.
 - policyAlert: solo se rilevante (salute, housing, credito, integratori, dimagrimento, alcol). Altrimenti "".
+- macroCategoria: una delle macro Ally se riconoscibile, altrimenti "Servizi Locali/Artigiani".
+- NON inventare numeri di mercato: niente CPL, CPA, ROAS, CPM, ticket, margine, conversion rate, audience size.
 - Non inventare brand. Nessun testo fuori dal JSON.`;
-
-function range(raw: unknown, fallbackMin: number, fallbackMax: number) {
-  const o = (raw ?? {}) as { min?: unknown; max?: unknown; optimal?: unknown };
-  const min = Number(o.min);
-  const max = Number(o.max);
-  return {
-    min: Number.isFinite(min) && min > 0 ? min : fallbackMin,
-    max: Number.isFinite(max) && max > 0 ? max : fallbackMax,
-  };
-}
 
 function normalizzaIntel(parsed: Record<string, unknown>, niche: string): SettoreIntel {
   const ganciRaw = Array.isArray(parsed.ganciConsigliati)
@@ -69,8 +56,6 @@ function normalizzaIntel(parsed: Record<string, unknown>, niche: string): Settor
   while (ganci.length < 3) {
     ganci.push(`Prima consulenza / prova per ${niche}`);
   }
-  const cpl = range(parsed.benchmarkCPL, 12, 40);
-  const cpa = range(parsed.benchmarkCPA, cpl.min * 1.4, cpl.max * 1.6);
   const macroRaw = String(parsed.macroCategoria ?? parsed.macro ?? "");
   const macro = MACRO_CATEGORIE.includes(macroRaw as (typeof MACRO_CATEGORIE)[number])
     ? (macroRaw as (typeof MACRO_CATEGORIE)[number])
@@ -80,10 +65,6 @@ function normalizzaIntel(parsed: Record<string, unknown>, niche: string): Settor
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "") || "nicchia-custom";
-  const aov =
-    Number(parsed.aovDefault ?? parsed.defaultAov) || 80;
-  const margine =
-    Number(parsed.margineDefault ?? parsed.defaultMargin) || 50;
   const formato =
     String(
       parsed.formatoVisualConsigliato ??
@@ -103,10 +84,11 @@ function normalizzaIntel(parsed: Record<string, unknown>, niche: string): Settor
     nome: String(parsed.nome ?? parsed.label ?? niche).trim() || niche,
     macroCategoria: macro,
     aliases: [niche],
-    aovDefault: Math.max(1, aov),
-    margineDefault: Math.min(80, Math.max(10, margine)),
-    benchmarkCPL: cpl,
-    benchmarkCPA: cpa,
+    /* AI path is qualitative only — never invent numeric market benchmarks. */
+    aovDefault: 0,
+    margineDefault: 0,
+    benchmarkCPL: { min: 0, max: 0 },
+    benchmarkCPA: { min: 0, max: 0 },
     ganciConsigliati: [ganci[0], ganci[1], ganci[2]],
     formatoVisualConsigliato: formato,
     policyAlert: policy,
@@ -115,7 +97,7 @@ function normalizzaIntel(parsed: Record<string, unknown>, niche: string): Settor
       8,
       Number(parsed.budgetGiornalieroMin) || 18,
     ),
-    benchmarkKnown: true,
+    benchmarkKnown: false,
     source: "ai",
   };
 }

@@ -115,12 +115,24 @@ function resolveActualForKpi(
 }
 
 /**
+ * Inclusive calendar-day span for YYYY-MM-DD windows (UTC date parts).
+ * Used to feed canonical small-sample health opts.
+ */
+export function daysInclusiveYmd(since: string, until: string): number | null {
+  const s = Date.parse(`${since}T00:00:00.000Z`);
+  const u = Date.parse(`${until}T00:00:00.000Z`);
+  if (!Number.isFinite(s) || !Number.isFinite(u) || u < s) return null;
+  return Math.floor((u - s) / 86_400_000) + 1;
+}
+
+/**
  * Determine health availability before attempting to compute health.
  */
 function resolveHealthAvailability(
   target: MetaControlRoomTarget,
   metrics: MetaControlRoomMetrics,
   resultMappingConfidence: "CONFIDENT" | "AMBIGUOUS" | "UNKNOWN",
+  sample: { daysActive: number | null; resultsCount: number | null },
 ): MetaHealthAvailability {
   if (target.primaryKpi == null || target.primaryKpi === "NONE") {
     return "TARGET_REQUIRED";
@@ -136,6 +148,12 @@ function resolveHealthAvailability(
     resultMappingConfidence !== "CONFIDENT"
   ) {
     return "RESULT_MAPPING_REQUIRED";
+  }
+  if (sample.daysActive != null && sample.daysActive < 3) {
+    return "INSUFFICIENT_DATA";
+  }
+  if (sample.resultsCount != null && sample.resultsCount < 2) {
+    return "INSUFFICIENT_DATA";
   }
   const actual = resolveActualForKpi(
     target.primaryKpi,
@@ -187,10 +205,17 @@ export function metaInsightsToControlRoomInput(input: {
     targetValue: target?.targetValue ?? null,
   };
 
+  const daysActive = daysInclusiveYmd(since, until);
+  const resultsCount =
+    metrics.results != null && Number.isFinite(metrics.results)
+      ? metrics.results
+      : null;
+
   const availability = resolveHealthAvailability(
     controlRoomTarget,
     metrics,
     aggregate.resultMappingConfidence,
+    { daysActive, resultsCount },
   );
 
   let health: HealthResult | null = null;
@@ -204,7 +229,16 @@ export function metaInsightsToControlRoomInput(input: {
     const threshold = controlRoomTarget.targetValue!;
     const healthMode =
       controlRoomTarget.primaryKpi === "CPM" ? "efficiency" : "economic";
-    health = calcolaHealthStatus(actual, threshold, healthMode);
+    health = calcolaHealthStatus(actual, threshold, healthMode, {
+      daysActive,
+      resultsCount,
+    });
+  } else if (availability === "INSUFFICIENT_DATA") {
+    /* Same canonical engine — force INSUFFICIENT rather than G/Y/R. */
+    health = calcolaHealthStatus(null, null, "economic", {
+      daysActive: daysActive ?? 0,
+      resultsCount: resultsCount ?? 0,
+    });
   }
 
   return {

@@ -231,6 +231,39 @@ test("C+: CPL=10 EUR, target=8 EUR → RED (above threshold)", () => {
   assert(out.health?.status === "RED", `Expected RED, got ${out.health?.status}`);
 });
 
+// Beta hardening: small-sample safety (canonical days < 3 OR results < 2)
+test("BETA: 1 result / 7 days → INSUFFICIENT_DATA (not G/Y/R)", () => {
+  const out = metaInsightsToControlRoomInput({
+    aggregate: makeConfidentLeadAggregate(50, 1),
+    since: "2026-08-01",
+    until: "2026-08-07",
+    target: { primaryKpi: "CPL", targetValue: 20 },
+    effectiveStatus: "ACTIVE",
+  });
+  assert(
+    out.healthAvailability === "INSUFFICIENT_DATA",
+    `availability ${out.healthAvailability}`,
+  );
+  assert(
+    out.health?.status === "INSUFFICIENT",
+    `health ${out.health?.status}`,
+  );
+});
+
+test("BETA: 10 results / 1 day → INSUFFICIENT_DATA", () => {
+  const out = metaInsightsToControlRoomInput({
+    aggregate: makeConfidentLeadAggregate(200, 10),
+    since: "2026-08-01",
+    until: "2026-08-01",
+    target: { primaryKpi: "CPL", targetValue: 20 },
+  });
+  assert(
+    out.healthAvailability === "INSUFFICIENT_DATA",
+    `availability ${out.healthAvailability}`,
+  );
+  assert(out.health?.status === "INSUFFICIENT", `health ${out.health?.status}`);
+});
+
 // D: CPL + AMBIGUOUS → RESULT_MAPPING_REQUIRED
 test("D: CPL + AMBIGUOUS → RESULT_MAPPING_REQUIRED", () => {
   const out = metaInsightsToControlRoomInput({
