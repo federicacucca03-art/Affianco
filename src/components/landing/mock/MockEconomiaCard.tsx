@@ -4,7 +4,7 @@ import { MockBrowser } from "@/components/landing/mock/MockBrowser";
 
 export function MockEconomiaCard() {
   return (
-    <MockBrowser titolo="affianco.app/campagne/nuova · Passo 2">
+    <MockBrowser titolo="Economia campagna">
       <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--accent)]">
         Sostenibilità economica
       </p>

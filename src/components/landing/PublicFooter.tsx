@@ -15,8 +15,8 @@ export function PublicFooter() {
             Ally
           </p>
           <p className="max-w-xl">
-            Il posto in cui un professionista gestisce tutto il lavoro dietro le
-            campagne Meta dei propri clienti.
+            Il workspace operativo per chi gestisce Meta Ads per clienti: sai
+            dove guardare e cosa fare dopo.
           </p>
           <Link href="/login" className="text-[var(--accent)] hover:underline">
             Accedi →

@@ -1,74 +1,73 @@
-import { MockBrowser } from "@/components/landing/mock/MockBrowser";
+import { StatoChip } from "@/components/nuova-contatti/StatoChip";
 
+/** Compact client approval mock — one shared version + clear status. */
 export function MockApprovazioneCliente() {
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
-      <MockBrowser titolo="affianco.app/approvazione · Vista cliente">
-        <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-medium text-[var(--accent)]">
-            SR
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-[var(--ink)]">
-              Studio Dentistico Rossi
-            </p>
-            <p className="mt-0.5 text-xs text-[var(--ink-muted)]">
-              Obiettivo · Richieste di contatto
-            </p>
+    <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-white shadow-[var(--shadow-soft)]">
+      <div className="grid sm:grid-cols-[1.15fr_0.85fr]">
+        <div className="border-b border-[var(--border)] p-4 sm:border-b-0 sm:border-r sm:p-5">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+            Cliente
+          </p>
+          <p className="mt-1 text-sm font-medium text-[var(--ink)]">
+            Studio Dentistico Rossi
+          </p>
+          <p className="mt-3 text-[10px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+            Obiettivo
+          </p>
+          <p className="mt-1 text-sm text-[var(--ink)]">Richieste di contatto</p>
+
+          <p className="mt-4 text-[10px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+            Copy
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-[var(--ink-muted)]">
+            Prima visita di controllo a Milano — valutazione gratuita, senza
+            impegno.
+          </p>
+
+          <p className="mt-4 text-[10px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+            Creatività
+          </p>
+          <div className="mt-2 flex items-center gap-3">
+            <div className="h-14 w-14 shrink-0 rounded-lg bg-[#e8f0fe]" />
+            <p className="text-xs text-[var(--ink-muted)]">Video testimonial</p>
           </div>
         </div>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_140px]">
+        <div className="flex flex-col justify-between gap-4 bg-[var(--surface-hover)]/50 p-4 sm:p-5">
           <div>
             <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-              Copy approvato
+              Stato
             </p>
-            <p className="mt-2 text-sm leading-relaxed text-[var(--ink)]">
-              Prima visita di controllo a Milano — scopri se sei un candidato
-              per gli allineatori invisibili. Valutazione gratuita, senza
-              impegno.
-            </p>
-            <p className="mt-3 text-[10px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-              Creatività
-            </p>
-            <div className="mt-2 overflow-hidden rounded-xl bg-[#e8f0fe]">
-              <div className="flex aspect-[4/3] items-center justify-center text-xs text-[var(--accent)]">
-                Video testimonial
-              </div>
+            <div className="mt-2">
+              <StatoChip kind="pending" label="In attesa di approvazione" />
             </div>
+            <p className="mt-3 text-xs leading-relaxed text-[var(--ink-muted)]">
+              Una sola versione condivisa. Approvazione tracciata.
+            </p>
           </div>
 
-          <div className="mx-auto w-[140px] shrink-0">
-            <div className="overflow-hidden rounded-[1.75rem] border-[3px] border-[var(--ink)] bg-white shadow-[var(--shadow-soft)]">
-              <div className="bg-[var(--ink)] px-3 py-1.5 text-center text-[9px] text-white">
-                Anteprima feed
-              </div>
-              <div className="p-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="h-5 w-5 rounded-full bg-[var(--accent-soft)]" />
-                  <span className="text-[9px] font-medium text-[var(--ink)]">
-                    Studio Rossi
-                  </span>
-                </div>
-                <div className="mt-2 aspect-square rounded-lg bg-[#e8f0fe]" />
-                <p className="mt-2 text-[8px] leading-snug text-[var(--ink)]">
-                  Prima visita di controllo a Milano…
-                </p>
-                <span className="mt-2 block rounded-md bg-[var(--surface-hover)] py-1 text-center text-[8px] font-medium text-[var(--ink-muted)]">
-                  Richiedi informazioni
-                </span>
-              </div>
-            </div>
+          <div className="space-y-2">
+            <button
+              type="button"
+              className="w-full rounded-full bg-[var(--ink)] py-2.5 text-sm font-medium text-white"
+            >
+              Approva
+            </button>
+            <button
+              type="button"
+              className="w-full rounded-full border border-[var(--border)] bg-white py-2.5 text-sm text-[var(--ink)]"
+            >
+              Richiedi modifiche
+            </button>
+          </div>
+
+          <div className="flex flex-wrap gap-2 border-t border-[var(--border)] pt-3">
+            <StatoChip kind="ok" label="Approvata" />
+            <StatoChip kind="watch" label="Modifiche richieste" />
           </div>
         </div>
-
-        <button
-          type="button"
-          className="mt-5 w-full rounded-full bg-[var(--ink)] py-2.5 text-sm font-medium text-white"
-        >
-          Approva campagna
-        </button>
-      </MockBrowser>
+      </div>
     </div>
   );
 }

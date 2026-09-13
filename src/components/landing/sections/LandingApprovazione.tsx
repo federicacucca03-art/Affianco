@@ -3,18 +3,23 @@ import { MockApprovazioneCliente } from "@/components/landing/mock/MockApprovazi
 
 export function LandingApprovazione() {
   return (
-    <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
-      <LandingSectionHeader
-        eyebrow="Approvazione cliente"
-        titolo="Basta “Hai visto il messaggio che ti ho mandato?”"
-        descrizione="Prepara la campagna, condividi un link e fai vedere al cliente esattamente cosa verrà pubblicato."
-      />
-
-      <div className="mt-10">
-        <MockApprovazioneCliente />
-        <p className="mt-4 text-center text-sm text-[var(--ink-muted)]">
-          Una sola versione. Una sola approvazione. Tutto tracciato.
-        </p>
+    <section id="approvazione" className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
+      <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
+        <div>
+          <LandingSectionHeader
+            eyebrow="Approvazione cliente"
+            titolo="Una campagna. Una versione approvata."
+            descrizione="Condividi un link con strategia, copy e creatività. Il cliente può approvare o chiedere modifiche senza creare un account."
+          />
+          <p className="mt-6 text-sm font-medium leading-relaxed text-[var(--ink)]">
+            Niente versioni sparse.
+            <br />
+            Niente dubbi su cosa è stato approvato.
+          </p>
+        </div>
+        <div className="mx-auto w-full max-w-lg lg:max-w-none">
+          <MockApprovazioneCliente />
+        </div>
       </div>
     </section>
   );

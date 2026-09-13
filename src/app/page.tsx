@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { LandingPage } from "@/components/landing/LandingPage";
 
 export const metadata: Metadata = {
-  title: "Ally — Gestisci le campagne Meta dei tuoi clienti",
+  title: "Ally — Sai sempre quale campagna guardare",
   description:
-    "Ally organizza strategia, sostenibilità economica, approvazione, lancio e monitoraggio delle campagne Meta in un unico flusso per freelance e piccole agenzie.",
+    "Ally è il workspace operativo per freelance e micro-agenzie che gestiscono Meta Ads per clienti. Pianifica, approva, collega Meta e capisci cosa fare dopo.",
 };
 
 export default function Home() {

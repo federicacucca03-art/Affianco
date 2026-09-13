@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { MockDashboardHero } from "@/components/landing/mock/MockDashboardHero";
+import { MockAllyOggi } from "@/components/landing/mock/MockAllyOggi";
 
 export function LandingHero() {
   return (
@@ -20,16 +20,19 @@ export function LandingHero() {
             Per freelance e micro-agenzie
           </p>
           <h1 className="landing-fade-up landing-delay-1 mt-4 text-3xl font-medium leading-[1.12] tracking-tight text-[var(--ink)] sm:text-4xl lg:text-[2.65rem]">
-            Tutto il lavoro dietro le tue campagne. In un unico posto.
+            Sai sempre quale campagna guardare.
+            <br />
+            E cosa fare dopo.
           </h1>
           <p className="landing-fade-up landing-delay-2 mt-5 max-w-md text-base leading-relaxed text-[var(--ink-muted)]">
-            Ally ti aiuta a gestire le campagne Meta dei tuoi clienti dalla
-            pianificazione al monitoraggio: fai i conti prima di spendere,
-            prepari la campagna, raccogli l&apos;approvazione del cliente e
-            controlli i risultati.
+            Ally è il workspace operativo per freelance e micro-agenzie che
+            gestiscono Meta Ads per clienti. Pianifica le campagne, raccogli le
+            approvazioni, collega Meta e tieni sotto controllo ciò che richiede
+            davvero la tua attenzione.
           </p>
-          <p className="landing-fade-up landing-delay-2 mt-3 text-sm font-medium text-[var(--ink)]">
-            Meno strumenti. Meno errori. Più controllo.
+          <p className="landing-fade-up landing-delay-2 mt-4 max-w-md text-sm leading-relaxed text-[var(--ink)]">
+            Meta Ads Manager gestisce le inserzioni. Ally organizza il lavoro e
+            le decisioni intorno alle campagne.
           </p>
           <div className="landing-fade-up landing-delay-3 mt-8 flex flex-wrap items-center gap-3">
             <Link
@@ -46,14 +49,11 @@ export function LandingHero() {
               Guarda come funziona
             </a>
           </div>
-          <p className="landing-fade-up landing-delay-4 mt-6 text-sm text-[var(--ink-muted)]">
-            Pensato per freelance, media buyer e piccole agenzie.
-          </p>
         </div>
 
         <div className="landing-fade-up landing-delay-2 relative lg:col-span-7">
           <div className="landing-float mx-auto max-w-xl lg:max-w-none">
-            <MockDashboardHero />
+            <MockAllyOggi />
           </div>
         </div>
       </div>

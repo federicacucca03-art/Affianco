@@ -1,59 +1,89 @@
-"use client";
-
-import { ArrowRight } from "lucide-react";
 import { MockBrowser } from "@/components/landing/mock/MockBrowser";
 import { StatoChip } from "@/components/nuova-contatti/StatoChip";
 
-const RIEPILOGO = [
-  { kind: "ok" as const, label: "6 clienti nella norma" },
-  { kind: "watch" as const, label: "2 da monitorare" },
-  { kind: "critico" as const, label: "1 richiede attenzione" },
-];
-
+/** Illustrative Control Room mock — priority, evidence, next action. */
 export function MockControlRoom() {
   return (
-    <MockBrowser titolo="affianco.app/risultati">
-      <div className="flex flex-wrap gap-2">
-        {RIEPILOGO.map((item) => (
-          <StatoChip key={item.label} kind={item.kind} label={item.label} />
-        ))}
-      </div>
-
-      <article className="mt-4 rounded-xl border border-[#f5c6c6] bg-[#FDECEC] p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-[var(--ink)]">
-              Studio Dentistico Rossi
-            </p>
-            <p className="mt-1 text-[11px] text-[var(--ink-muted)]">
-              CPL attuale: €34 · CPL target: €25 · Trend: +36%
-            </p>
-          </div>
-          <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-medium text-[#C45C5C]">
-            Richiede attenzione
-          </span>
-        </div>
-
-        <div className="mt-4 space-y-2 text-xs leading-relaxed text-[var(--ink)]">
-          <p>
-            <span className="font-medium">Diagnosi:</span> Il CPL sta aumentando
-            rispetto alla soglia definita.
-          </p>
-          <p>
-            <span className="font-medium">Azione:</span> Controlla la creatività
-            principale.
-          </p>
-        </div>
-
-        <p className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-[var(--accent)]">
-          Vedi diagnosi
-          <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
-        </p>
-      </article>
-
-      <p className="mt-4 text-[11px] text-[var(--ink-muted)]">
-        Cosa sta succedendo → Perché → Cosa fare
+    <MockBrowser titolo="Monitoraggio">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--accent)]">
+        Non tutte le campagne meritano attenzione oggi
       </p>
+
+      <div className="mt-4 space-y-3">
+        <article className="rounded-xl border border-[#f0d0d0] bg-[#fff8f8] px-3.5 py-3.5">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-[#b42318]">
+                Richiede attenzione
+              </p>
+              <p className="mt-0.5 text-sm font-medium text-[var(--ink)]">
+                Studio Dentistico Rossi
+              </p>
+            </div>
+            <StatoChip kind="critico" label="Attenzione" />
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4">
+            <div>
+              <p className="text-[var(--ink-muted)]">CPL attuale</p>
+              <p className="font-medium text-[var(--ink)]">€34</p>
+            </div>
+            <div>
+              <p className="text-[var(--ink-muted)]">CPL target</p>
+              <p className="font-medium text-[var(--ink)]">€25</p>
+            </div>
+            <div>
+              <p className="text-[var(--ink-muted)]">Risultati</p>
+              <p className="font-medium text-[var(--ink)]">12</p>
+            </div>
+            <div>
+              <p className="text-[var(--ink-muted)]">Giorni</p>
+              <p className="font-medium text-[var(--ink)]">8</p>
+            </div>
+          </div>
+          <p className="mt-3 text-[11px] leading-relaxed text-[var(--ink-muted)]">
+            Perché: il costo è sopra la soglia e ci sono abbastanza dati per
+            valutarlo.
+          </p>
+          <p className="mt-2 text-[11px] font-medium text-[var(--ink)]">
+            Prossima azione: Controlla la creatività principale.
+          </p>
+        </article>
+
+        <article className="rounded-xl border border-[var(--border)] bg-white px-3.5 py-3.5">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
+                Dati insufficienti
+              </p>
+              <p className="mt-0.5 text-sm font-medium text-[var(--ink)]">
+                Autoscuola Bianchi
+              </p>
+            </div>
+            <StatoChip kind="pending" label="Dati insufficienti" />
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-3">
+            <div>
+              <p className="text-[var(--ink-muted)]">CPL attuale</p>
+              <p className="font-medium text-[var(--ink)]">€22</p>
+            </div>
+            <div>
+              <p className="text-[var(--ink-muted)]">Risultati</p>
+              <p className="font-medium text-[var(--ink)]">1</p>
+            </div>
+            <div>
+              <p className="text-[var(--ink-muted)]">Giorni</p>
+              <p className="font-medium text-[var(--ink)]">2</p>
+            </div>
+          </div>
+          <p className="mt-3 text-[11px] leading-relaxed text-[var(--ink-muted)]">
+            Non c&apos;è ancora abbastanza evidenza per giudicare il CPL. Non
+            viene forzata una conclusione verde o rossa.
+          </p>
+          <p className="mt-2 text-[11px] font-medium text-[var(--ink)]">
+            Prossima azione: Aspetta altri dati.
+          </p>
+        </article>
+      </div>
     </MockBrowser>
   );
 }

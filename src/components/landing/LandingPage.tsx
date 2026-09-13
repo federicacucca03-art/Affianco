@@ -5,9 +5,12 @@ import { LandingNavbar } from "@/components/landing/LandingNavbar";
 import { LandingHero } from "@/components/landing/sections/LandingHero";
 import { LandingProblema } from "@/components/landing/sections/LandingProblema";
 import { LandingComeFunziona } from "@/components/landing/sections/LandingComeFunziona";
+import { LandingAllyOggi } from "@/components/landing/sections/LandingAllyOggi";
 import { LandingSostenibilita } from "@/components/landing/sections/LandingSostenibilita";
+import { LandingPreLancio } from "@/components/landing/sections/LandingPreLancio";
 import { LandingApprovazione } from "@/components/landing/sections/LandingApprovazione";
 import { LandingControlRoom } from "@/components/landing/sections/LandingControlRoom";
+import { LandingAskAlly } from "@/components/landing/sections/LandingAskAlly";
 import { LandingStoricoCliente } from "@/components/landing/sections/LandingStoricoCliente";
 import { LandingPerChiE } from "@/components/landing/sections/LandingPerChiE";
 import { LandingDifferenziazione } from "@/components/landing/sections/LandingDifferenziazione";
@@ -30,12 +33,15 @@ export function LandingPage() {
         <LandingHero />
         <LandingProblema />
         <LandingComeFunziona />
+        <LandingAllyOggi />
         <LandingSostenibilita />
+        <LandingPreLancio />
         <LandingApprovazione />
         <LandingControlRoom />
+        <LandingAskAlly />
         <LandingStoricoCliente />
-        <LandingPerChiE />
         <LandingDifferenziazione />
+        <LandingPerChiE />
         <LandingFaq />
         <LandingCtaFinale />
       </main>

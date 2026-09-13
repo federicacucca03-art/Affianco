@@ -1,69 +1,68 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { LandingSectionHeader } from "@/components/landing/LandingSectionHeader";
 
 const FAQ = [
   {
     q: "Ally sostituisce Meta Ads Manager?",
-    a: "No. Ally organizza il lavoro operativo prima, durante e dopo la campagna. Meta Ads Manager resta lo strumento di pubblicazione e gestione delle inserzioni.",
+    a: "No. Meta Ads Manager resta lo strumento per pubblicazione e gestione operativa delle inserzioni. Qui organizzi strategia, preparazione, approvazioni, monitoraggio e decisioni attorno alle campagne.",
   },
   {
-    q: "Il cliente deve creare un account?",
-    a: "No. Condividi un link di approvazione: il cliente vede copy, creatività e soglie economiche senza login.",
+    q: "Ally può collegarsi a Meta?",
+    a: "Sì: puoi collegare e importare campagne e leggere i dati disponibili per il monitoraggio. Non vengono modificate automaticamente campagne, budget o stato delle inserzioni.",
   },
   {
-    q: "Cosa significa “CPL target”?",
-    a: "È una soglia economica di riferimento calcolata da valore medio, margine e tasso di chiusura. Non è una previsione certa, ma un criterio per capire se la campagna ha senso per il business del cliente.",
+    q: "Devo conoscere già il CPL target?",
+    a: "No. Puoi completare la pianificazione anche quando alcuni dati economici non sono ancora disponibili. Quei dati servono soprattutto a confrontare i risultati con la sostenibilità economica.",
   },
   {
-    q: "Posso riusare profili e storico clienti?",
-    a: "Sì. Ally conserva nome, settore, brief e campagne passate, così non riparti da zero ad ogni progetto.",
+    q: "Il cliente deve avere un account Ally?",
+    a: "No. Puoi condividere un link di approvazione dedicato.",
   },
   {
-    q: "Come funziona la diagnosi post-lancio?",
-    a: "Carichi uno screenshot o i dati da Ads Manager: Ally confronta CPL reale e soglia definita, e ti indica cosa richiede attenzione e cosa fare.",
+    q: "Ally usa l'AI?",
+    a: "Sì, dove serve per interpretare brief, creatività e contesto. Stati, controlli e soglie operative non vengono affidati ciecamente all'AI.",
   },
 ];
 
 export function LandingFaq() {
-  const [aperta, setAperta] = useState<number | null>(0);
+  const [aperto, setAperto] = useState<number | null>(0);
 
   return (
-    <section id="faq" className="border-t border-[var(--border)] bg-white">
-      <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20">
-        <LandingSectionHeader
-          eyebrow="FAQ"
-          titolo="Domande frequenti"
-          allineamento="centro"
-        />
+    <section id="faq" className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20">
+      <LandingSectionHeader allineamento="centro" titolo="Domande frequenti" />
 
-        <div className="mt-10 divide-y divide-[var(--border)] rounded-[var(--radius)] border border-[var(--border)] bg-[var(--background)]">
-          {FAQ.map((item, i) => {
-            const isAperta = aperta === i;
-            return (
-              <div key={item.q} className="px-4 sm:px-5">
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between gap-4 py-4 text-left text-sm font-medium text-[var(--ink)]"
-                  onClick={() => setAperta(isAperta ? null : i)}
-                  aria-expanded={isAperta}
-                >
+      <ul className="mt-10 divide-y divide-[var(--border)] border-y border-[var(--border)]">
+        {FAQ.map((item, i) => {
+          const isOpen = aperto === i;
+          return (
+            <li key={item.q}>
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-4 py-4 text-left"
+                aria-expanded={isOpen}
+                onClick={() => setAperto(isOpen ? null : i)}
+              >
+                <span className="text-sm font-medium text-[var(--ink)] sm:text-base">
                   {item.q}
-                  <span className="shrink-0 text-[var(--ink-muted)]">
-                    {isAperta ? "−" : "+"}
-                  </span>
-                </button>
-                {isAperta ? (
-                  <p className="pb-4 text-sm leading-relaxed text-[var(--ink-muted)]">
-                    {item.a}
-                  </p>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+                </span>
+                <ChevronDown
+                  className={`h-4 w-4 shrink-0 text-[var(--ink-muted)] transition-transform ${
+                    isOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {isOpen ? (
+                <p className="pb-4 text-sm leading-relaxed text-[var(--ink-muted)]">
+                  {item.a}
+                </p>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
