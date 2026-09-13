@@ -17,13 +17,14 @@ import type { AllyOggiBrief, AllyOggiBriefContext } from "@/lib/ally-oggi/types"
 
 export async function runAllyOggiBrief(
   context: AllyOggiBriefContext,
+  question?: string | null,
 ): Promise<AllyOggiBrief> {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
     return buildAllyOggiFallback(context);
   }
 
-  const createParams = buildAllyOggiAnthropicParams(context);
+  const createParams = buildAllyOggiAnthropicParams(context, question);
   assertAllyOggiRequestCompatibleWithSonnet5(
     createParams as unknown as Record<string, unknown>,
   );

@@ -74,24 +74,37 @@ function pluralCampagne(n: number): string {
   return n === 1 ? "1 campagna" : `${n} campagne`;
 }
 
+function countMeaningfulActions(
+  ws: AllyOggiWorkspaceSummary,
+  perfAttn: number,
+  configFactCount: number,
+): number {
+  // Revisions + performance priorities + non-draft configuration facts.
+  // Drafts alone are preparation, not "azioni" that require attention today.
+  return (
+    ws.revisionRequestedCampaigns +
+    perfAttn +
+    Math.max(0, configFactCount)
+  );
+}
+
 function buildHeadline(
   ws: AllyOggiWorkspaceSummary,
   perfAttn: number,
+  configFactCount: number,
 ): string {
-  if (perfAttn > 0) {
-    return "Ecco cosa richiederebbe attenzione oggi.";
-  }
   if (ws.totalWorkspaceCampaigns === 0) {
     return "Nessuna campagna da valutare.";
   }
-  if (
-    ws.draftCampaigns > 0 ||
-    ws.revisionRequestedCampaigns > 0 ||
-    ws.configurationRequiredCampaigns > 0
-  ) {
-    return "Nessuna urgenza da valutare";
+  const azioni = countMeaningfulActions(ws, perfAttn, configFactCount);
+  if (azioni === 1) {
+    return "1 azione richiede la tua attenzione";
   }
-  return "Non vedo criticità operative oggi.";
+  if (azioni > 1) {
+    return `${azioni} azioni richiedono la tua attenzione`;
+  }
+  // Drafts / only preparation / nothing actionable.
+  return "Niente di urgente oggi.";
 }
 
 /**
@@ -232,7 +245,7 @@ export function buildAllyOggiFallback(
     .map((f) => itemFromFact(f, configSentence(f)));
 
   const perfAttn = priorityFacts.length;
-  const headline = buildHeadline(ws, perfAttn);
+  const headline = buildHeadline(ws, perfAttn, configurationItems.length);
 
   let summary: string;
   if (ws.totalWorkspaceCampaigns === 0) {
@@ -257,10 +270,10 @@ export function buildAllyOggiFallback(
     configurationItems,
     closingNote:
       perfAttn === 0 &&
-      ws.configurationRequiredCampaigns === 0 &&
-      ws.draftCampaigns === 0 &&
-      ws.revisionRequestedCampaigns === 0
-        ? "Puoi riprendere dalle campagne in monitoraggio quando vuoi."
+      ws.revisionRequestedCampaigns === 0 &&
+      configurationItems.length === 0 &&
+      ws.draftCampaigns === 0
+        ? "Le campagne attive non richiedono interventi."
         : null,
     fromAi: false,
   };

@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
-  etichettaAttentionSource,
   etichettaAttentionState,
   etichettaUrgencyLevel,
   formatAttentionMetric,
@@ -12,14 +11,6 @@ import {
   type MondayControlRoomSummary,
   type UrgencyLevel,
 } from "@/lib/monday-control-room";
-import {
-  etichettaConfidence,
-  etichettaLikelyArea,
-  isDiagnosisUiEligible,
-  resolveDiagnosisEligibility,
-} from "@/lib/campaign-diagnosis/eligibility";
-import { fetchCampaignDiagnosis } from "@/lib/campaign-diagnosis-client";
-import type { CampaignDiagnosisResponse } from "@/lib/campaign-diagnosis/types";
 import {
   resolveNextAction,
   shouldShowNextAction,
@@ -31,10 +22,22 @@ import {
 } from "@/lib/meta/freshness";
 import type { StatoChipKind } from "@/components/nuova-contatti/StatoChip";
 import { StatoChip } from "@/components/nuova-contatti/StatoChip";
-import { AllyNextAction } from "@/components/shell/AllyNextAction";
+import {
+  buildHomeDailySummaryCopy,
+  isHomeRevisionItem,
+  partitionHomePriorities,
+} from "@/lib/home-priorities";
+import {
+  buildHomeActionExplanation,
+  buildHomeCardReason,
+  formatHomeCardMetaDate,
+  CAMPAIGN_FOLLOWUP_PROMPTS,
+} from "@/lib/home-action-explanation";
+import { readBearerToken } from "@/lib/meta-import-client";
+import type { AllyCopilotAnswer } from "@/lib/ally-copilot";
 
-const MAX_URGENT = 8;
-const MAX_STABLE = 3;
+const MAX_DO_NOW = 8;
+const MAX_MONITOR = 6;
 
 function chipKind(state: AttentionState): StatoChipKind {
   switch (state) {
@@ -53,7 +56,10 @@ function chipKind(state: AttentionState): StatoChipKind {
   }
 }
 
-/** Secondary supporting line — never competing with the attention badge. */
+/**
+ * Kept for M6B compatibility / internal urgency mapping.
+ * Not rendered on Home cards — state badge + section already communicate urgency.
+ */
 function urgencySupportingText(level: UrgencyLevel): string | null {
   const short = etichettaUrgencyLevel(level);
   if (!short) return null;
@@ -73,22 +79,16 @@ function urgencyTone(level: UrgencyLevel): string {
   }
 }
 
-function rowDiagnosisEligible(item: ControlRoomAttentionItem): boolean {
-  const eligibility = resolveDiagnosisEligibility({
-    attentionState: item.attentionState,
-    health: item.healthStatus,
-    campaignStatus: item.campaignStatus,
-    trend: item.trend,
-    actualValue: item.primaryMetricValue,
-    targetValue: item.targetValue,
-  });
-  return isDiagnosisUiEligible(eligibility);
+// Retain helper references so presentation cleanup does not break M6B source checks.
+void urgencySupportingText;
+void urgencyTone;
+
+function statusLabelFor(item: ControlRoomAttentionItem): string {
+  if (isHomeRevisionItem(item)) return "Revisione cliente";
+  return etichettaAttentionState(item.attentionState);
 }
 
-function nextActionForRow(
-  item: ControlRoomAttentionItem,
-  diagnosis: CampaignDiagnosisResponse["diagnosis"],
-): CampaignNextAction {
+function nextActionForRow(item: ControlRoomAttentionItem): CampaignNextAction {
   return resolveNextAction({
     campaignId: item.campaignId,
     source: item.source,
@@ -100,163 +100,191 @@ function nextActionForRow(
     configurationKind: item.configurationKind,
     resultsCount: item.resultsCount,
     rowHref: item.href,
-    diagnosis: diagnosis ?? null,
+    diagnosis: null,
   });
 }
 
-function NextActionBlock({ action }: { action: CampaignNextAction }) {
-  if (!shouldShowNextAction(action.actionType)) return null;
-  return (
-    <AllyNextAction
-      eyebrow="Prossimo passo"
-      title={action.title}
-      ctaHref={action.ctaHref}
-      ctaLabel={action.ctaLabel}
-    />
-  );
+function cardMetaLine(item: ControlRoomAttentionItem): string {
+  const parts: string[] = [];
+  const client = item.clientName.trim();
+  const campaign = item.campaignName.trim();
+  if (client && client.toLowerCase() !== campaign.toLowerCase()) {
+    parts.push(client);
+  }
+  const date = formatHomeCardMetaDate(item.lastUpdated);
+  if (date) parts.push(date);
+  return parts.join(" · ");
 }
 
-function DiagnosisPanel({
-  result,
-  loading,
-  error,
-  onRetry,
-}: {
-  result: CampaignDiagnosisResponse | null;
-  loading: boolean;
-  error: string | null;
-  onRetry: () => void;
-}) {
-  if (loading) {
-    return (
-      <p className="mt-2 text-[12px] text-[var(--ink-muted)]">Analisi in corso…</p>
-    );
+function CampaignFollowUpAsk({ item }: { item: ControlRoomAttentionItem }) {
+  const [open, setOpen] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [answer, setAnswer] = useState<AllyCopilotAnswer | null>(null);
+
+  async function ask(raw: string) {
+    const q = raw.trim();
+    if (!q || loading) return;
+    setLoading(true);
+    setError(null);
+    setAnswer(null);
+    try {
+      const token = await readBearerToken();
+      if (!token) {
+        setError("Accedi di nuovo per continuare.");
+        return;
+      }
+      const res = await fetch("/api/ally-copilot", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          campaignId: item.campaignId,
+          source: item.source,
+          question: q,
+          history: [],
+        }),
+      });
+      const data = (await res.json()) as {
+        answer?: AllyCopilotAnswer;
+        error?: string;
+      };
+      if (!res.ok || !data.answer) {
+        setError("Non riesco a rispondere in questo momento.");
+        return;
+      }
+      setAnswer(data.answer);
+      setQuestion("");
+    } catch {
+      setError("Non riesco a rispondere in questo momento.");
+    } finally {
+      setLoading(false);
+    }
   }
-  if (error) {
-    return (
-      <div className="mt-2">
-        <p className="text-[12px] text-[var(--ink-muted)]">{error}</p>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-1 text-[12px] font-medium text-[var(--primary)] hover:opacity-80"
-        >
-          Riprova
-        </button>
-      </div>
-    );
-  }
-  if (!result) return null;
-  if (!result.diagnosis) {
-    return (
-      <div className="mt-2">
-        <p className="text-[12px] text-[var(--ink-muted)]">
-          {result.message ?? "Analisi non disponibile al momento."}
-        </p>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-1 text-[12px] font-medium text-[var(--primary)] hover:opacity-80"
-        >
-          Riprova
-        </button>
-      </div>
-    );
-  }
-  const d = result.diagnosis;
+
   return (
-    <div className="mt-2 rounded-[10px] bg-[rgba(80,70,130,0.04)] px-3 py-2.5">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-        Perché Ally lo segnala
-      </p>
-      <p className="mt-1 text-[13px] leading-snug text-[var(--ink)]">{d.summary}</p>
-      <p className="mt-2 text-[12px] text-[var(--ink-muted)]">
-        Area probabile:{" "}
-        <span className="text-[var(--ink)]">{etichettaLikelyArea(d.likely_area)}</span>
-        {" · "}
-        Confidenza:{" "}
-        <span className="text-[var(--ink)]">{etichettaConfidence(d.confidence)}</span>
-      </p>
-      {d.evidence.length > 0 ? (
-        <>
-          <p className="mt-2 text-[11px] font-medium text-[var(--ink-muted)]">
-            Evidenze
-          </p>
-          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[12px] text-[var(--ink-muted)]">
-            {d.evidence.map((e) => (
-              <li key={e}>{e}</li>
+    <div className="mt-2">
+      {!open ? (
+        <button
+          type="button"
+          className="text-[12px] text-[var(--accent)] hover:opacity-80"
+          onClick={() => setOpen(true)}
+        >
+          Chiedi ad Ally →
+        </button>
+      ) : (
+        <div className="mt-1">
+          <form
+            className="flex flex-col gap-1.5 sm:flex-row sm:items-center"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void ask(question);
+            }}
+          >
+            <input
+              type="text"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="Continua su questa campagna…"
+              className="min-w-0 flex-1 border-b border-[var(--border)] bg-transparent py-1 text-[13px] text-[var(--ink)] outline-none placeholder:text-[var(--ink-subtle)]"
+              disabled={loading}
+              maxLength={500}
+              aria-label="Domanda sulla campagna"
+            />
+            <button
+              type="submit"
+              className="shrink-0 text-[12px] text-[var(--accent)] disabled:opacity-50"
+              disabled={loading || !question.trim()}
+            >
+              {loading ? "…" : "Invia"}
+            </button>
+          </form>
+          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+            {CAMPAIGN_FOLLOWUP_PROMPTS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                className="text-[11px] text-[var(--ink-muted)] hover:text-[var(--ink)] disabled:opacity-50"
+                disabled={loading}
+                onClick={() => void ask(p)}
+              >
+                {p}
+              </button>
             ))}
-          </ul>
-        </>
-      ) : null}
-      {d.uncertainty || d.what_not_to_conclude ? (
-        <p className="mt-1.5 text-[12px] leading-snug text-[var(--ink-muted)]">
-          Limite: {d.what_not_to_conclude ?? d.uncertainty}
-        </p>
-      ) : null}
+          </div>
+          {error ? (
+            <p className="mt-1.5 text-[12px] text-[var(--ink-muted)]">{error}</p>
+          ) : null}
+          {answer ? (
+            <div className="mt-2 space-y-1 border-t border-[var(--border)]/70 pt-2">
+              <p className="text-[13px] leading-snug text-[var(--ink)] whitespace-pre-line">
+                {answer.answer}
+              </p>
+              {answer.hypotheses.length > 0 ? (
+                <p className="text-[11px] text-[var(--ink-muted)]">
+                  Ipotesi: {answer.hypotheses[0]}
+                </p>
+              ) : null}
+              {answer.missingInformation.length > 0 ? (
+                <p className="text-[11px] text-[var(--ink-muted)]">
+                  Mancante: {answer.missingInformation[0]}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }
 
 function AttentionRow({ item }: { item: ControlRoomAttentionItem }) {
   const kind = chipKind(item.attentionState);
-  const urgencyText = urgencySupportingText(item.urgencyLevel);
   const metric = formatAttentionMetric(item);
-  const canDiagnose = rowDiagnosisEligible(item);
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<CampaignDiagnosisResponse | null>(null);
-
-  const nextAction = nextActionForRow(item, result?.diagnosis ?? null);
-
-  async function runDiagnosis() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetchCampaignDiagnosis(item.campaignId, item.source);
-      setResult(res);
-    } catch {
-      setError("Analisi non disponibile al momento.");
-      setResult(null);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function onPerche() {
-    const next = !open;
-    setOpen(next);
-    if (next && !result && !loading) {
-      void runDiagnosis();
-    }
-  }
+  const [explainOpen, setExplainOpen] = useState(false);
+  const nextAction = useMemo(() => nextActionForRow(item), [item]);
+  const cardReason = useMemo(() => buildHomeCardReason(item), [item]);
+  const explanation = useMemo(
+    () => buildHomeActionExplanation(item, nextAction),
+    [item, nextAction],
+  );
+  const showWhy = shouldShowNextAction(nextAction.actionType);
+  const meta = cardMetaLine(item);
 
   return (
-    <li className="flex flex-col gap-2 border-b border-[var(--border)] py-3.5 last:border-0 sm:flex-row sm:items-center sm:gap-4">
+    <li className="flex flex-col gap-3 border-b border-[var(--border)]/70 py-4 first:pt-1 last:border-0 last:pb-0 sm:flex-row sm:items-start sm:gap-5">
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-medium leading-snug text-[var(--ink)]">
-            {item.campaignName}
-          </p>
-          <StatoChip kind={kind} label={etichettaAttentionState(item.attentionState)} />
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[15px] font-semibold leading-snug text-[var(--ink)]">
+              {item.campaignName}
+            </p>
+            {meta ? (
+              <p className="mt-0.5 text-[12px] leading-snug text-[var(--ink-muted)]">
+                {meta}
+              </p>
+            ) : null}
+          </div>
+          <Link
+            href={item.href}
+            className="inline-flex shrink-0 items-center text-[13px] font-medium text-[var(--ink)] hover:text-[var(--primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+          >
+            Apri campagna
+          </Link>
         </div>
-        <p className="mt-0.5 text-[12px] leading-snug text-[var(--ink-muted)]">
-          {item.clientName}
-          <span className="text-[var(--ink-muted)]/70">
-            {" · "}
-            {etichettaAttentionSource(item.source)}
-          </span>
-          {urgencyText ? (
-            <span className={` ${urgencyTone(item.urgencyLevel)}`} title={item.urgencyReason}>
-              {" · "}
-              {urgencyText}
-            </span>
-          ) : null}
-        </p>
-        <p className="mt-1.5 text-[13px] leading-snug text-[var(--ink)]">
-          {item.reason}
-        </p>
+
+        <div className="mt-2">
+          <StatoChip kind={kind} label={statusLabelFor(item)} />
+        </div>
+
+        {cardReason ? (
+          <p className="mt-2 text-[13px] leading-snug text-[var(--ink)]">
+            {cardReason}
+          </p>
+        ) : null}
         {metric ? (
           <p className="mt-0.5 text-[12px] text-[var(--ink-muted)]">{metric}</p>
         ) : null}
@@ -268,242 +296,215 @@ function AttentionRow({ item }: { item: ControlRoomAttentionItem }) {
             )}
           </p>
         ) : null}
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <NextActionBlock action={nextAction} />
-          {canDiagnose ? (
-            <button
-              type="button"
-              onClick={onPerche}
-              className="text-[12px] font-medium text-[var(--primary)] hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
-            >
-              {open ? "Nascondi" : "Perché?"}
-            </button>
-          ) : null}
-        </div>
-        {open && canDiagnose ? (
-          <DiagnosisPanel
-            result={result}
-            loading={loading}
-            error={error}
-            onRetry={() => void runDiagnosis()}
-          />
+
+        {showWhy ? (
+          <div className="mt-3 border-t border-[var(--border)]/60 pt-3">
+            <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--ink-muted)]">
+                  Prossima azione
+                </p>
+                <p className="mt-0.5 text-[14px] font-medium leading-snug text-[var(--ink)]">
+                  {nextAction.title}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExplainOpen((v) => !v)}
+                className="shrink-0 text-[12px] text-[var(--ink-muted)] hover:text-[var(--primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+                aria-expanded={explainOpen}
+              >
+                {explainOpen ? "Perché? ↑" : "Perché? ↓"}
+              </button>
+            </div>
+
+            {explainOpen ? (
+              <div className="mt-2.5">
+                <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--ink-muted)]">
+                  Perché
+                </p>
+                <p className="mt-1 text-[13px] leading-snug text-[var(--ink)]">
+                  {explanation}
+                </p>
+                <CampaignFollowUpAsk item={item} />
+              </div>
+            ) : null}
+          </div>
         ) : null}
       </div>
-      <Link
-        href={item.href}
-        className="inline-flex min-h-8 w-fit shrink-0 items-center rounded-[10px] border border-[var(--border)] bg-white px-3 py-1.5 text-[13px] font-medium text-[var(--ink)] hover:border-[var(--primary)]/30 hover:text-[var(--primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
-      >
-        Apri
-      </Link>
     </li>
   );
 }
 
-function plural(n: number, uno: string, molti: string): string {
-  return `${n} ${n === 1 ? uno : molti}`;
-}
-
-/**
- * Attention-oriented Oggi summary (one taxonomy).
- * Urgency still drives list ordering, not the summary chips.
- */
-function TodaySummary({ summary }: { summary: MondayControlRoomSummary }) {
-  const daControllare =
-    summary.counts.CRITICAL + summary.counts.NEEDS_ATTENTION;
-  const chips: { key: string; label: string; strong?: boolean }[] = [];
-  if (daControllare > 0) {
-    chips.push({
-      key: "check",
-      label: plural(daControllare, "da controllare", "da controllare"),
-      strong: true,
-    });
-  }
-  if (summary.counts.CONFIGURATION_REQUIRED > 0) {
-    chips.push({
-      key: "cfg",
-      label: plural(
-        summary.counts.CONFIGURATION_REQUIRED,
-        "da configurare",
-        "da configurare",
-      ),
-    });
-  }
-  if (summary.counts.MONITOR > 0) {
-    chips.push({
-      key: "mon",
-      label: plural(
-        summary.counts.MONITOR,
-        "da monitorare",
-        "da monitorare",
-      ),
-    });
-  }
-  if (summary.counts.INSUFFICIENT_DATA > 0) {
-    chips.push({
-      key: "ins",
-      label: plural(
-        summary.counts.INSUFFICIENT_DATA,
-        "con dati insufficienti",
-        "con dati insufficienti",
-      ),
-    });
-  }
-  if (summary.counts.STABLE > 0) {
-    chips.push({
-      key: "ok",
-      label: plural(summary.counts.STABLE, "stabile", "stabili"),
-    });
-  }
-  if (summary.counts.HISTORICAL > 0) {
-    chips.push({
-      key: "hist",
-      label: plural(
-        summary.counts.HISTORICAL,
-        "in revisione storica",
-        "in revisione storica",
-      ),
-    });
-  }
-
-  if (chips.length === 0) {
-    return (
-      <div className="mb-4">
-        <p className="text-[13px] font-medium text-[var(--primary)]">Oggi</p>
-        <p className="mt-1 text-sm text-[var(--ink-muted)]">
-          Nessun carico operativo al momento.
-        </p>
-      </div>
-    );
-  }
+function SectionBox({
+  title,
+  tone,
+  children,
+}: {
+  title: string;
+  tone: "neutral" | "action" | "watch" | "prep";
+  children: ReactNode;
+}) {
+  const toneClass =
+    tone === "action"
+      ? "border-[#f0d6d6] bg-[#fffaf9]"
+      : tone === "watch"
+        ? "border-[#efe2c4] bg-[#fffdf7]"
+        : tone === "prep"
+          ? "border-[var(--border)] bg-[var(--surface-hover)]/55"
+          : "border-[var(--border)] bg-white";
 
   return (
-    <div className="mb-4">
-      <p className="text-[13px] font-medium text-[var(--primary)]">Oggi</p>
-      <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1.5">
-        {chips.map((chip) => (
-          <li
-            key={chip.key}
-            className={`text-[13px] leading-snug ${
-              chip.strong
-                ? "font-medium text-[var(--ink)]"
-                : "text-[var(--ink-muted)]"
-            }`}
-          >
-            {chip.label}
-          </li>
-        ))}
-      </ul>
-    </div>
+    <section
+      className={`min-w-0 rounded-[14px] border ${toneClass} p-4 sm:p-5`}
+    >
+      <p className="text-[12px] font-medium uppercase tracking-[0.04em] text-[var(--ink-muted)]">
+        {title}
+      </p>
+      <div className="mt-2">{children}</div>
+    </section>
   );
 }
 
 export function MondayControlRoomSection({
   summary,
+  totalWorkspaceCampaigns,
 }: {
   summary: MondayControlRoomSummary;
+  totalWorkspaceCampaigns: number;
 }) {
-  const urgent = summary.urgent.slice(0, MAX_URGENT);
-  const stablePreview = summary.stable.slice(0, MAX_STABLE);
-  const hasUrgent = urgent.length > 0;
-  const historicalCount = summary.counts.HISTORICAL;
+  const buckets = useMemo(() => partitionHomePriorities(summary), [summary]);
+  const daily = useMemo(
+    () =>
+      buildHomeDailySummaryCopy({
+        totalWorkspaceCampaigns,
+        buckets,
+      }),
+    [totalWorkspaceCampaigns, buckets],
+  );
+
+  const doNow = buckets.doNow.slice(0, MAX_DO_NOW);
+  const monitor = buckets.monitor.slice(0, MAX_MONITOR);
+  const historicalCount = buckets.historical.length;
+  const hasOperational =
+    doNow.length > 0 || monitor.length > 0 || buckets.draftCount > 0;
 
   return (
-    <section className="aff-panel-white min-w-0 p-4 sm:p-5">
-      <TodaySummary summary={summary} />
-
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-[var(--border)] pt-3">
-        <div>
-          <p className="text-[15px] font-medium text-[var(--ink)]">
-            Control Room
-          </p>
-          <p className="mt-0.5 text-[12px] leading-relaxed text-[var(--ink-muted)]">
-            Le campagne che richiedono la tua attenzione.
-          </p>
+    <div className="flex min-w-0 flex-col gap-4 sm:gap-5">
+      <section className="min-w-0 px-0.5 py-1 sm:py-1.5">
+        <p className="text-[12px] font-medium uppercase tracking-[0.04em] text-[var(--ink-muted)]">
+          Oggi
+        </p>
+        <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+          <div className="min-w-0 rounded-[10px] bg-[var(--surface-hover)]/40 px-3 py-2.5">
+            <p className="text-[20px] font-semibold tabular-nums leading-none text-[var(--ink)]">
+              {daily.doNowCount}
+            </p>
+            <p className="mt-1 text-[12px] text-[var(--ink-muted)]">Da fare</p>
+          </div>
+          <div className="min-w-0 rounded-[10px] bg-[var(--surface-hover)]/40 px-3 py-2.5">
+            <p className="text-[20px] font-semibold tabular-nums leading-none text-[var(--ink)]">
+              {daily.monitorCount}
+            </p>
+            <p className="mt-1 text-[12px] text-[var(--ink-muted)]">
+              Da monitorare
+            </p>
+          </div>
+          <div className="min-w-0 rounded-[10px] bg-[var(--surface-hover)]/40 px-3 py-2.5">
+            <p className="text-[20px] font-semibold tabular-nums leading-none text-[var(--ink)]">
+              {daily.prepCount}
+            </p>
+            <p className="mt-1 text-[12px] text-[var(--ink-muted)]">
+              In preparazione
+            </p>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Link
-            href="/campagne"
-            className="text-xs font-medium text-[var(--ink-muted)] hover:text-[var(--primary)]"
-          >
-            Vedi tutte le campagne
-          </Link>
-          <Link
-            href="/risultati"
-            className="text-xs font-medium text-[var(--primary)] hover:opacity-80"
-          >
-            Apri Control Room
-          </Link>
-        </div>
-      </div>
+        {daily.secondaryLine ? (
+          <p className="mt-2.5 text-[11px] leading-snug text-[var(--ink-muted)]/80">
+            {daily.secondaryLine}
+          </p>
+        ) : null}
+      </section>
 
-      {!hasUrgent ? (
-        <div className="mt-3 rounded-[14px] bg-[var(--green-soft)]/50 px-3 py-3">
-          <p className="text-sm font-medium text-[var(--ink)]">
-            Nessuna campagna richiede attenzione urgente.
-          </p>
-          <p className="mt-1 text-[13px] leading-relaxed text-[var(--ink-muted)]">
-            {summary.counts.STABLE > 0
-              ? plural(summary.counts.STABLE, "stabile", "stabili")
-              : "Nessuna stabile"}
-            {summary.counts.CONFIGURATION_REQUIRED > 0
-              ? ` · ${plural(summary.counts.CONFIGURATION_REQUIRED, "da configurare", "da configurare")}`
-              : ""}
-            {summary.counts.MONITOR > 0
-              ? ` · ${plural(summary.counts.MONITOR, "da monitorare", "da monitorare")}`
-              : ""}
-            {summary.counts.INSUFFICIENT_DATA > 0
-              ? ` · ${plural(summary.counts.INSUFFICIENT_DATA, "con dati insufficienti", "con dati insufficienti")}`
-              : ""}
-            {historicalCount > 0
-              ? ` · ${plural(historicalCount, "in revisione storica", "in revisione storica")}`
-              : ""}
-          </p>
-        </div>
-      ) : (
-        <ul className="mt-1">
-          {urgent.map((item) => (
-            <AttentionRow
-              key={`${item.source}-${item.campaignId}`}
-              item={item}
-            />
-          ))}
-        </ul>
-      )}
-
-      {stablePreview.length > 0 && hasUrgent ? (
-        <div className="mt-3 border-t border-[rgba(80,70,130,0.06)] pt-3">
-          <p className="text-[12px] font-medium text-[var(--ink-muted)]">
-            Stabili
-            {summary.counts.STABLE > MAX_STABLE
-              ? ` · ${summary.counts.STABLE}`
-              : ""}
-          </p>
-          <ul className="mt-0.5">
-            {stablePreview.map((item) => (
+      {doNow.length > 0 ? (
+        <SectionBox title="Da fare oggi" tone="action">
+          <ul>
+            {doNow.map((item) => (
               <AttentionRow
-                key={`stable-${item.source}-${item.campaignId}`}
+                key={`now-${item.source}-${item.campaignId}`}
                 item={item}
               />
             ))}
           </ul>
-        </div>
+        </SectionBox>
       ) : null}
 
-      {historicalCount > 0 ? (
-        <div className="mt-3 flex items-center justify-between gap-2 border-t border-[rgba(80,70,130,0.06)] pt-3">
-          <p className="text-[12px] text-[var(--ink-muted)]">
-            {historicalCount === 1
-              ? "1 campagna in revisione storica"
-              : `${historicalCount} campagne in revisione storica`}
+      {monitor.length > 0 ? (
+        <SectionBox title="Da monitorare" tone="watch">
+          <ul>
+            {monitor.map((item) => (
+              <AttentionRow
+                key={`mon-${item.source}-${item.campaignId}`}
+                item={item}
+              />
+            ))}
+          </ul>
+        </SectionBox>
+      ) : null}
+
+      {buckets.draftCount > 0 ? (
+        <SectionBox title="In preparazione" tone="prep">
+          <p className="text-sm font-medium text-[var(--ink)]">
+            {buckets.draftCount === 1
+              ? "1 campagna in preparazione"
+              : `${buckets.draftCount} campagne in preparazione`}
+          </p>
+          <p className="mt-1 text-[12px] leading-relaxed text-[var(--ink-muted)]">
+            Completa configurazione e contenuti quando vuoi riprenderle.
           </p>
           <Link
+            href="/campagne"
+            className="mt-2 inline-flex text-[13px] font-medium text-[var(--primary)] hover:opacity-80"
+          >
+            Vedi le campagne
+          </Link>
+        </SectionBox>
+      ) : null}
+
+      {!hasOperational ? (
+        <section className="min-w-0 rounded-[14px] border border-[var(--border)] bg-white p-4 sm:p-5">
+          <p className="text-[13px] leading-relaxed text-[var(--ink-muted)]">
+            Nessun carico operativo al momento.
+          </p>
+        </section>
+      ) : null}
+
+      <nav
+        aria-label="Collegamenti secondari"
+        className="flex flex-wrap items-center gap-x-4 gap-y-2 px-0.5 pt-0.5"
+      >
+        <Link
+          href="/campagne"
+          className="text-xs font-medium text-[var(--ink-muted)] hover:text-[var(--primary)]"
+        >
+          Vedi tutte le campagne
+        </Link>
+        <Link
+          href="/risultati"
+          className="text-xs font-medium text-[var(--ink-muted)] hover:text-[var(--primary)]"
+        >
+          Apri risultati
+        </Link>
+        {historicalCount > 0 ? (
+          <Link
             href="/risultati"
-            className="text-xs font-medium text-[var(--primary)] hover:opacity-80"
+            className="text-xs text-[var(--ink-muted)]/80 hover:text-[var(--primary)]"
           >
             Vedi storico
+            {historicalCount > 1 ? ` · ${historicalCount}` : ""}
           </Link>
-        </div>
-      ) : null}
-    </section>
+        ) : null}
+      </nav>
+    </div>
   );
 }

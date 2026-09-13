@@ -248,7 +248,7 @@ test("G: all stable → no invented issue", () => {
   });
   assert(item.attentionState === "STABLE", item.attentionState);
   const fb = buildAllyOggiFallback(buildAllyOggiBriefContext([item]));
-  assert(/non vedo critic/i.test(fb.headline), fb.headline);
+  assert(/niente di urgente/i.test(fb.headline), fb.headline);
   assert(fb.priorityItems.length === 0, "no priority");
 });
 
@@ -533,11 +533,15 @@ test("N: structural — no Meta writes / no health mutation / no cron AI", () =>
     }
   }
   const home = read("src/components/dashboard/DashboardHome.tsx");
-  assert(home.includes("AllyOggiBriefPanel"), "Home wires Ally oggi");
-  const blockMatch = home.match(
-    /showControlRoom[\s\S]*?AllyOggiBriefPanel[\s\S]*?MondayControlRoomSection/,
+  assert(home.includes("MondayControlRoomSection"), "Home wires Control Room");
+  assert(
+    home.includes("startMetaImportFlow"),
+    "Home keeps Meta import flow",
   );
-  assert(Boolean(blockMatch), "Ally oggi above Control Room in Home JSX");
+  assert(
+    /MondayControlRoomSection/.test(home) && /Attività recente/.test(home),
+    "Priorities then recent activity on Home",
+  );
 });
 
 test("O: multi-client names present in context", () => {
@@ -693,7 +697,7 @@ test("M9.1B B: drafts only → workspace summary, no performance priority", () =
   assert(/2 campagne/i.test(fb.summary), fb.summary);
   assert(fb.priorityItems.length === 0, "no perf priority");
   assert(
-    /bozza|preparazione|urgenza da valutare/i.test(`${fb.headline} ${fb.summary}`),
+    /bozza|preparazione|niente di urgente/i.test(`${fb.headline} ${fb.summary}`),
     `${fb.headline} ${fb.summary}`,
   );
   assert(!/workflow/i.test(`${fb.headline} ${fb.summary}`), "no workflow jargon");
@@ -788,7 +792,7 @@ test("M9.1B G: no monitorable → no performance priority claims", () => {
   const fb = buildAllyOggiFallback(ctx);
   assert(fb.priorityItems.length === 0, "no priority");
   assert(
-    /bozza|urgenza da valutare/i.test(`${fb.headline} ${fb.summary}`),
+    /bozza|niente di urgente|preparazione/i.test(`${fb.headline} ${fb.summary}`),
     `${fb.headline} ${fb.summary}`,
   );
   assert(!/workflow/i.test(`${fb.headline} ${fb.summary}`), "no workflow jargon");
@@ -1192,7 +1196,7 @@ test("M9.1D A: 1 DRAFT + config required → one campaign, not 1+1 workload lang
   assert(!/1 da configurare/i.test(fb.summary), fb.summary);
   assert(!/completare · .*configurare/i.test(fb.summary), fb.summary);
   assert(!/workflow/i.test(`${fb.headline} ${fb.summary}`), "no workflow");
-  assert(/urgenza da valutare/i.test(fb.headline), fb.headline);
+  assert(/niente di urgente/i.test(fb.headline), fb.headline);
 });
 
 test("M9.1D B: 1 DRAFT / no performance → no AI CTA eligibility, no AI call path", () => {
@@ -1413,8 +1417,11 @@ test("M9.1E E: mixed multi-campaign meaningful context → AI true", () => {
 test("M9.1D E: top action + Ally oggi have distinct copy roles", () => {
   const ui = read("src/components/dashboard/AllyOggiBrief.tsx");
   const home = read("src/components/dashboard/DashboardHome.tsx");
-  assert(home.includes("AllyOggiBriefPanel"), "Ally oggi on Home");
   assert(home.includes("MondayControlRoomSection"), "Control Room on Home");
+  assert(
+    home.includes("partitionHomePriorities") === false,
+    "partition lives in lib (imported by section)",
+  );
   assert(
     !ui.includes("Completa la campagna in bozza"),
     "Ally oggi must not own top-action draft CTA copy",
@@ -1422,6 +1429,10 @@ test("M9.1D E: top action + Ally oggi have distinct copy roles", () => {
   assert(
     !ui.includes("Continua la campagna"),
     "Ally oggi must not own continue-draft CTA",
+  );
+  assert(
+    !ui.includes("Leggi il briefing di Ally"),
+    "no redundant AI briefing CTA",
   );
   const c = campagna({ status: "DRAFT" });
   const fb = buildAllyOggiFallback(
@@ -1439,7 +1450,12 @@ test("M9.1D E: top action + Ally oggi have distinct copy roles", () => {
     }),
   );
   assert(!/^Completa/i.test(fb.headline), fb.headline);
-  assert(/urgenza da valutare|workspace|bozza/i.test(`${fb.headline} ${fb.summary}`), fb.summary);
+  assert(
+    /niente di urgente|workspace|bozza|preparazione/i.test(
+      `${fb.headline} ${fb.summary}`,
+    ),
+    fb.summary,
+  );
 });
 
 test("M9.1D F: deterministic fallback still usable without AI", () => {

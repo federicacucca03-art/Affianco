@@ -499,7 +499,7 @@ export function buildAllySetupGuidance(
           reason: explain.reason,
         },
         showControlRoom: true,
-        showQuickActions: true,
+        showQuickActions: false,
         showHeroTools: true,
       };
     }
@@ -520,7 +520,7 @@ export function buildAllySetupGuidance(
         primaryHref: "/risultati",
         primaryAction: "navigate",
         showControlRoom: true,
-        showQuickActions: true,
+        showQuickActions: false,
         showHeroTools: true,
       };
 
@@ -528,9 +528,9 @@ export function buildAllySetupGuidance(
       return {
         ...base,
         phase,
-        heroTitle: "Capisci cosa conta oggi.",
+        heroTitle: "Ecco cosa richiede attenzione oggi.",
         heroSubtitle:
-          "Controlla le campagne che richiedono attenzione e il prossimo passo da fare.",
+          "Priorità, motivo e prossimo passo — senza rumore.",
         eyebrow: "",
         title: "",
         bodyLines: [],
@@ -539,7 +539,7 @@ export function buildAllySetupGuidance(
         primaryAction: null,
         checklistVisible: false,
         showControlRoom: true,
-        showQuickActions: true,
+        showQuickActions: false,
         showHeroTools: true,
       };
   }

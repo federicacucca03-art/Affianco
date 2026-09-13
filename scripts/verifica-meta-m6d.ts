@@ -458,10 +458,11 @@ test("Aurora 2-result fixture → WAIT_FOR_MORE_DATA", () => {
 
 test("Home Prossimo passo UX present", () => {
   const ui = read("./src/components/dashboard/MondayControlRoomSection.tsx");
-  assert(ui.includes("Prossimo passo"), "label");
+  assert(ui.includes("Prossima azione"), "label");
   assert(ui.includes("resolveNextAction"), "resolver");
   assert(ui.includes("shouldShowNextAction"), "gate");
   assert(!ui.includes("useEffect(() => {\n      void runDiagnosis"), "no auto AI");
+  assert(!ui.includes("AllyNextAction"), "no nested next-action card on Home");
 });
 
 test("Builders expose M6D context fields", () => {

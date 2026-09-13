@@ -3,15 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  Bell,
-  LayoutDashboard,
-  LineChart,
-  Link2,
-  Plus,
-  Search,
-  Sparkles,
-} from "lucide-react";
+import { Link2, Plus, Search } from "lucide-react";
 import type { Campagna } from "@/types/campagne";
 import { leggiInventarioCampagneNative } from "@/lib/campagne-inventory";
 import {
@@ -21,7 +13,6 @@ import {
 } from "@/lib/campaign-checks-db";
 import {
   aggregaAttivitaSettimana,
-  campagneInRevisione,
   isoInizioFinestraGiorni,
 } from "@/lib/dashboard-home";
 import {
@@ -35,8 +26,7 @@ import {
 import { loadMetaMondayBundle } from "@/lib/meta/monday-meta-loader";
 import { nomeCampagnaCard } from "@/components/risultati/ControlRoomOverview";
 import { MondayControlRoomSection } from "@/components/dashboard/MondayControlRoomSection";
-import { AllyOggiBriefPanel } from "@/components/dashboard/AllyOggiBrief";
-import { AllyFeatureCard } from "@/components/shell/AllyFeatureCard";
+import { HomeAskAllyBar } from "@/components/dashboard/HomeAskAllyBar";
 import { HomeSetupPanel } from "@/components/dashboard/HomeSetupPanel";
 import { useOnboardingCampagna } from "@/components/OnboardingCampagnaContext";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -59,41 +49,12 @@ import {
   readBearerToken,
   startMetaImportFlow,
 } from "@/lib/meta-import-client";
+import {
+  countWorkspaceCampaigns,
+} from "@/lib/ally-oggi/workspace-summary";
 
-const MAX_REVISIONI = 3;
 const TREND_CHECK_DAYS = 30;
 const STROKE_NAV = 1.75;
-
-const QUICK_ACTIONS = [
-  {
-    href: "/home",
-    title: "Control Room",
-    body: "Le campagne che richiedono la tua attenzione.",
-    icon: LayoutDashboard,
-    tone: 1 as const,
-  },
-  {
-    href: "/risultati",
-    title: "Monitoraggio",
-    body: "Performance, soglie e trend.",
-    icon: LineChart,
-    tone: 2 as const,
-  },
-  {
-    href: "/risultati",
-    title: "Diagnosi",
-    body: "Perché una campagna viene segnalata.",
-    icon: Sparkles,
-    tone: 3 as const,
-  },
-  {
-    href: "/notifiche",
-    title: "Notifiche",
-    body: "I cambiamenti importanti.",
-    icon: Bell,
-    tone: 4 as const,
-  },
-] as const;
 
 export function DashboardHome() {
   const { apriModaleCampagna } = useOnboardingCampagna();
@@ -118,10 +79,6 @@ export function DashboardHome() {
   const [showFirstClientForm, setShowFirstClientForm] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
 
-  /*
-   * Layer A branch intent from URL only on Home:
-   * ?setup=import|plan → explicit branch; bare /home → NONE (never inherit Meta/draft).
-   */
   useEffect(() => {
     const setup = searchParams.get("setup");
     if (setup === "import") {
@@ -153,7 +110,6 @@ export function DashboardHome() {
       const da = isoInizioFinestraGiorni(7);
       const daTrend = isoInizioFinestraGiorni(TREND_CHECK_DAYS);
       const [lista, mappa, settimana, trendChecks] = await Promise.all([
-        /* Canonical Supabase inventory — same as /campagne (no localStorage). */
         leggiInventarioCampagneNative(),
         leggiUltimiChecksUtente(),
         leggiChecksUtenteDal(da),
@@ -217,10 +173,6 @@ export function DashboardHome() {
         hasMetaCampaign: nextMeta.length > 0,
         attentionItems: merged,
       });
-      /*
-       * Home derivation uses URL branch only. Do not wipe sessionStorage here —
-       * chooseMeta may have just written "meta" before navigating to the client.
-       */
       const setup = searchParams.get("setup");
       const pathPreference =
         setup === "import" ? "meta" : setup === "plan" ? "native" : null;
@@ -277,10 +229,16 @@ export function DashboardHome() {
   }, [campagne, ultimi, checksByCampaign, metaItems, linkedNativeIds]);
   const monday = mondayBundle.summary;
 
-  const revisioni = useMemo(
-    () => campagneInRevisione(campagne),
-    [campagne],
+  const totalWorkspaceCampaigns = useMemo(
+    () =>
+      countWorkspaceCampaigns({
+        nativeCampaigns: campagne,
+        metaCampaignCount: metaItems.filter((i) => i.source === "META").length,
+        linkedNativeIds,
+      }),
+    [campagne, metaItems, linkedNativeIds],
   );
+
   const attivita = useMemo(
     () => aggregaAttivitaSettimana(checksSettimana),
     [checksSettimana],
@@ -331,7 +289,6 @@ export function DashboardHome() {
         setErrore("Sessione assente. Accedi di nuovo.");
         return;
       }
-      /* Home Import is always generic — provisional client, never an arbitrary pick. */
       const result = await startMetaImportFlow(null, token);
       setSetupSignals((prev) =>
         prev
@@ -411,124 +368,151 @@ export function DashboardHome() {
     }
   }
 
-  // Search/quick cards once the workspace is unlocked (first real campaign).
   const showSearchShell = Boolean(
     isActiveWorkspace && guidance?.showHeroTools,
   );
-  const showQuickCards = Boolean(
-    isActiveWorkspace && guidance?.showQuickActions,
-  );
-  const heroBadge = guidance?.heroBadge ?? "Ciao, sono Ally";
-  const heroTitle =
-    guidance?.heroTitle ??
-    (isActiveWorkspace
-      ? "Capisci cosa conta oggi."
-      : "Come vuoi iniziare?");
-  const heroSubtitle =
-    guidance?.heroSubtitle ??
-    (isActiveWorkspace
-      ? "Controlla le campagne che richiedono attenzione e il prossimo passo da fare."
-      : "Importa le campagne che gestisci già oppure pianificane una nuova.");
 
   return (
-    <main className="mx-auto w-full max-w-[1040px] pb-12">
+    <main
+      className={[
+        "mx-auto w-full pb-12",
+        isActiveWorkspace ? "max-w-[840px]" : "max-w-[1040px]",
+      ].join(" ")}
+    >
       <section
         className={[
-          "relative text-center",
+          "relative",
           showSetup
-            ? "pt-8 sm:pt-10 lg:pt-12"
-            : "pt-10 sm:pt-14 lg:pt-16",
+            ? "pt-8 text-center sm:pt-10 lg:pt-12"
+            : isActiveWorkspace
+              ? "pt-4 sm:pt-5"
+              : "pt-10 text-center sm:pt-14 lg:pt-16",
         ].join(" ")}
       >
-        <div className="aff-hero-glow" aria-hidden />
+        {!isActiveWorkspace ? <div className="aff-hero-glow" aria-hidden /> : null}
 
-        <div className="relative z-[1] flex flex-col items-center">
-          <div className="aff-ally-mark" aria-hidden>
-            A
-          </div>
-
-          <p className="mt-6 inline-flex items-center rounded-full border border-[var(--border)] bg-white/90 px-3.5 py-1.5 text-[12.5px] font-medium text-[var(--ink)]">
-            {heroBadge}
-          </p>
-          <h2 className="mt-6 text-[clamp(38px,4vw,52px)] font-bold leading-[1.05] tracking-[-0.035em] text-[var(--ink)]">
-            {heroTitle}
-          </h2>
-          <p className="mx-auto mt-4 max-w-xl text-[15px] leading-relaxed text-[var(--ink-muted)]">
-            {heroSubtitle}
-          </p>
+        <div
+          className={[
+            "relative z-[1] flex flex-col",
+            isActiveWorkspace ? "items-stretch" : "items-center text-center",
+          ].join(" ")}
+        >
+          {!isActiveWorkspace ? (
+            <>
+              <div className="aff-ally-mark" aria-hidden>
+                A
+              </div>
+              <p className="mt-6 inline-flex items-center rounded-full border border-[var(--border)] bg-white/90 px-3.5 py-1.5 text-[12.5px] font-medium text-[var(--ink)]">
+                {guidance?.heroBadge ?? "Ciao, sono Ally"}
+              </p>
+              <h2 className="mt-6 text-[clamp(38px,4vw,52px)] font-bold leading-[1.05] tracking-[-0.035em] text-[var(--ink)]">
+                {guidance?.heroTitle ?? "Come vuoi iniziare?"}
+              </h2>
+              <p className="mx-auto mt-4 max-w-xl text-[15px] leading-relaxed text-[var(--ink-muted)]">
+                {guidance?.heroSubtitle ??
+                  "Importa le campagne che gestisci già oppure pianificane una nuova."}
+              </p>
+            </>
+          ) : null}
 
           {showSearchShell ? (
-            <div className="mx-auto mt-10 w-full max-w-[960px]">
+            <div
+              className={[
+                "w-full",
+                isActiveWorkspace ? "mt-0" : "mx-auto mt-10 max-w-[960px]",
+              ].join(" ")}
+            >
               <div className="relative w-full text-left">
-                <div className="flex min-h-[180px] w-full flex-col rounded-[14px] border border-[var(--border)] bg-white shadow-[var(--shadow-card)]">
-                  <div className="relative flex-1 px-5 pt-6 sm:px-6 sm:pt-7">
-                    <Search
-                      className="pointer-events-none absolute left-5 top-7 h-[18px] w-[18px] text-[var(--ink-muted)] sm:left-6 sm:top-8"
-                      strokeWidth={STROKE_NAV}
-                      aria-hidden
-                    />
-                    <input
-                      ref={searchRef}
-                      type="search"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Cerca un cliente o una campagna"
-                      className="w-full bg-transparent py-1 pl-8 text-[15px] font-medium tracking-[-0.01em] text-[var(--ink)] outline-none placeholder:font-normal placeholder:text-[var(--ink-subtle)] sm:pl-9"
-                      aria-label="Cerca un cliente o una campagna"
-                    />
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] px-4 py-3.5 sm:px-5">
-                    <button
-                      type="button"
-                      className="aff-tool-chip"
-                      onClick={() => searchRef.current?.focus()}
-                    >
+                {isActiveWorkspace ? (
+                  <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:gap-2.5">
+                    <div className="relative min-w-0 flex-1">
                       <Search
-                        className="h-3.5 w-3.5"
+                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ink-muted)]"
                         strokeWidth={STROKE_NAV}
+                        aria-hidden
                       />
-                      Cerca
-                    </button>
-                    <Link href="/home" className="aff-tool-chip">
-                      <LayoutDashboard
-                        className="h-3.5 w-3.5"
-                        strokeWidth={STROKE_NAV}
+                      <input
+                        ref={searchRef}
+                        type="search"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Cerca cliente o campagna"
+                        className="h-10 w-full rounded-[10px] border border-[var(--border)] bg-white/80 pl-9 pr-3 text-[14px] text-[var(--ink)] outline-none placeholder:text-[var(--ink-subtle)] focus-visible:border-[var(--primary)]/30"
+                        aria-label="Cerca un cliente o una campagna"
                       />
-                      Control Room
-                    </Link>
-                    <Link href="/risultati" className="aff-tool-chip">
-                      <LineChart
-                        className="h-3.5 w-3.5"
-                        strokeWidth={STROKE_NAV}
-                      />
-                      Risultati
-                    </Link>
-                    <button
-                      type="button"
-                      className="aff-tool-chip"
-                      onClick={() => void chooseMeta()}
-                      disabled={importBusy}
-                    >
-                      <Link2
-                        className="h-3.5 w-3.5"
-                        strokeWidth={STROKE_NAV}
-                      />
-                      {importBusy ? "Preparazione…" : "Importa da Meta"}
-                    </button>
-                    <button
-                      type="button"
-                      className="aff-tool-chip"
-                      onClick={apriModaleCampagna}
-                    >
-                      <Plus
-                        className="h-3.5 w-3.5"
-                        strokeWidth={STROKE_NAV}
-                      />
-                      Nuova campagna
-                    </button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        className="aff-tool-chip"
+                        onClick={apriModaleCampagna}
+                      >
+                        <Plus
+                          className="h-3.5 w-3.5"
+                          strokeWidth={STROKE_NAV}
+                        />
+                        Nuova campagna
+                      </button>
+                      <button
+                        type="button"
+                        className="aff-tool-chip"
+                        onClick={() => void chooseMeta()}
+                        disabled={importBusy}
+                      >
+                        <Link2
+                          className="h-3.5 w-3.5"
+                          strokeWidth={STROKE_NAV}
+                        />
+                        {importBusy ? "Preparazione…" : "Importa da Meta"}
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex w-full flex-col rounded-[12px] border border-[var(--border)] bg-white shadow-[var(--shadow-card)]">
+                    <div className="relative px-4 py-3 sm:px-4 sm:py-3.5">
+                      <Search
+                        className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ink-muted)]"
+                        strokeWidth={STROKE_NAV}
+                        aria-hidden
+                      />
+                      <input
+                        ref={searchRef}
+                        type="search"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Cerca un cliente o una campagna"
+                        className="w-full bg-transparent py-1 pl-7 text-[14px] font-medium tracking-[-0.01em] text-[var(--ink)] outline-none placeholder:font-normal placeholder:text-[var(--ink-subtle)]"
+                        aria-label="Cerca un cliente o una campagna"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] px-3 py-2.5 sm:px-4">
+                      <button
+                        type="button"
+                        className="aff-tool-chip"
+                        onClick={apriModaleCampagna}
+                      >
+                        <Plus
+                          className="h-3.5 w-3.5"
+                          strokeWidth={STROKE_NAV}
+                        />
+                        Nuova campagna
+                      </button>
+                      <button
+                        type="button"
+                        className="aff-tool-chip"
+                        onClick={() => void chooseMeta()}
+                        disabled={importBusy}
+                      >
+                        <Link2
+                          className="h-3.5 w-3.5"
+                          strokeWidth={STROKE_NAV}
+                        />
+                        {importBusy ? "Preparazione…" : "Importa da Meta"}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {searchHits.length > 0 ? (
                   <ul className="absolute z-10 mt-2 w-full overflow-hidden rounded-[12px] border border-[var(--border)] bg-white shadow-[var(--shadow-card)]">
@@ -550,30 +534,15 @@ export function DashboardHome() {
                   </ul>
                 ) : null}
               </div>
-
-              <div className="mt-6 grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {showQuickCards
-                  ? QUICK_ACTIONS.map((card) => (
-                      <AllyFeatureCard
-                        key={card.title}
-                        href={card.href}
-                        title={card.title}
-                        body={card.body}
-                        icon={card.icon}
-                        tone={card.tone}
-                      />
-                    ))
-                  : null}
-              </div>
             </div>
           ) : null}
         </div>
       </section>
 
       {caricamento ? (
-        <p className="mt-16 text-sm text-[var(--ink-muted)]">Caricamento…</p>
+        <p className="mt-10 text-sm text-[var(--ink-muted)]">Caricamento…</p>
       ) : errore ? (
-        <p className="mt-16 text-sm text-[#7a3d58]">{errore}</p>
+        <p className="mt-10 text-sm text-[#7a3d58]">{errore}</p>
       ) : (
         <>
           {(showSetup || showWorkspaceConfig) && guidance ? (
@@ -591,93 +560,46 @@ export function DashboardHome() {
 
           {showControlRoom ? (
             <>
+              {isActiveWorkspace ? (
+                <div className="mt-5 sm:mt-6">
+                  <HomeAskAllyBar
+                    attentionItems={mondayBundle.merged}
+                    nativeCampaigns={campagne}
+                    metaItems={metaItems}
+                    linkedNativeIds={linkedNativeIds}
+                    enabled={isActiveWorkspace}
+                  />
+                </div>
+              ) : null}
+
               <div
                 className={
-                  showSetup || showWorkspaceConfig ? "mt-10" : "mt-16"
+                  showSetup || showWorkspaceConfig ? "mt-8" : "mt-5 sm:mt-6"
                 }
               >
-                <AllyOggiBriefPanel
-                  attentionItems={mondayBundle.merged}
-                  nativeCampaigns={campagne}
-                  metaItems={metaItems}
-                  linkedNativeIds={linkedNativeIds}
-                  enabled={isActiveWorkspace}
+                <MondayControlRoomSection
+                  summary={monday}
+                  totalWorkspaceCampaigns={totalWorkspaceCampaigns}
                 />
               </div>
 
-              <div className="mt-6">
-                <MondayControlRoomSection summary={monday} />
-              </div>
-
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <section className="aff-panel-white min-w-0 p-4">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p className="text-[13px] font-medium text-[var(--ink-muted)]">
-                      Revisioni cliente
-                    </p>
-                    {revisioni.length > MAX_REVISIONI ? (
-                      <Link
-                        href="/campagne"
-                        className="text-xs font-medium text-[var(--primary)] hover:opacity-80"
-                      >
-                        Vedi tutte
-                      </Link>
-                    ) : null}
-                  </div>
-                  {revisioni.length === 0 ? (
-                    <p className="mt-2 text-[13px] leading-relaxed text-[var(--ink-muted)]">
-                      Nessuna revisione in sospeso.
-                    </p>
-                  ) : (
-                    <>
-                      <p className="mt-2 text-sm font-semibold text-[var(--ink)]">
-                        {revisioni.length === 1
-                          ? "1 revisione da gestire"
-                          : `${revisioni.length} revisioni da gestire`}
-                      </p>
-                      <ul className="mt-2 space-y-1.5">
-                        {revisioni.slice(0, MAX_REVISIONI).map((campagna) => (
-                          <li key={campagna.id}>
-                            <Link
-                              href={`/campagne/${campagna.id}`}
-                              className="block rounded-[10px] bg-[var(--surface-hover)] px-2.5 py-2 hover:opacity-90"
-                            >
-                              <p className="text-sm font-medium leading-snug text-[var(--ink)]">
-                                {campagna.nomeCliente}
-                              </p>
-                              <p className="mt-0.5 text-[12px] leading-snug text-[var(--ink-muted)]">
-                                {nomeCampagnaCard(campagna)}
-                              </p>
-                            </Link>
-                          </li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                </section>
-
-                <section className="aff-panel-white min-w-0 p-4">
+              {attivita.totaleCheck > 0 ? (
+                <section className="aff-panel-white mt-4 min-w-0 p-4">
                   <p className="text-[13px] font-medium text-[var(--ink-muted)]">
                     Attività recente
                   </p>
-                  {attivita.totaleCheck === 0 ? (
-                    <p className="mt-2 text-[13px] leading-relaxed text-[var(--ink-muted)]">
-                      Nessun controllo negli ultimi 7 giorni.
-                    </p>
-                  ) : (
-                    <p className="mt-2 text-[13px] leading-relaxed text-[var(--ink)]">
-                      <span className="font-semibold tabular-nums">
-                        {attivita.campagneControllate}
-                      </span>
-                      {attivita.campagneControllate === 1
-                        ? " campagna controllata"
-                        : " campagne controllate"}
-                      {" negli ultimi 7 giorni"}
-                      {attivita.totaleCheck !== attivita.campagneControllate
-                        ? ` · ${attivita.totaleCheck} controlli`
-                        : ""}
-                    </p>
-                  )}
+                  <p className="mt-2 text-[13px] leading-relaxed text-[var(--ink)]">
+                    <span className="font-semibold tabular-nums">
+                      {attivita.campagneControllate}
+                    </span>
+                    {attivita.campagneControllate === 1
+                      ? " campagna controllata"
+                      : " campagne controllate"}
+                    {" negli ultimi 7 giorni"}
+                    {attivita.totaleCheck !== attivita.campagneControllate
+                      ? ` · ${attivita.totaleCheck} controlli`
+                      : ""}
+                  </p>
                   <Link
                     href="/campagne"
                     className="mt-3 inline-flex text-xs font-medium text-[var(--primary)] hover:opacity-80"
@@ -685,7 +607,7 @@ export function DashboardHome() {
                     Vedi tutte le campagne
                   </Link>
                 </section>
-              </div>
+              ) : null}
             </>
           ) : null}
         </>

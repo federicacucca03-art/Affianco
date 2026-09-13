@@ -23,6 +23,7 @@ export type AllyOggiAnthropicCreateParams = {
 
 export function buildAllyOggiAnthropicParams(
   context: AllyOggiBriefContext,
+  question?: string | null,
 ): AllyOggiAnthropicCreateParams {
   return {
     model: anthropicModelId(),
@@ -32,7 +33,7 @@ export function buildAllyOggiAnthropicParams(
     messages: [
       {
         role: "user",
-        content: buildAllyOggiUserPrompt(context),
+        content: buildAllyOggiUserPrompt(context, question),
       },
     ],
   };

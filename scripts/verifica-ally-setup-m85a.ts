@@ -452,7 +452,7 @@ assert(
   assert(g.heroTitle.includes("Capisci cosa conta"), "E workspace hero");
   assert(/soglia/i.test(g.heroSubtitle), "E target hero subtitle");
   assert(!/configurazione richiesta/i.test(g.title), "E no generic config title");
-  assert(g.showQuickActions === true, "E workspace quick actions");
+  assert(g.showQuickActions === false, "E no redundant quick action cards");
 }
 
 // F result mapping
@@ -619,7 +619,7 @@ assert(
     "G waiting-for-data copy",
   );
   assert(g.primaryLabel.includes("Control Room"), "G CTA Control Room");
-  assert(g.showQuickActions === true, "G workspace quick actions");
+  assert(g.showQuickActions === false, "G no redundant quick action cards");
   assert(g.showControlRoom === true, "G ready shows Control Room");
 }
 
@@ -653,9 +653,12 @@ assert(
     }),
   );
   assert(g.checklistVisible === false, "H no checklist");
-  assert(g.showQuickActions === true, "H quick actions restored");
+  assert(g.showQuickActions === false, "H no redundant feature cards");
   assert(g.showHeroTools === true, "H hero tools restored");
-  assert(g.heroTitle === "Capisci cosa conta oggi.", "H active hero unchanged");
+  assert(
+    /attenzione oggi/i.test(g.heroTitle),
+    "H active hero prioritizes attention",
+  );
 }
 
 // J existing configured — campaigns alone skip NO_CLIENT

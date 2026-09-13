@@ -48,7 +48,25 @@ Limiti:
 - title: "Cliente · Campagna" o equivalente breve.
 - Non usare tono motivazionale, "AI-powered", o frasi generiche da chatbot.`;
 
-export function buildAllyOggiUserPrompt(context: AllyOggiBriefContext): string {
+export function buildAllyOggiUserPrompt(
+  context: AllyOggiBriefContext,
+  question?: string | null,
+): string {
+  const q = typeof question === "string" ? question.trim() : "";
+  if (q) {
+    return [
+      "Contesto canonico (già calcolato, non contestare):",
+      JSON.stringify(context),
+      "",
+      `Domanda dell'utente dalla Home: ${q}`,
+      "",
+      "Rispondi alla domanda usando SOLO i fatti nel contesto.",
+      "Usa headline + summary per rispondere in modo operativo e conciso.",
+      "Riempi priority_items / watch_items / configuration_items solo se utili alla risposta e coerenti con campaigns[] / workspace.",
+      "Non inventare performance, metriche, cause o dati Meta.",
+      "Se manca informazione: dillo in closing_note o nel summary.",
+    ].join("\n");
+  }
   return [
     "Contesto canonico (già calcolato, non contestare):",
     JSON.stringify(context),

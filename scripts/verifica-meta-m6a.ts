@@ -313,7 +313,8 @@ test("P: cross-client data isolation (structural)", () => {
 
 test("Q: source badge preserved", () => {
   const ui = read("./src/components/dashboard/MondayControlRoomSection.tsx");
-  assert(ui.includes("etichettaAttentionSource"), "source badge in UI");
+  assert(ui.includes('item.source === "META"'), "META source surfaced in UI");
+  assert(ui.includes("etichettaFreshness"), "Meta freshness line");
   const lib = read("./src/lib/monday-control-room.ts");
   assert(lib.includes('"META"'), "META source");
   assert(lib.includes('"NATIVE"'), "NATIVE source");
@@ -443,9 +444,8 @@ test("Home uses Monday section", () => {
   const monday = read("./src/components/dashboard/MondayControlRoomSection.tsx");
   assert(home.includes("MondayControlRoomSection"), "section wired");
   assert(
-    monday.includes("Control Room") &&
-      monday.includes("Le campagne che richiedono la tua attenzione"),
-    "copy",
+    monday.includes("Da fare oggi") && monday.includes("Da monitorare"),
+    "priority hierarchy copy",
   );
   assert(home.includes("loadMetaMondayBundle"), "loads meta");
 });
@@ -453,10 +453,11 @@ test("Home uses Monday section", () => {
 test("Empty urgent state copy", () => {
   const ui = read("./src/components/dashboard/MondayControlRoomSection.tsx");
   assert(
-    ui.includes("Nessuna campagna richiede attenzione urgente."),
-    "empty state",
+    ui.includes("Nessun carico operativo al momento.") ||
+      ui.includes("Niente di urgente oggi."),
+    "empty / neutral state",
   );
-  assert(ui.includes("Oggi"), "today summary");
+  assert(ui.includes("Da fare oggi"), "priority sections");
 });
 
 test("Home focus: no duplicate status boards", () => {
@@ -464,7 +465,7 @@ test("Home focus: no duplicate status boards", () => {
   assert(!home.includes("Campagne in gestione"), "gestione removed");
   assert(!home.includes("LavoriAperti"), "lavori aperti removed from home");
   assert(!home.includes("MiniChartAttivita"), "large activity chart removed");
-  assert(home.includes("Revisioni cliente"), "revisions kept");
+  assert(!home.includes("Revisioni cliente"), "revisions fold into Da fare oggi");
   assert(home.includes("Attività recente"), "activity compact");
 });
 

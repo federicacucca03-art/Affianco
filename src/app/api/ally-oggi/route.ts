@@ -29,7 +29,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Non autenticato." }, { status: 401 });
   }
 
-  let body: { context?: unknown; isFirstRunOnboarding?: unknown };
+  let body: {
+    context?: unknown;
+    isFirstRunOnboarding?: unknown;
+    question?: unknown;
+  };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -52,6 +56,11 @@ export async function POST(request: Request) {
   const isFirstRun =
     body.isFirstRunOnboarding === true ||
     body.isFirstRunOnboarding === "true";
+
+  const question =
+    typeof body.question === "string"
+      ? body.question.trim().slice(0, 500)
+      : "";
 
   if (
     !shouldGenerateAllyOggiBrief({
@@ -85,7 +94,7 @@ export async function POST(request: Request) {
   const promptCharsEstimate = estimateAllyOggiPromptChars(context);
 
   try {
-    const brief = await runAllyOggiBrief(context);
+    const brief = await runAllyOggiBrief(context, question || null);
     return NextResponse.json({
       skipped: false,
       brief,

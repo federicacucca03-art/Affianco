@@ -684,12 +684,13 @@ test("Facts vs interpretation separated in API response type", () => {
   assert(facts.targetValue === 30, "target fact");
 });
 
-test("Home Perché? UX present", () => {
+test("Home Perché? UX present (deterministic, 0 AI)", () => {
   const ui = read("./src/components/dashboard/MondayControlRoomSection.tsx");
   assert(ui.includes("Perché?"), "button");
-  assert(ui.includes("fetchCampaignDiagnosis"), "on demand");
-  assert(ui.includes("Analisi non disponibile al momento."), "failure ux");
-  assert(ui.includes("Riprova"), "retry");
+  assert(ui.includes("buildHomeActionExplanation"), "deterministic explain");
+  assert(!ui.includes("fetchCampaignDiagnosis"), "no diagnosis AI on Home");
+  assert(ui.includes("Chiedi ad Ally"), "follow-up entry");
+  assert(ui.includes("/api/ally-copilot"), "campaign follow-up reuses M9.2");
   assert(!ui.includes("useEffect(() => {\n      void runDiagnosis"), "no auto");
 });
 
@@ -760,10 +761,11 @@ test("A2: revision-only → NOT_NEEDED", () => {
   assert(!isDiagnosisUiEligible(e), "no perché");
 });
 
-test("B2: revision-only UI has no Perché path", () => {
+test("B2: revision-only uses deterministic Perché path (no diagnosis AI)", () => {
   const ui = read("./src/components/dashboard/MondayControlRoomSection.tsx");
-  assert(ui.includes("primaryMetricValue"), "passes metrics to eligibility");
-  assert(ui.includes("resolveDiagnosisEligibility"), "eligibility gate");
+  assert(ui.includes("buildHomeActionExplanation"), "deterministic explain");
+  assert(!ui.includes("fetchCampaignDiagnosis"), "no diagnosis on Home");
+  assert(!ui.includes("resolveDiagnosisEligibility"), "no diagnosis gate on Home");
   const itemEligible = isDiagnosisUiEligible(
     resolveDiagnosisEligibility({
       attentionState: "NEEDS_ATTENTION",
@@ -771,7 +773,7 @@ test("B2: revision-only UI has no Perché path", () => {
       campaignStatus: "REVISION_REQUESTED",
     }),
   );
-  assert(!itemEligible, "aurora-like not eligible");
+  assert(!itemEligible, "aurora-like not diagnosis-eligible (API still gated)");
 });
 
 test("C2: draft → NOT_NEEDED", () => {
@@ -1169,12 +1171,14 @@ test("M6C.3 N: no DB changes", () => {
   }
 });
 
-test("M6C.3 O: no automatic AI calls", () => {
+test("M6C.3 O: no automatic AI calls on Home", () => {
   const ui = read("./src/components/dashboard/MondayControlRoomSection.tsx");
-  assert(ui.includes("fetchCampaignDiagnosis"), "on demand");
+  assert(!ui.includes("fetchCampaignDiagnosis"), "Home has no diagnosis fetch");
   assert(!ui.includes("useEffect(() => {\n      void runDiagnosis"), "no auto");
   const orch = read("./src/lib/campaign-diagnosis/orchestrate.ts");
   assert(orch.includes("isDiagnosisUiEligible"), "gated");
+  const home = read("./src/components/dashboard/DashboardHome.tsx");
+  assert(!home.includes("fetchCampaignDiagnosis"), "home no auto batch");
 });
 
 test("M6C.3 prompt epistemic guards present", () => {

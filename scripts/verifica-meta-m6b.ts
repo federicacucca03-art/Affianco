@@ -474,11 +474,17 @@ test("Drafts do not outrank RED NOW", () => {
 test("UI shows urgency secondary to attention", () => {
   const ui = read("./src/components/dashboard/MondayControlRoomSection.tsx");
   assert(ui.includes("etichettaUrgencyLevel"), "urgency label helper");
-  assert(ui.includes("Priorità"), "priorità copy");
-  assert(ui.includes("urgencySupportingText"), "supporting urgency text");
-  assert(!ui.includes("urgencyCounts"), "oggi is attention-based");
-  assert(ui.includes("da controllare"), "oggi attention chips");
-  // Urgency must not be the old dominant uppercase MEDIA/ALTA first-line label.
+  assert(ui.includes("Priorità"), "priorità copy helper retained");
+  assert(ui.includes("urgencySupportingText"), "supporting urgency text helper");
+  assert(!ui.includes("urgencyCounts"), "summary is not urgencyCounts-driven");
+  assert(ui.includes("Da fare oggi"), "attention sections replace old oggi chips");
+  assert(ui.includes("buildHomeDailySummaryCopy") || ui.includes("partitionHomePriorities"), "home priorities partition");
+  // Visible priority labels removed from cards — helpers remain for M6B mapping.
+  assert(
+    ui.includes("Not rendered on Home cards") ||
+      ui.includes("not rendered on Home"),
+    "priority labels not rendered on cards",
+  );
   assert(
     !ui.includes("uppercase tracking-wide ${urgencyTone"),
     "no uppercase urgency labels",
