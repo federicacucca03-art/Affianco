@@ -43,3 +43,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# M10A.1 temporary production QA env (never commit)
+.env.m10a-live-qa.local

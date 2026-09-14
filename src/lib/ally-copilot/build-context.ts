@@ -189,6 +189,7 @@ export function buildAllyCampaignCopilotContext(input: {
     },
     configuration,
     linkedNativeId: identity.linkedNativeId,
+    hierarchy: null,
   };
 }
 
@@ -241,6 +242,18 @@ export function fitAllyCopilotInput(input: {
         input.context.configuration.interpretazione,
       ),
     },
+    hierarchy: input.context.hierarchy
+      ? {
+          adSets: input.context.hierarchy.adSets.map((a) => ({
+            ...a,
+            ads: a.ads.map((ad) => ({ ...ad })),
+          })),
+          focusHint: input.context.hierarchy.focusHint
+            ? { ...input.context.hierarchy.focusHint }
+            : null,
+          diagnosisLines: [...input.context.hierarchy.diagnosisLines],
+        }
+      : null,
   };
   let droppedHistoryTurns = 0;
   let trimmedPlanning = false;

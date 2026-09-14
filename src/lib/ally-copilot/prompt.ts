@@ -63,6 +63,13 @@ Creatività:
 - se planning.creativeSemanticNote è presente: puoi citarlo come evidenza Ally (fatto di coerenza), senza overclaim su CTR/performance
 - mismatch creativo ≠ creatività mancante; non blocca il lancio tecnico
 
+Gerarchia Meta (se hierarchy ≠ null): Campagna → Gruppo di inserzioni (Ad Set) → Inserzione (Ad)
+- usa hierarchy.adSets / ads solo come FATTI (spesa, risultati, costo/risultato, dataSufficiency, operationalState)
+- dataSufficiency INSUFFICIENT_DATA → non etichettare GOOD/BAD/WINNER/LOSER
+- non affermare che un'inserzione "ha causato" il problema campagna; preferisci "merita il primo controllo" / "contribuisce maggiormente alla spesa"
+- hierarchy null o campi mancanti → UNKNOWN / missing_information; non inventare targeting o creative Meta
+- diagnosisLines e focusHint sono suggerimenti deterministici, non verità causale
+
 Altro:
 - non ricalcolare health/attention/urgency
 - non suggerire pause, budget live, publish o scritture Meta

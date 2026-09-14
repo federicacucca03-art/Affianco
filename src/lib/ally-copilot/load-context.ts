@@ -333,10 +333,88 @@ export async function loadAllyCampaignCopilotContext(
     };
   }
 
-  const context = buildAllyCampaignCopilotContext({
+  let context = buildAllyCampaignCopilotContext({
     identity: identityBase,
     payload,
   });
+
+  if (source === "META" || identityBase.source === "LINKED") {
+    try {
+      const { loadCampaignHierarchyView } = await import(
+        "@/lib/meta/hierarchy-load"
+      );
+      const { applyHierarchyToNextAction } = await import(
+        "@/lib/meta/hierarchy-evaluate"
+      );
+      const clientId =
+        (
+          await admin()
+            .from("meta_campaigns")
+            .select("client_id")
+            .eq("id", campaignId)
+            .eq("user_id", userId)
+            .maybeSingle()
+        ).data as { client_id: string } | null;
+      if (clientId?.client_id) {
+        const view = await loadCampaignHierarchyView(
+          userId,
+          clientId.client_id,
+          campaignId,
+        );
+        const hierarchy = view.hierarchyAvailable
+          ? {
+              adSets: view.adSets.map((a) => ({
+                name: a.name,
+                spend: a.spend,
+                results: a.results,
+                costPerResult: a.costPerResult,
+                dataSufficiency: a.dataSufficiency,
+                operationalState: a.operationalState,
+                ads: a.ads.map((ad) => ({
+                  name: ad.name,
+                  spend: ad.spend,
+                  results: ad.results,
+                  costPerResult: ad.costPerResult,
+                  dataSufficiency: ad.dataSufficiency,
+                  operationalState: ad.operationalState,
+                })),
+              })),
+              focusHint:
+                view.diagnosis.focusAdSetName || view.diagnosis.focusAdName
+                  ? {
+                      adSetName: view.diagnosis.focusAdSetName,
+                      adName: view.diagnosis.focusAdName,
+                    }
+                  : null,
+              diagnosisLines: view.diagnosis.lines,
+            }
+          : null;
+        context = { ...context, hierarchy };
+        if (hierarchy?.focusHint && context.decision.nextActionType) {
+          const refined = applyHierarchyToNextAction(
+            {
+              actionType: context.decision.nextActionType,
+              title: context.decision.nextActionTitle ?? "",
+              rationale: "",
+            },
+            hierarchy.focusHint,
+          );
+          if (refined.title && refined.title !== context.decision.nextActionTitle) {
+            context = {
+              ...context,
+              decision: {
+                ...context.decision,
+                nextActionTitle: refined.title,
+              },
+            };
+          }
+        }
+      }
+    } catch {
+      context = { ...context, hierarchy: null };
+    }
+  }
+
   assertAllyCopilotPayloadSafe(context);
   return context;
 }

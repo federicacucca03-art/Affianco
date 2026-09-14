@@ -204,6 +204,16 @@ export async function importClientCampaignInsights(
         })
       : null;
 
+  // M10A — hierarchy sync after successful campaign insights (never fail the import)
+  try {
+    const { syncClientCampaignHierarchy } = await import(
+      "@/lib/meta/hierarchy-sync"
+    );
+    await syncClientCampaignHierarchy(userId, clientId, campaignId, options);
+  } catch {
+    // swallow — campaign insights already persisted
+  }
+
   return {
     metaCampaignId: discovered.metaCampaignId,
     syncedAt: now,

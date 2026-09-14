@@ -134,6 +134,32 @@ export type AllyCopilotDecision = {
   nextActionHref: string | null;
 };
 
+/** M10A — compact Meta hierarchy for Ask Ally (optional). */
+export type AllyCopilotHierarchyAd = {
+  name: string;
+  spend: number | null;
+  results: number | null;
+  costPerResult: number | null;
+  dataSufficiency: string;
+  operationalState: string;
+};
+
+export type AllyCopilotHierarchyAdSet = {
+  name: string;
+  spend: number | null;
+  results: number | null;
+  costPerResult: number | null;
+  dataSufficiency: string;
+  operationalState: string;
+  ads: AllyCopilotHierarchyAd[];
+};
+
+export type AllyCopilotHierarchy = {
+  adSets: AllyCopilotHierarchyAdSet[];
+  focusHint: { adSetName: string | null; adName: string | null } | null;
+  diagnosisLines: string[];
+};
+
 /** Canonical compact context sent to the model (plus question + short history). */
 export type AllyCampaignCopilotContext = {
   identity: AllyCopilotIdentity;
@@ -144,6 +170,7 @@ export type AllyCampaignCopilotContext = {
   decision: AllyCopilotDecision;
   configuration: AllyCopilotConfiguration;
   linkedNativeId: string | null;
+  hierarchy: AllyCopilotHierarchy | null;
 };
 
 export type AllyCopilotAnswer = {

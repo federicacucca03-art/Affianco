@@ -31,6 +31,8 @@ import {
 import type { LinkedAffiancoCampaignSnapshot } from "@/lib/meta/campaign-link-compatibility";
 import type { ResultMappingConfidence } from "@/lib/meta/insight-actions";
 import { ChiediAdAllyPanel } from "@/components/campagne/ChiediAdAllyPanel";
+import { MetaHierarchyPanel } from "@/components/risultati/MetaHierarchyPanel";
+import { etichettaMetaObjectiveUtente } from "@/lib/meta/meta-ui-labels";
 
 // ------------------------------------------------------------------
 // Sub-component: target setter
@@ -363,7 +365,12 @@ function MetaCampaignCard({
           </p>
           <p className="mt-1 aff-meta">
             {row.clientName}
-            {row.rawObjective ? ` · ${row.rawObjective}` : ""}
+            {row.rawObjective
+              ? ` · Obiettivo Meta: ${
+                  etichettaMetaObjectiveUtente(row.rawObjective) ??
+                  "non classificato"
+                }`
+              : ""}
           </p>
         </div>
         <div className="shrink-0 text-right">
@@ -547,6 +554,8 @@ function MetaCampaignCard({
           }}
         />
       )}
+
+      <MetaHierarchyPanel clientId={row.clientId} campaignId={row.id} />
 
       <div className="mt-2">
         <ChiediAdAllyPanel
