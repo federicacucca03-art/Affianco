@@ -82,6 +82,7 @@ function readiness(extra: {
   haCopySelezionato?: boolean;
   haTitoloAnnuncio?: boolean;
   fotoCaricata?: boolean;
+  guidedDestination?: string | null;
 } = {}) {
   return calculateLaunchReadiness({
     fotoCaricata: extra.fotoCaricata ?? true,
@@ -91,6 +92,8 @@ function readiness(extra: {
     haCopySelezionato: extra.haCopySelezionato ?? true,
     haTitoloAnnuncio: extra.haTitoloAnnuncio ?? true,
     objective: "LEADS",
+    // M10B.1: Lead Form / Page only after Modulo Meta is chosen.
+    guidedDestination: extra.guidedDestination ?? "META_LEAD_FORM",
   });
 }
 

@@ -21,6 +21,22 @@ export function etichettaMetaObjectiveUtente(
     case "AWARENESS":
       return "Notorietà";
     default:
-      return null;
+      break;
   }
+  const rawUp = (raw ?? "").toUpperCase();
+  if (
+    rawUp === "OUTCOME_TRAFFIC" ||
+    rawUp === "TRAFFIC" ||
+    rawUp === "LINK_CLICKS"
+  ) {
+    return "Traffico";
+  }
+  if (
+    rawUp === "OUTCOME_ENGAGEMENT" ||
+    rawUp === "ENGAGEMENT" ||
+    rawUp === "POST_ENGAGEMENT"
+  ) {
+    return "Interazioni";
+  }
+  return null;
 }

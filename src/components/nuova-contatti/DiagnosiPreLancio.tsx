@@ -135,7 +135,7 @@ function LayoutLegacy({
       <div className="mt-5">
         <StatoChip
           kind={toneKind}
-          label={`Prontezza campagna: ${diagnosi.score}% — ${diagnosi.label}`}
+          label={`Completezza bozza: ${diagnosi.score}% — ${diagnosi.label}`}
         />
       </div>
 
@@ -522,9 +522,13 @@ export function DiagnosiPreLancio({ diagnosi, onAzioneRapida }: Props) {
               Indicatore sintetico
             </p>
             <p className="mt-1 text-sm text-[var(--ink)]">
-              Prontezza campagna:{" "}
+              Completezza bozza:{" "}
               <span className="font-medium">{diagnosi.score}%</span> —{" "}
               {diagnosi.label}
+              <span className="mt-1 block text-xs text-[var(--ink-muted)]">
+                Non è la sola prontezza Meta: destinazione, Pagina e tracking
+                restano separati. La percentuale non certifica il lancio.
+              </span>
             </p>
           </div>
           )}

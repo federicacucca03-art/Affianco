@@ -68,7 +68,7 @@ export function StrategicScoreCard({ result }: Props) {
     <section className="aff-panel-white p-5 sm:p-6">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-[13px] font-medium text-[var(--primary)]">
-          Strategic Score
+          Valutazione strategica
         </p>
         <StatoChip kind={chip} label={result.label} />
       </div>

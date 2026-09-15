@@ -618,8 +618,8 @@ export function raccomandaLancio(
     description:
       "La strategia e la configurazione operativa sono complete.",
     reasons: tagliaTre([
-      "Strategic Score in stato solido.",
-      "Prontezza al lancio completa.",
+      "Valutazione strategica in stato solido.",
+      "Configurazione operativa completa.",
     ]),
     actions: [],
   };
@@ -670,13 +670,13 @@ export const MICROCOPY_EXPORT_PRONTA =
 export const MICROCOPY_EXPORT_BOZZA =
   "Ally prepara una bozza strutturata da completare in Ads Manager.";
 export const MICROCOPY_EXPORT_PAGE_FORM =
-  "Page ID e Form ID dovranno essere completati in Meta Ads Manager prima di andare live.";
+  "Pagina Facebook e modulo contatti vanno collegati su Meta prima della pubblicazione.";
 export const MICROCOPY_EXPORT_PAGE =
-  "Page ID dovrà essere completato in Meta Ads Manager prima di andare live.";
+  "La Pagina Facebook va collegata su Meta prima della pubblicazione.";
 export const MICROCOPY_EXPORT_FORM =
-  "Form ID dovrà essere completato in Meta Ads Manager prima di andare live.";
+  "Il modulo contatti va scelto su Meta prima della pubblicazione.";
 export const MICROCOPY_EXPORT_BLOCCATO =
-  "Inserisci almeno un testo annuncio per generare il file.";
+  "Inserisci almeno un testo annuncio per preparare la bozza Meta.";
 
 export type EtichetteExportMeta = {
   labelCta: string;

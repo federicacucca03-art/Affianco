@@ -19,7 +19,7 @@ export function ValutazioneEconomicaCard({ result }: Props) {
   return (
     <section className="aff-panel-white p-5 sm:p-6">
       <p className="text-[13px] font-medium text-[var(--primary)]">
-        Strategic Score
+        Valutazione strategica
       </p>
       <p className="mt-2 text-lg font-medium text-[var(--ink)]">
         {LABEL_VALUTAZIONE_IN_CORSO}

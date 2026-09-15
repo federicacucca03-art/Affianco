@@ -47,6 +47,8 @@ import { ValutazioneEconomicaCard } from "@/components/nuova-contatti/Valutazion
 import { LaunchReadinessCard } from "@/components/nuova-contatti/LaunchReadinessCard";
 import { WizardStepper } from "@/components/nuova-contatti/WizardStepper";
 import { DiagnosiPreLancio } from "@/components/nuova-contatti/DiagnosiPreLancio";
+import { MetaStrutturaGuidata } from "@/components/nuova-contatti/MetaStrutturaGuidata";
+import { buildGuidedMetaPlan } from "@/lib/meta/guided-plan";
 import { CardLinkApprovazione } from "@/components/nuova-contatti/CardLinkApprovazione";
 import {
   mappaStatoApprovazioneLeads,
@@ -122,9 +124,22 @@ import { anteprimeDaCreativitaMeta } from "@/lib/creativita-storage";
 import { logCampagnaAggiornata } from "@/lib/campaign-logs";
 
 const CRS_SESSION_PREFIX = "affianco-conversion-rate-source:";
+const GUIDED_DEST_SESSION_PREFIX = "affianco-guided-destination-v1:";
+
+type GuidedDestinationChoice =
+  | "META_LEAD_FORM"
+  | "WEBSITE"
+  | "WHATSAPP"
+  | "PHONE"
+  | "INSTAGRAM_DM"
+  | "MAPS";
 
 function chiaveCrsSessione(search: string): string {
   return `${CRS_SESSION_PREFIX}${search || "nuova"}`;
+}
+
+function chiaveGuidedDestSessione(search: string): string {
+  return `${GUIDED_DEST_SESSION_PREFIX}${search || "nuova"}`;
 }
 
 function persistiCrsSessione(search: string, source: ConversionRateSource) {
@@ -144,6 +159,44 @@ function leggiCrsSessione(search: string): ConversionRateSource | undefined {
     );
   } catch {
     return undefined;
+  }
+}
+
+function persistiGuidedDestSessione(
+  search: string,
+  dest: GuidedDestinationChoice | null,
+) {
+  if (typeof window === "undefined") return;
+  try {
+    const key = chiaveGuidedDestSessione(search);
+    if (!dest) window.sessionStorage.removeItem(key);
+    else window.sessionStorage.setItem(key, dest);
+  } catch {
+    // quota / private mode
+  }
+}
+
+function leggiGuidedDestSessione(
+  search: string,
+): GuidedDestinationChoice | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(
+      chiaveGuidedDestSessione(search),
+    );
+    if (
+      raw === "META_LEAD_FORM" ||
+      raw === "WEBSITE" ||
+      raw === "WHATSAPP" ||
+      raw === "PHONE" ||
+      raw === "INSTAGRAM_DM" ||
+      raw === "MAPS"
+    ) {
+      return raw;
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 
@@ -456,6 +509,17 @@ export function PercorsoContatti({
   const [targetAge, setTargetAge] = useState<TargetAgeBand>("25-50");
   const [retargetingAudienceSource, setRetargetingAudienceSource] =
     useState<RetargetingAudienceSource>("CART");
+  const [guidedDestination, setGuidedDestination] = useState<
+    GuidedDestinationChoice | null
+  >(() => leggiGuidedDestSessione(searchParams.toString()));
+  const [fromBriefFlags, setFromBriefFlags] = useState<{
+    budgetGiornaliero?: boolean;
+    citta?: boolean;
+    raggioKm?: boolean;
+    etaMin?: boolean;
+    etaMax?: boolean;
+    objective?: boolean;
+  }>({});
   const [dataEventoApertura, setDataEventoApertura] = useState("");
   const [tonoVoce, setTonoVoce] = useState<TonoVoce>("diretto");
   const [previewTabReset, setPreviewTabReset] = useState(0);
@@ -851,6 +915,17 @@ export function PercorsoContatti({
     if (h.scontrinoMedio != null) setScontrinoMedio(h.scontrinoMedio);
     if (h.tassoConversione != null) setTassoConversione(h.tassoConversione);
     if (h.productMargin != null) setProductMargin(h.productMargin);
+
+    // M10B.1 — mark hydrated brief facts as BRIEF (not EXPLICIT technical choices).
+    setFromBriefFlags({
+      budgetGiornaliero: h.budgetGiornaliero != null,
+      citta: Boolean(h.citta),
+      raggioKm: h.raggioKm != null,
+      etaMin: h.etaMin != null,
+      etaMax: h.etaMax != null,
+      objective: true,
+    });
+
     if (accepted.matchedClienteId) {
       setClienteId(accepted.matchedClienteId);
       setSalvaClientePreferito(true);
@@ -1409,6 +1484,7 @@ export function PercorsoContatti({
             : undefined,
         objective: objectiveEffettivo,
         bookingChannel: isBookings ? bookingChannel : undefined,
+        guidedDestination: guidedDestination ?? undefined,
         haCopySelezionato,
         haTitoloAnnuncio: Boolean((config.titoloAnnuncio ?? "").trim()),
       },
@@ -1428,6 +1504,7 @@ export function PercorsoContatti({
     objectiveEffettivo,
     isBookings,
     bookingChannel,
+    guidedDestination,
     config.varianteA,
     config.varianteB,
     config.varianteC,
@@ -1537,6 +1614,9 @@ export function PercorsoContatti({
             frontEndOffer: frontEndOffer.trim(),
             varianteA: config.varianteA ?? "",
             targetType,
+            guidedDestination: guidedDestination ?? "UNKNOWN",
+            sitoWeb: sitoWeb.trim() || undefined,
+            whatsappNumber: whatsappNumber.trim() || undefined,
             creativita: creativita.map((c) => ({
               avvisoFormato: c.avvisoFormato,
               formatoOrizzontale: c.formatoOrizzontale,
@@ -1724,6 +1804,7 @@ export function PercorsoContatti({
       isRetargeting,
       whatsappNumber,
       sitoWeb,
+      guidedDestination,
       elevatorPitch,
       heroProduct,
       contesto.settore,
@@ -1765,6 +1846,69 @@ export function PercorsoContatti({
       objectiveEffettivo,
     ],
   );
+
+  const guidedMetaPlan = useMemo(
+    () =>
+      buildGuidedMetaPlan({
+        objective: objectiveEffettivo,
+        nomeCampagna: config.nomeCampagna,
+        citta: contesto.citta,
+        raggioKm: config.raggioKm,
+        etaMin: config.etaMin,
+        etaMax: config.etaMax,
+        budgetGiornaliero: config.budgetGiornaliero,
+        bookingChannel: isBookings ? bookingChannel : undefined,
+        destinationUrl: sitoWeb,
+        whatsappNumber: isBookings ? whatsappNumber : undefined,
+        pageId,
+        formId,
+        targetType,
+        retargetingAudienceSource: isRetargeting
+          ? retargetingAudienceSource
+          : undefined,
+        cboAttivo: config.cboAttivo,
+        posizionamentiAdvantage: config.posizionamentiAdvantage,
+        varianteA: config.varianteA,
+        varianteB: config.varianteB,
+        varianteC: config.varianteC,
+        titoloAnnuncio: config.titoloAnnuncio,
+        creativitaCount: creativita.length,
+        explicitDestination: guidedDestination,
+        fromBrief: fromBriefFlags,
+      }),
+    [
+      objectiveEffettivo,
+      config.nomeCampagna,
+      config.raggioKm,
+      config.etaMin,
+      config.etaMax,
+      config.budgetGiornaliero,
+      config.cboAttivo,
+      config.posizionamentiAdvantage,
+      config.varianteA,
+      config.varianteB,
+      config.varianteC,
+      config.titoloAnnuncio,
+      contesto.citta,
+      isBookings,
+      bookingChannel,
+      sitoWeb,
+      whatsappNumber,
+      pageId,
+      formId,
+      targetType,
+      isRetargeting,
+      retargetingAudienceSource,
+      creativita.length,
+      guidedDestination,
+      fromBriefFlags,
+    ],
+  );
+
+  function scegliDestinazioneGuidata(kind: GuidedDestinationChoice) {
+    setGuidedDestination(kind);
+    persistiGuidedDestSessione(searchParams.toString(), kind);
+  }
 
   function azioneRapidaDiagnosi(tipo: PreLancioAzioneRapida) {
     if (tipo === "espandi-raggio") {
@@ -2586,14 +2730,52 @@ export function PercorsoContatti({
             }`}
           >
             {wizardStep === 5 ? (
-              <DiagnosiPreLancio
-                diagnosi={diagnosi}
-                onAzioneRapida={azioneRapidaDiagnosi}
-              />
+              <>
+                <MetaStrutturaGuidata
+                  plan={guidedMetaPlan}
+                  onModificaPasso={(s) => {
+                    if (s <= wizardStep) setWizardStep(s as WizardStep);
+                  }}
+                  onScegliDestinazione={(kind) => {
+                    if (
+                      kind === "META_LEAD_FORM" ||
+                      kind === "WEBSITE" ||
+                      kind === "WHATSAPP" ||
+                      kind === "PHONE" ||
+                      kind === "INSTAGRAM_DM" ||
+                      kind === "MAPS"
+                    ) {
+                      scegliDestinazioneGuidata(kind);
+                    }
+                  }}
+                />
+                <DiagnosiPreLancio
+                  diagnosi={diagnosi}
+                  onAzioneRapida={azioneRapidaDiagnosi}
+                />
+              </>
             ) : (
               <>
                 {wizardStep === 6 ? (
                   <>
+                  <MetaStrutturaGuidata
+                    plan={guidedMetaPlan}
+                    onModificaPasso={(s) => {
+                      if (s <= wizardStep) setWizardStep(s as WizardStep);
+                    }}
+                    onScegliDestinazione={(kind) => {
+                      if (
+                        kind === "META_LEAD_FORM" ||
+                        kind === "WEBSITE" ||
+                        kind === "WHATSAPP" ||
+                        kind === "PHONE" ||
+                        kind === "INSTAGRAM_DM" ||
+                        kind === "MAPS"
+                      ) {
+                        scegliDestinazioneGuidata(kind);
+                      }
+                    }}
+                  />
                   <RaccomandazioneLancio result={raccomandazioneLancio} />
                   <StrategicScoreCard result={strategicScore} />
                   <LaunchReadinessCard result={launchReadiness} />

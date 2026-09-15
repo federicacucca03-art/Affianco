@@ -216,6 +216,20 @@ export type PreLancioInput = {
   pageId?: string;
   /** LEADS: ID modulo lead Meta. */
   formId?: string;
+  /**
+   * M10B guided destination (UNKNOWN / missing = not chosen).
+   * Page/Form Meta requirements are conditional on META_LEAD_FORM.
+   */
+  guidedDestination?:
+    | "META_LEAD_FORM"
+    | "WEBSITE"
+    | "WHATSAPP"
+    | "PHONE"
+    | "INSTAGRAM_DM"
+    | "MAPS"
+    | "UNKNOWN"
+    | "NOT_REQUIRED"
+    | null;
   /** LEADS: città per controllo hook. */
   citta?: string;
   /** LEADS: offerta front-end per controllo hook. */
@@ -855,7 +869,7 @@ export function calcolaDiagnosiPreLancioLeads(
         titolo: "Titolo annuncio",
         severita: "consiglio",
         motivazione:
-          "Mancante: l'export userà un titolo di fallback, ma conviene personalizzarlo.",
+          "Mancante: conviene personalizzare il titolo prima della pubblicazione.",
       }),
     );
     score -= 8;
@@ -894,7 +908,7 @@ export function calcolaDiagnosiPreLancioLeads(
         id: "budget",
         titolo: "Budget giornaliero",
         severita: "consiglio",
-        motivazione: `${budget}€ è sotto il minimo consigliato per ${input.settore?.trim() || "questa nicchia"} (${budgetMin}€/giorno).`,
+        motivazione: `${budget}€ è sotto il benchmark indicativo per ${input.settore?.trim() || "questa nicchia"} (circa ${budgetMin}€/giorno). Puoi comunque procedere.`,
       }),
     );
     score -= 15;
@@ -904,7 +918,7 @@ export function calcolaDiagnosiPreLancioLeads(
         id: "budget",
         titolo: "Budget giornaliero",
         severita: "ok",
-        motivazione: `${budget}€/giorno è in linea con il minimo di nicchia (${budgetMin}€).`,
+        motivazione: `${budget}€/giorno è in linea con il benchmark indicativo di nicchia (circa ${budgetMin}€).`,
       }),
     );
   }
@@ -927,7 +941,7 @@ export function calcolaDiagnosiPreLancioLeads(
         id: "copy",
         titolo: "Testo annuncio (Variante A)",
         severita: "ok",
-        motivazione: "Copy presente e pronto per l'export.",
+        motivazione: "Copy presente.",
       }),
     );
 
@@ -1028,48 +1042,99 @@ export function calcolaDiagnosiPreLancioLeads(
 
   const pageId = (input.pageId ?? "").trim();
   const formId = (input.formId ?? "").trim();
-  if (!pageId) {
-    checks.push(
-      itemOperativo({
-        id: "page-id",
-        titolo: "ID Pagina Facebook",
-        severita: "consiglio",
-        motivazione:
-          "Mancante nel CSV: il file si genera, ma in Meta Ads Manager va collegata la pagina prima del go-live.",
-      }),
-    );
-    score -= 8;
-  } else {
-    checks.push(
-      itemOperativo({
-        id: "page-id",
-        titolo: "ID Pagina Facebook",
-        severita: "ok",
-        motivazione: "Presente — pronto per l'import in blocco.",
-      }),
-    );
-  }
+  const dest = (input.guidedDestination ?? "UNKNOWN").toUpperCase();
+  const moduloMetaScelto = dest === "META_LEAD_FORM";
+  const destinazioneSito = dest === "WEBSITE";
+  const destinazioneWhatsapp = dest === "WHATSAPP";
+  const destinazioneScelta =
+    dest !== "UNKNOWN" &&
+    dest !== "NOT_REQUIRED" &&
+    dest !== "" &&
+    dest !== "NULL";
 
-  if (!formId) {
+  // Configurazione Meta: solo dopo destinazione esplicita (mai Instant Form inventato).
+  if (!destinazioneScelta) {
     checks.push(
       itemOperativo({
-        id: "form-id",
-        titolo: "ID Modulo Lead Meta",
+        id: "destinazione-guidata",
+        titolo: "Come ricevi i contatti",
         severita: "consiglio",
         motivazione:
-          "Mancante nel CSV: l'export funziona, ma il modulo va associato manualmente in Meta.",
+          "Scegli se i contatti arrivano su Modulo Meta, sito, WhatsApp o chiamata. Finché non scegli, Ally non chiede Pagina o modulo.",
       }),
     );
-    score -= 8;
-  } else {
-    checks.push(
-      itemOperativo({
-        id: "form-id",
-        titolo: "ID Modulo Lead Meta",
-        severita: "ok",
-        motivazione: "Presente — allineato all'obiettivo Lead Generation.",
-      }),
-    );
+    score -= 5;
+  } else if (moduloMetaScelto) {
+    if (!pageId) {
+      checks.push(
+        itemOperativo({
+          id: "page-id",
+          titolo: "Pagina Facebook",
+          severita: "consiglio",
+          motivazione:
+            "Pagina Facebook da collegare. Necessaria prima della pubblicazione su Meta.",
+        }),
+      );
+      score -= 8;
+    } else {
+      checks.push(
+        itemOperativo({
+          id: "page-id",
+          titolo: "Pagina Facebook",
+          severita: "ok",
+          motivazione: "Pagina indicata.",
+        }),
+      );
+    }
+
+    if (!formId) {
+      checks.push(
+        itemOperativo({
+          id: "form-id",
+          titolo: "Modulo contatti Meta",
+          severita: "consiglio",
+          motivazione:
+            "Modulo contatti da scegliere. Se scegli Modulo Meta, dovrai indicare quale modulo utilizzare.",
+        }),
+      );
+      score -= 8;
+    } else {
+      checks.push(
+        itemOperativo({
+          id: "form-id",
+          titolo: "Modulo contatti Meta",
+          severita: "ok",
+          motivazione: "Modulo indicato.",
+        }),
+      );
+    }
+  } else if (destinazioneSito) {
+    const url = (input.sitoWeb ?? "").trim();
+    if (!url) {
+      checks.push(
+        itemOperativo({
+          id: "destination-url",
+          titolo: "URL di destinazione",
+          severita: "consiglio",
+          motivazione: "Indica l'URL del sito dove vuoi ricevere i contatti.",
+        }),
+      );
+      score -= 8;
+    }
+  } else if (destinazioneWhatsapp) {
+    const wa = (input.whatsappNumber ?? "").trim();
+    if (!wa) {
+      checks.push(
+        itemOperativo({
+          id: "whatsapp",
+          titolo: "WhatsApp Business",
+          severita: "consiglio",
+          motivazione:
+            "Numero WhatsApp Business da indicare, oppure completalo su Meta prima della pubblicazione.",
+        }),
+      );
+      score -= 6;
+    }
   }
 
   score = Math.max(0, Math.min(100, score));
@@ -1077,16 +1142,17 @@ export function calcolaDiagnosiPreLancioLeads(
   const haErroriBloccanti = riepilogo.errori > 0;
 
   let tone: PreLancioDiagnosi["tone"] = "orange";
-  let label = "Da completare prima del lancio";
+  // Score = bozza Ally (pianificazione + consigli), non "prontezza Meta tecnica" pura.
+  let label = "Bozza da completare";
   if (haErroriBloccanti) {
     tone = "orange";
     label = "Correggi gli elementi in rosso";
   } else if (score >= 80 && riepilogo.consigli === 0) {
     tone = "green";
-    label = "Pronta al lancio";
+    label = "Bozza solida — verifica ancora la config Meta";
   } else if (score >= 60) {
     tone = "yellow";
-    label = "Puoi procedere — rivedi i consigli";
+    label = "Bozza ok — rivedi i consigli";
   }
 
   const saturazione = stimaSaturazionePubblico({
@@ -1149,7 +1215,7 @@ export function calcolaDiagnosiPreLancioBookings(
         id: "copy",
         titolo: "Testo annuncio (Variante A)",
         severita: "ok",
-        motivazione: "Copy presente e pronto per l'export.",
+        motivazione: "Copy presente.",
       }),
     );
   }
@@ -1339,7 +1405,7 @@ export function calcolaDiagnosiPreLancioBookings(
         id: "budget",
         titolo: "Budget vs CPA sostenibile",
         severita: "consiglio",
-        motivazione: `${budget}€/giorno è sotto il minimo consigliato per ${input.settore?.trim() || "questa nicchia"} (${budgetMin}€/giorno).`,
+        motivazione: `${budget}€/giorno è sotto il benchmark indicativo per ${input.settore?.trim() || "questa nicchia"} (circa ${budgetMin}€/giorno). Puoi comunque procedere.`,
       }),
     );
     score -= 10;
@@ -1352,7 +1418,7 @@ export function calcolaDiagnosiPreLancioBookings(
         motivazione:
           cpa > 0
             ? `${budget}€/giorno copre il CPA target (${Math.round(cpa * 100) / 100}€) con margine operativo.`
-            : `${budget}€/giorno è in linea con il minimo di nicchia (${budgetMin}€).`,
+            : `${budget}€/giorno è in linea con il benchmark indicativo di nicchia (circa ${budgetMin}€).`,
       }),
     );
   }
@@ -1507,7 +1573,7 @@ export function calcolaDiagnosiPreLancioEcommerce(
         id: "copy",
         titolo: "Testo annuncio (Variante A)",
         severita: "ok",
-        motivazione: "Copy presente e pronto per l'export.",
+        motivazione: "Copy presente.",
       }),
     );
   }

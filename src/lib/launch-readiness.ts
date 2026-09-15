@@ -1,10 +1,23 @@
 import type { BookingChannel, CampagnaObjective } from "@/types/campagne";
 
-/** Lead Form ID obbligatorio solo per LEADS o BOOKINGS su LEAD_FORM. */
+/** Lead Form ID obbligatorio solo con destinazione Modulo Meta (o BOOKINGS su LEAD_FORM). */
 export function richiedeModuloContatti(
   objective?: CampagnaObjective,
   bookingChannel?: BookingChannel,
+  guidedDestination?: string | null,
 ): boolean {
+  const dest = (guidedDestination ?? "").toUpperCase();
+  if (dest === "META_LEAD_FORM") return true;
+  if (
+    dest === "WEBSITE" ||
+    dest === "WHATSAPP" ||
+    dest === "PHONE" ||
+    dest === "INSTAGRAM_DM" ||
+    dest === "MAPS" ||
+    dest === "NOT_REQUIRED"
+  ) {
+    return false;
+  }
   if (objective === "BOOKINGS") {
     return bookingChannel === "LEAD_FORM";
   }
@@ -12,11 +25,13 @@ export function richiedeModuloContatti(
     objective === "ECOMMERCE" ||
     objective === "IN_STORE" ||
     objective === "RETARGETING" ||
-    objective === "AWARENESS"
+    objective === "AWARENESS" ||
+    objective === "LEADS"
   ) {
+    // LEADS senza destinazione scelta: non inventare Instant Form.
     return false;
   }
-  return true;
+  return false;
 }
 
 /** Destination URL obbligatorio per E-commerce, In-Store, Retargeting e Apertura. */
@@ -54,9 +69,11 @@ export type LaunchReadinessInput = {
   destinationUrl?: string;
   objective?: CampagnaObjective;
   bookingChannel?: BookingChannel;
-  /** Copy pronto per il CSV di import Meta. */
+  /** Guided destination from M10B (gates Lead Form / page requirements). */
+  guidedDestination?: string | null;
+  /** Copy pronto per pubblicazione / export Meta. */
   haCopySelezionato: boolean;
-  /** Headline / nome campagna presenti per l'export. */
+  /** Headline / nome campagna presenti. */
   haTitoloAnnuncio: boolean;
 };
 
@@ -81,7 +98,7 @@ function testoDestinazioneMancante(objective?: CampagnaObjective): string {
   if (objective === "ECOMMERCE") {
     return "URL Pagina Prodotto / Store mancante";
   }
-  return "ID Modulo Contatti mancante";
+  return "Destinazione da scegliere";
 }
 
 /**
@@ -91,23 +108,47 @@ function testoDestinazioneMancante(objective?: CampagnaObjective): string {
 export function calculateLaunchReadiness(
   input: LaunchReadinessInput,
 ): LaunchReadinessResult {
-  const pageOk = input.paginaFacebookId.trim() !== "";
   const formRichiesto = richiedeModuloContatti(
     input.objective,
     input.bookingChannel,
+    input.guidedDestination,
   );
   const storeUrlRichiesto = richiedeDestinationUrl(input.objective);
+  const dest = (input.guidedDestination ?? "").toUpperCase();
+  const hasChosenGuidedDest = [
+    "META_LEAD_FORM",
+    "WEBSITE",
+    "WHATSAPP",
+    "PHONE",
+    "INSTAGRAM_DM",
+    "MAPS",
+    "NOT_REQUIRED",
+  ].includes(dest);
+  const pageRichiesto =
+    formRichiesto ||
+    dest === "WHATSAPP" ||
+    dest === "INSTAGRAM_DM" ||
+    dest === "PHONE";
+  const pageOk = !pageRichiesto || input.paginaFacebookId.trim() !== "";
   const formOk = !formRichiesto || input.moduloContattiId.trim() !== "";
   const storeOk =
     !storeUrlRichiesto || (input.destinationUrl ?? "").trim() !== "";
-  const destinazioneOk = formOk && storeOk;
+  // LEADS without guided destination: incomplete Meta config (no Instant Form invent).
+  const leadsNeedsDestinationChoice =
+    input.objective === "LEADS" && !hasChosenGuidedDest;
+  const destinazioneOk =
+    formOk && storeOk && !leadsNeedsDestinationChoice;
   const exportOk = input.haCopySelezionato && input.haTitoloAnnuncio;
 
   const etichettaDestinazione = storeUrlRichiesto
     ? "URL di destinazione"
     : formRichiesto
-      ? "ID Modulo Contatti / destinazione"
-      : "Destinazione Meta";
+      ? "Modulo contatti Meta"
+      : leadsNeedsDestinationChoice
+        ? "Come ricevi i contatti"
+        : dest === "WHATSAPP"
+          ? "Destinazione messaggi"
+          : "Destinazione Meta";
 
   const items: LaunchReadinessItem[] = [
     {
@@ -124,30 +165,34 @@ export function calculateLaunchReadiness(
     },
     {
       id: "pageId",
-      label: "ID Pagina Facebook",
+      label: "Pagina Facebook",
       ok: pageOk,
-      mancante: "ID Pagina Facebook mancante",
+      mancante: pageRichiesto
+        ? "Pagina Facebook da collegare"
+        : undefined,
     },
     {
       id: "destinazione",
       label: etichettaDestinazione,
       ok: destinazioneOk,
       mancante: !destinazioneOk
-        ? formRichiesto && !formOk
-          ? "ID Modulo Contatti mancante"
-          : storeUrlRichiesto && !storeOk
-            ? testoDestinazioneMancante(input.objective)
-            : "Destinazione mancante"
+        ? leadsNeedsDestinationChoice
+          ? "Destinazione da scegliere"
+          : formRichiesto && !formOk
+            ? "Modulo contatti da scegliere"
+            : storeUrlRichiesto && !storeOk
+              ? testoDestinazioneMancante(input.objective)
+              : "Destinazione da scegliere"
         : undefined,
     },
     {
       id: "export",
-      label: "Requisiti export",
+      label: "Messaggio e titolo pronti",
       ok: exportOk,
       mancante: !exportOk
         ? !input.haCopySelezionato
-          ? "Copy mancante per l'export"
-          : "Titolo annuncio mancante per l'export"
+          ? "Messaggio / copy mancante"
+          : "Titolo annuncio mancante"
         : undefined,
     },
   ];

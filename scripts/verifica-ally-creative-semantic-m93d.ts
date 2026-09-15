@@ -69,6 +69,8 @@ function baseLr(extra?: Partial<Parameters<typeof calculateLaunchReadiness>[0]>)
     haCopySelezionato: true,
     haTitoloAnnuncio: true,
     objective: "LEADS" as const,
+    // M10B: page/form imply Modulo Meta destination choice
+    guidedDestination: "META_LEAD_FORM",
     ...extra,
   };
 }
