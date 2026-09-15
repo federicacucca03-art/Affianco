@@ -1,10 +1,11 @@
 /**
- * M5B — Meta Control Room adapter (deterministic, no AI, no invented targets).
+ * M5B / M10C — Meta Control Room adapter (deterministic, no AI, no invented targets).
  *
  * Rules enforced:
- * - No GREEN/YELLOW/RED without explicit target.
+ * - No GREEN/YELLOW/RED without explicit target (when economic target is required).
  * - No CPL/CPA health without CONFIDENT result mapping.
- * - ROAS health deferred (higher-is-better needs separate engine).
+ * - Awareness/Traffic/Engagement do NOT require CPL/CPA → no fake CONFIGURATION_REQUIRED.
+ * - ROAS health only when spend + reliable purchase value exist (separate path).
  * - PAUSED/ARCHIVED/DELETED → HISTORICAL_REVIEW mode.
  * - Never writes to campaign_checks.
  * - Never auto-infers target from Meta data.
@@ -17,6 +18,11 @@ import {
 } from "@/lib/control-room";
 import type { AggregatedMetaInsights } from "@/lib/meta/insight-aggregate";
 import type { MetaCampaignTarget, MetaMonitoringKpi } from "@/lib/meta/campaign-target";
+import {
+  evaluateObjectiveEvidenceSufficiency,
+  resolveObjectivePerformanceProfile,
+  type ObjectivePerformanceProfile,
+} from "@/lib/meta/objective-performance";
 
 export const META_INSIGHTS_CONTROL_ROOM_SOURCE = "META_API" as const;
 
@@ -32,7 +38,14 @@ export type MetaHealthAvailability =
   | "RESULT_MAPPING_REQUIRED"
   | "INSUFFICIENT_DATA"
   | "ROAS_DEFERRED"
-  | "LINKED_BUT_KPI_INCOMPATIBLE";
+  | "LINKED_BUT_KPI_INCOMPATIBLE"
+  /** Unknown Meta objective — factual metrics only, no performance verdict. */
+  | "OBJECTIVE_UNSUPPORTED"
+  /**
+   * Objective does not require an economic target (e.g. Awareness).
+   * Delivery may be readable; no GREEN/YELLOW/RED without an optional compatible target.
+   */
+  | "NO_ECONOMIC_EVALUATION";
 
 export type MetaControlRoomMetrics = {
   spend: number | null;
@@ -125,41 +138,129 @@ export function daysInclusiveYmd(since: string, until: string): number | null {
   return Math.floor((u - s) / 86_400_000) + 1;
 }
 
+function kpiCompatibleWithProfile(
+  kpi: MetaMonitoringKpi,
+  profile: ObjectivePerformanceProfile,
+): boolean {
+  switch (profile.family) {
+    case "LEADS":
+      return kpi === "CPL" || kpi === "CPA" || kpi === "CPC" || kpi === "CPM";
+    case "SALES":
+      return kpi === "CPA" || kpi === "ROAS" || kpi === "CPC" || kpi === "CPM";
+    case "TRAFFIC":
+      return kpi === "CPC" || kpi === "CPM";
+    case "AWARENESS":
+      return kpi === "CPM" || kpi === "CPC";
+    case "ENGAGEMENT":
+      return kpi === "CPC" || kpi === "CPM";
+    default:
+      return false;
+  }
+}
+
 /**
  * Determine health availability before attempting to compute health.
+ * Objective-aware: Awareness without CPL is not TARGET_REQUIRED.
+ * M10C.1: RESULT ambiguity ≠ sample insufficiency ≠ missing target.
  */
 function resolveHealthAvailability(
   target: MetaControlRoomTarget,
   metrics: MetaControlRoomMetrics,
   resultMappingConfidence: "CONFIDENT" | "AMBIGUOUS" | "UNKNOWN",
-  sample: { daysActive: number | null; resultsCount: number | null },
+  sample: {
+    daysActive: number | null;
+    resultsCount: number | null;
+    impressions: number | null;
+    linkClicks: number | null;
+  },
+  profile: ObjectivePerformanceProfile,
 ): MetaHealthAvailability {
-  if (target.primaryKpi == null || target.primaryKpi === "NONE") {
+  if (profile.family === "UNKNOWN") {
+    return "OBJECTIVE_UNSUPPORTED";
+  }
+
+  const conversionFamily =
+    profile.family === "LEADS" ||
+    profile.family === "SALES" ||
+    profile.family === "ENGAGEMENT" ||
+    profile.family === "TRAFFIC";
+
+  /**
+   * Ambiguity is a semantic limitation — never "need more sample" and never
+   * overwritten by "set a target" when an outcome mapping is required.
+   */
+  if (conversionFamily && resultMappingConfidence === "AMBIGUOUS") {
+    return "RESULT_MAPPING_REQUIRED";
+  }
+
+  const hasUsableTarget =
+    target.primaryKpi != null &&
+    target.primaryKpi !== "NONE" &&
+    target.targetValue != null &&
+    target.targetValue > 0;
+
+  if (!hasUsableTarget) {
+    if (!profile.economicTargetRequired) {
+      const sufficiency = evaluateObjectiveEvidenceSufficiency({
+        mode: profile.sufficiencyMode,
+        daysActive: sample.daysActive,
+        resultsCount: sample.resultsCount,
+        impressions: sample.impressions,
+        linkClicks: sample.linkClicks,
+      });
+      if (sufficiency === "INSUFFICIENT_DATA") return "INSUFFICIENT_DATA";
+      return "NO_ECONOMIC_EVALUATION";
+    }
+    // Leads/Sales without target: check delivery/days before asking for target.
+    const deliverySufficiency = evaluateObjectiveEvidenceSufficiency({
+      mode:
+        profile.sufficiencyMode === "CONVERSION"
+          ? "GENERIC"
+          : profile.sufficiencyMode,
+      daysActive: sample.daysActive,
+      resultsCount: null,
+      impressions: sample.impressions,
+      linkClicks: sample.linkClicks,
+    });
+    if (deliverySufficiency === "INSUFFICIENT_DATA") {
+      return "INSUFFICIENT_DATA";
+    }
     return "TARGET_REQUIRED";
   }
-  if (target.targetValue == null || target.targetValue <= 0) {
-    return "TARGET_REQUIRED";
+
+  const kpi = target.primaryKpi!;
+  if (!kpiCompatibleWithProfile(kpi, profile)) {
+    return "LINKED_BUT_KPI_INCOMPATIBLE";
   }
-  if (target.primaryKpi === "ROAS") {
+  if (kpi === "ROAS") {
+    // Observed ROAS needs spend + purchase value; engine still defers G/Y/R ROAS.
     return "ROAS_DEFERRED";
   }
   if (
-    (target.primaryKpi === "CPL" || target.primaryKpi === "CPA") &&
+    (kpi === "CPL" || kpi === "CPA") &&
     resultMappingConfidence !== "CONFIDENT"
   ) {
     return "RESULT_MAPPING_REQUIRED";
   }
-  if (sample.daysActive != null && sample.daysActive < 3) {
+
+  // CPC/CPM evaluate delivery economics — do not require conversion results.
+  const sufficiencyMode =
+    kpi === "CPC" || kpi === "CPM" ? "GENERIC" : profile.sufficiencyMode;
+  const sufficiency = evaluateObjectiveEvidenceSufficiency({
+    mode: sufficiencyMode,
+    daysActive: sample.daysActive,
+    resultsCount:
+      sufficiencyMode === "DELIVERY" || sufficiencyMode === "GENERIC"
+        ? null
+        : sample.resultsCount,
+    impressions: sample.impressions,
+    linkClicks: sample.linkClicks,
+  });
+  if (sufficiency === "INSUFFICIENT_DATA") {
     return "INSUFFICIENT_DATA";
   }
-  if (sample.resultsCount != null && sample.resultsCount < 2) {
-    return "INSUFFICIENT_DATA";
-  }
-  const actual = resolveActualForKpi(
-    target.primaryKpi,
-    metrics,
-    resultMappingConfidence,
-  );
+
+  const actual = resolveActualForKpi(kpi, metrics, resultMappingConfidence);
   if (actual == null) {
     return "INSUFFICIENT_DATA";
   }
@@ -176,10 +277,14 @@ export function metaInsightsToControlRoomInput(input: {
   until: string;
   target?: MetaCampaignTarget | null;
   effectiveStatus?: string | null;
+  /** Meta Graph objective — drives M10C profile (optional; defaults UNKNOWN). */
+  rawObjective?: string | null;
 }): MetaControlRoomOutput {
-  const { aggregate, since, until, target, effectiveStatus } = input;
+  const { aggregate, since, until, target, effectiveStatus, rawObjective } =
+    input;
 
   const mode = resolveMonitoringMode(effectiveStatus);
+  const profile = resolveObjectivePerformanceProfile(rawObjective);
 
   const metrics: MetaControlRoomMetrics = {
     spend: aggregate.spend,
@@ -215,12 +320,23 @@ export function metaInsightsToControlRoomInput(input: {
     controlRoomTarget,
     metrics,
     aggregate.resultMappingConfidence,
-    { daysActive, resultsCount },
+    {
+      daysActive,
+      resultsCount,
+      impressions: metrics.impressions,
+      linkClicks: metrics.linkClicks,
+    },
+    profile,
   );
 
   let health: HealthResult | null = null;
 
-  if (availability === "AVAILABLE" && controlRoomTarget.primaryKpi && controlRoomTarget.primaryKpi !== "NONE" && controlRoomTarget.primaryKpi !== "ROAS") {
+  if (
+    availability === "AVAILABLE" &&
+    controlRoomTarget.primaryKpi &&
+    controlRoomTarget.primaryKpi !== "NONE" &&
+    controlRoomTarget.primaryKpi !== "ROAS"
+  ) {
     const actual = resolveActualForKpi(
       controlRoomTarget.primaryKpi,
       metrics,
@@ -231,7 +347,11 @@ export function metaInsightsToControlRoomInput(input: {
       controlRoomTarget.primaryKpi === "CPM" ? "efficiency" : "economic";
     health = calcolaHealthStatus(actual, threshold, healthMode, {
       daysActive,
-      resultsCount,
+      resultsCount:
+        controlRoomTarget.primaryKpi === "CPL" ||
+        controlRoomTarget.primaryKpi === "CPA"
+          ? resultsCount
+          : null,
     });
   } else if (availability === "INSUFFICIENT_DATA") {
     /* Same canonical engine — force INSUFFICIENT rather than G/Y/R. */
@@ -288,13 +408,17 @@ export function etichettaHealthAvailability(
     case "TARGET_REQUIRED":
       return "Target da impostare";
     case "RESULT_MAPPING_REQUIRED":
-      return "Tipo risultato non determinabile";
+      return "Risultati Meta non determinabili";
     case "INSUFFICIENT_DATA":
       return "Dati insufficienti";
     case "ROAS_DEFERRED":
       return "ROAS non ancora supportato";
     case "LINKED_BUT_KPI_INCOMPATIBLE":
       return "KPI pianificato non compatibile";
+    case "OBJECTIVE_UNSUPPORTED":
+      return "Obiettivo non supportato per la valutazione";
+    case "NO_ECONOMIC_EVALUATION":
+      return "Valutazione economica non richiesta";
   }
 }
 

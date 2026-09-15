@@ -25,7 +25,10 @@ import {
   assertAllyCopilotRequestCompatibleWithSonnet5,
   buildAllyCopilotAnthropicParams,
 } from "../src/lib/ally-copilot/anthropic-request";
-import { ALLY_COPILOT_MAX_INPUT_CHARS } from "../src/lib/ally-copilot/types";
+import {
+  ALLY_COPILOT_MAX_ANSWER_TOKENS,
+  ALLY_COPILOT_MAX_INPUT_CHARS,
+} from "../src/lib/ally-copilot/types";
 import type { CampaignDiagnosisAiPayload } from "../src/lib/campaign-diagnosis/types";
 import { isSmallSample } from "../src/lib/campaign-next-action";
 import {
@@ -81,6 +84,7 @@ function baseSnapshot(
     formId: null,
     website: null,
     bookingChannel: null,
+    guidedDestination: null,
     status: "DRAFT",
     approvedAt: null,
     ...overrides,
@@ -141,6 +145,15 @@ function basePayload(
     hasCreativeAnalysisEvidence: false,
     trend: "INSUFFICIENT",
     resultMappingConfidence: null,
+    performanceProfile: {
+      family: "LEADS",
+      primaryOutcomeLabel: "Contatti / lead",
+      primaryMetrics: ["results", "cost_per_result", "spend", "ctr"],
+      supportingMetrics: ["cpc", "link_clicks", "impressions"],
+      economicMetric: "CPL",
+      economicTargetRequired: true,
+      sufficiencyMode: "CONVERSION",
+    },
     economics: {
       maxSustainableCpa: 35,
       dailyBudget: 20,
@@ -393,6 +406,85 @@ test("L: one question → max 1 AI call (structural)", () => {
   assert(route.includes("aiCalls: answer.fromAi ? 1 : 0"), "report 0/1");
 });
 
+test("M10C.2 A: complete valid JSON uses normal parser path", () => {
+  const ctx = buildAllyCampaignCopilotContext({
+    identity: baseIdentity(),
+    payload: basePayload(),
+  });
+  const parsed = parseAllyCopilotAnswer(
+    JSON.stringify({
+      answer: "Campagna in pausa. Spesa e CTR sono fatti; i lead non sono determinabili.",
+      confidence: "LOW",
+      evidence: ["spesa reale", "CTR reale"],
+      hypotheses: ["il CTR suggerisce interesse"],
+      missing_information: ["conteggio lead canonico"],
+      suggested_next_questions: ["Cosa manca per valutare il CPL?"],
+      recommended_action_href: null,
+    }),
+    ctx,
+  );
+  assert(parsed.fromAi === true, "fromAi");
+  assert(parsed.confidence === "LOW", parsed.confidence);
+  assert(parsed.evidence.length === 2, String(parsed.evidence.length));
+  assert(parsed.hypotheses.length === 1, String(parsed.hypotheses.length));
+  assert(parsed.missingInformation.length === 1, "missing");
+});
+
+test("M10C.2 B: truncated JSON recovers answer without inventing facts", () => {
+  const ctx = buildAllyCampaignCopilotContext({
+    identity: baseIdentity(),
+    payload: basePayload(),
+  });
+  const truncated =
+    '{"answer":"Questa campagna è in pausa. Spesa e CTR sono disponibili.","confidence":"MEDIUM","evidence":["spesa reale"],"hypotheses":["ipotesi"],"missing_information":["Numero di lead e CPL (';
+  const parsed = parseAllyCopilotAnswer(truncated, ctx);
+  assert(parsed.fromAi === true, "recovered still from AI text");
+  assert(/in pausa/i.test(parsed.answer), parsed.answer);
+  assert(parsed.confidence === "LOW", "partial → LOW, not invented MEDIUM");
+  assert(parsed.evidence.length === 0, "no invented evidence from truncated fields");
+  assert(parsed.hypotheses.length === 0, "no invented hypotheses");
+  assert(parsed.missingInformation.length === 0, "no invented missing list");
+});
+
+test("M10C.2 C: unrecoverable malformed JSON throws (safe fallback path)", () => {
+  const ctx = buildAllyCampaignCopilotContext({
+    identity: baseIdentity(),
+    payload: basePayload(),
+  });
+  let threw = false;
+  try {
+    parseAllyCopilotAnswer("not-json-at-all {{{", ctx);
+  } catch {
+    threw = true;
+  }
+  assert(threw, "must throw so service can use safe fallback");
+  const fb = buildAllyCopilotFallbackAnswer(ctx);
+  assert(fb.fromAi === false, "fallback not AI");
+});
+
+test("M10C.2 D: truncation before answer completion is unrecoverable", () => {
+  const ctx = buildAllyCampaignCopilotContext({
+    identity: baseIdentity(),
+    payload: basePayload(),
+  });
+  let threw = false;
+  try {
+    parseAllyCopilotAnswer('{"answer":"', ctx);
+  } catch {
+    threw = true;
+  }
+  assert(threw, "empty/partial answer must not invent prose");
+});
+
+test("M10C.2 E: recovery does not add a second provider call + token headroom", () => {
+  const service = read("src/lib/ally-copilot/service.ts");
+  const parseSrc = read("src/lib/ally-copilot/parse.ts");
+  assert((service.match(/messages\.create/g) ?? []).length === 1, "still one create");
+  assert(parseSrc.includes("recoverPartialAllyJson"), "recovery helper present");
+  assert(!/messages\.create/.test(parseSrc), "parse never calls provider");
+  assert(ALLY_COPILOT_MAX_ANSWER_TOKENS === 1400, String(ALLY_COPILOT_MAX_ANSWER_TOKENS));
+});
+
 test("M/N: page render + suggestions → 0 AI calls", () => {
   const ui = read("src/components/campagne/ChiediAdAllyPanel.tsx");
   const route = read("src/app/api/ally-copilot/route.ts");
@@ -511,7 +603,15 @@ test("M9.2A B: field missing → inventory missing", () => {
   );
   const page = inv.fields.find((f) => f.id === "pageId");
   assert(page?.status === "missing", String(page?.status));
-  assert(inv.launchReadiness.items.some((i) => i.id === "pageId" && !i.ok), "LR missing page");
+  // M10B: without guided Instant Form destination, page is not a launch blocker.
+  assert(
+    inv.launchReadiness.items.some((i) => i.id === "destinazione" && !i.ok),
+    "LR destinazione incomplete without guided destination",
+  );
+  assert(
+    inv.launchReadiness.items.find((i) => i.id === "pageId")?.ok === true,
+    "page not required until Instant Form destination chosen",
+  );
 });
 
 test("M9.2A C: unavailable ≠ missing (Strategic Score / CTA)", () => {
@@ -619,6 +719,7 @@ test("M9.2B A: target missing + launch fields complete → target NOT launch blo
   const inv = buildAllyCopilotConfigurationInventory(
     baseSnapshot({
       maxSustainableCpa: null,
+      guidedDestination: "META_LEAD_FORM",
       pageId: "page-1",
       formId: "form-1",
       hasCreativeAsset: true,
@@ -666,6 +767,7 @@ test("M9.2B C: lead-form campaign missing Page/Form → launch requirements", ()
   const inv = buildAllyCopilotConfigurationInventory(
     baseSnapshot({
       objective: "LEADS",
+      guidedDestination: "META_LEAD_FORM",
       pageId: null,
       formId: null,
       maxSustainableCpa: 40,
@@ -677,7 +779,7 @@ test("M9.2B C: lead-form campaign missing Page/Form → launch requirements", ()
     blocchi.join("|"),
   );
   assert(
-    blocchi.some((b) => /Modulo Contatti|destinazione/i.test(b)),
+    blocchi.some((b) => /Modulo Contatti|destinazione|Modulo contatti/i.test(b)),
     blocchi.join("|"),
   );
   assert(
@@ -807,6 +909,7 @@ test("M9.2B canonical engine does not mix CPA into Launch Readiness", () => {
   const inv = buildAllyCopilotConfigurationInventory(
     baseSnapshot({
       maxSustainableCpa: null,
+      guidedDestination: "META_LEAD_FORM",
       pageId: "1",
       formId: "2",
       status: "APPROVED",

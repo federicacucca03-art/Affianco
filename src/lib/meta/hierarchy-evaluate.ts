@@ -3,6 +3,11 @@
  * Small-sample + vs-target states for ad sets / ads. No Meta writes.
  */
 
+import {
+  evaluateObjectiveEvidenceSufficiency,
+  resolveObjectivePerformanceProfile,
+} from "@/lib/meta/objective-performance";
+
 export type HierarchyDataSufficiency = "SUFFICIENT" | "INSUFFICIENT_DATA";
 
 export type AllyHierarchyOperationalState =
@@ -48,7 +53,7 @@ const REFINEABLE_ACTION_TYPES = new Set([
   "CREATE_CREATIVE_VARIANT",
 ]);
 
-/** Same M6 rule: days < 3 OR results < 2 → insufficient. */
+/** Canonical conversion sample rule (Leads/Sales). Prefer evaluateSampleSufficiencyForObjective. */
 export function evaluateSampleSufficiency(input: {
   daysActive: number | null;
   resultsCount: number | null;
@@ -66,6 +71,27 @@ export function evaluateSampleSufficiency(input: {
 }
 
 /**
+ * M10C — objective-aware evidence sufficiency.
+ * Awareness uses impressions, not conversion results.
+ */
+export function evaluateSampleSufficiencyForObjective(input: {
+  rawObjective?: string | null;
+  daysActive: number | null;
+  resultsCount: number | null;
+  impressions?: number | null;
+  linkClicks?: number | null;
+}): HierarchyDataSufficiency {
+  const profile = resolveObjectivePerformanceProfile(input.rawObjective);
+  return evaluateObjectiveEvidenceSufficiency({
+    mode: profile.sufficiencyMode,
+    daysActive: input.daysActive,
+    resultsCount: input.resultsCount,
+    impressions: input.impressions ?? null,
+    linkClicks: input.linkClicks ?? null,
+  });
+}
+
+/**
  * Compare entity cost/result to campaign target.
  * Meta PAUSED/ACTIVE is never mapped here — status is orthogonal.
  */
@@ -74,9 +100,14 @@ export function evaluateEntityVsTarget(input: {
   costPerResult: number | null;
   targetValue: number | null;
   primaryKpi?: string | null;
+  /** M10C.1 — ambiguous mapping must not become "need more data". */
+  resultMappingConfidence?: "CONFIDENT" | "AMBIGUOUS" | "UNKNOWN" | null;
 }): AllyHierarchyOperationalState {
   if (input.sufficiency === "INSUFFICIENT_DATA") {
     return "INSUFFICIENT_DATA";
+  }
+  if (input.resultMappingConfidence === "AMBIGUOUS") {
+    return "NEUTRAL";
   }
   const kpi = (input.primaryKpi ?? "").toUpperCase();
   if (

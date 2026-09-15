@@ -5,12 +5,13 @@ import { daysInclusiveYmd } from "@/lib/meta/insights-control-room";
 import {
   buildHierarchyDiagnosisLines,
   evaluateEntityVsTarget,
-  evaluateSampleSufficiency,
+  evaluateSampleSufficiencyForObjective,
   pickFirstAdFocus,
   pickFirstAdSetFocus,
   type AllyHierarchyOperationalState,
   type HierarchyDataSufficiency,
 } from "@/lib/meta/hierarchy-evaluate";
+import { resolvePerformanceFamily } from "@/lib/meta/objective-performance";
 import { MetaError } from "@/lib/meta/errors";
 import type { NormalizedDailyInsight } from "@/lib/meta/insight-normalize";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
@@ -59,6 +60,8 @@ export type HierarchyAdSetView = {
 export type CampaignHierarchyView = {
   metaCampaignId: string;
   campaignName: string;
+  rawObjective: string | null;
+  performanceFamily: ReturnType<typeof resolvePerformanceFamily>;
   adSets: HierarchyAdSetView[];
   diagnosis: {
     focusAdSetName: string | null;
@@ -126,6 +129,7 @@ function toNormalized(row: DailyInsightDb): NormalizedDailyInsight {
       row.result_mapping_confidence === "AMBIGUOUS"
         ? row.result_mapping_confidence
         : "UNKNOWN",
+    outcomeLimitation: null,
   };
 }
 
@@ -163,6 +167,7 @@ function evaluateFromRows(
   rows: NormalizedDailyInsight[],
   primaryKpi: string | null,
   targetValue: number | null,
+  rawObjective: string | null,
 ): {
   spend: number | null;
   results: number | null;
@@ -192,16 +197,38 @@ function evaluateFromRows(
     frequency: null,
   });
   const results = resolveResults(agg);
-  const sufficiency = evaluateSampleSufficiency({
-    daysActive,
-    resultsCount: results ?? 0,
-  });
+  const family = resolvePerformanceFamily(rawObjective);
+  /**
+   * M10C.1 — Ambiguous mapping ≠ insufficient sample.
+   * Do not feed resultsCount=0 into conversion thresholds when Ally
+   * deliberately withheld a primary result for semantic safety.
+   */
+  let sufficiency: HierarchyDataSufficiency;
+  if (agg.resultMappingConfidence === "AMBIGUOUS") {
+    const daysOk = daysActive != null && daysActive >= 3;
+    const hasDelivery =
+      (agg.impressions != null && agg.impressions > 0) ||
+      (agg.spend != null && agg.spend > 0);
+    sufficiency = daysOk && hasDelivery ? "SUFFICIENT" : "INSUFFICIENT_DATA";
+  } else {
+    sufficiency = evaluateSampleSufficiencyForObjective({
+      rawObjective,
+      daysActive,
+      resultsCount:
+        family === "AWARENESS" || family === "UNKNOWN"
+          ? null
+          : (results ?? 0),
+      impressions: agg.impressions,
+      linkClicks: agg.linkClicks,
+    });
+  }
   const costPerResult = resolveCostPerResult(primaryKpi, agg);
   const operationalState = evaluateEntityVsTarget({
     sufficiency,
     costPerResult,
     targetValue,
     primaryKpi,
+    resultMappingConfidence: agg.resultMappingConfidence,
   });
   return {
     spend: agg.spend,
@@ -294,6 +321,8 @@ export async function loadCampaignHierarchyView(
     return {
       metaCampaignId: campaign.metaCampaignId,
       campaignName: campaign.name,
+      rawObjective: campaign.rawObjective,
+      performanceFamily: resolvePerformanceFamily(campaign.rawObjective),
       adSets: [],
       diagnosis: { focusAdSetName: null, focusAdName: null, lines: [] },
       hierarchyAvailable: false,
@@ -332,12 +361,15 @@ export async function loadCampaignHierarchyView(
     adInsightById.set(row.meta_ad_id, list);
   }
 
+  const rawObjective = campaign.rawObjective ?? null;
+
   const adsByAdSet = new Map<string, HierarchyAdView[]>();
   for (const ad of adRows) {
     const metrics = evaluateFromRows(
       adInsightById.get(ad.meta_ad_id) ?? [],
       primaryKpi,
       safeTarget,
+      rawObjective,
     );
     const view: HierarchyAdView = {
       metaAdId: ad.meta_ad_id,
@@ -364,6 +396,7 @@ export async function loadCampaignHierarchyView(
       adSetInsightById.get(as.meta_ad_set_id) ?? [],
       primaryKpi,
       safeTarget,
+      rawObjective,
     );
     return {
       metaAdSetId: as.meta_ad_set_id,
@@ -438,6 +471,8 @@ export async function loadCampaignHierarchyView(
     metaCampaignId: campaign.metaCampaignId,
     campaignName:
       (campRow as { name?: string } | null)?.name?.trim() || campaign.name,
+    rawObjective,
+    performanceFamily: resolvePerformanceFamily(rawObjective),
     adSets,
     diagnosis: {
       focusAdSetName: focusAdSet?.name ?? null,

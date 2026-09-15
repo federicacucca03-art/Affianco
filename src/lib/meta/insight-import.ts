@@ -80,6 +80,7 @@ function rowToNormalized(
       row.result_mapping_confidence === "AMBIGUOUS"
         ? row.result_mapping_confidence
         : "UNKNOWN",
+    outcomeLimitation: null,
   };
 }
 

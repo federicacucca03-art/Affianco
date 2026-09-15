@@ -191,7 +191,11 @@ test("F: ambiguous Meta result → CONFIGURATION_REQUIRED", () => {
     }),
   });
   assert(item.attentionState === "CONFIGURATION_REQUIRED", item.attentionState);
-  assert(item.reason.toLowerCase().includes("risultato"), item.reason);
+  // M10C.1: plural "risultati" / "mapping ambiguo" — not sample-size language.
+  assert(
+    /risultat/i.test(item.reason) && !/più dati|sample/i.test(item.reason),
+    item.reason,
+  );
 });
 
 test("G: insufficient data → INSUFFICIENT_DATA", () => {

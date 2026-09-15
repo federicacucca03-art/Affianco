@@ -94,6 +94,16 @@ export type CampaignDiagnosisAiPayload = {
   hasCreativeAnalysisEvidence: boolean;
   trend: AttentionTrend;
   resultMappingConfidence: "CONFIDENT" | "AMBIGUOUS" | "UNKNOWN" | null;
+  /** M10C — deterministic objective performance profile (facts for AI). */
+  performanceProfile: {
+    family: string;
+    primaryOutcomeLabel: string;
+    primaryMetrics: string[];
+    supportingMetrics: string[];
+    economicMetric: string;
+    economicTargetRequired: boolean;
+    sufficiencyMode: string;
+  } | null;
   economics: {
     maxSustainableCpa: number | null;
     dailyBudget: number | null;

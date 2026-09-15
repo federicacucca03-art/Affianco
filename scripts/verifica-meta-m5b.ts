@@ -78,6 +78,17 @@ function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
 }
 
+/** M10C — Control Room health is objective-aware; LEADS fixtures default here. */
+function cr(
+  input: Parameters<typeof metaInsightsToControlRoomInput>[0],
+): ReturnType<typeof metaInsightsToControlRoomInput> {
+  return metaInsightsToControlRoomInput({
+    rawObjective: "OUTCOME_LEADS",
+    ...input,
+  });
+}
+
+
 function makeAggregate(overrides: Partial<AggregatedMetaInsights> = {}): AggregatedMetaInsights {
   return {
     spend: 99.97,
@@ -137,6 +148,7 @@ function makeDailyRow(
     primaryResults: results,
     primaryResultValue: null,
     resultMappingConfidence: results != null ? "CONFIDENT" : "UNKNOWN",
+    outcomeLimitation: null,
   };
 }
 
@@ -149,7 +161,7 @@ console.log("━".repeat(56));
 
 // A: no target → health must not be GREEN/YELLOW/RED
 test("A: no target → health is null (no G/Y/R)", () => {
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeAggregate(),
     since: "2026-08-01",
     until: "2026-08-31",
@@ -161,7 +173,7 @@ test("A: no target → health is null (no G/Y/R)", () => {
 
 // B: no target → TARGET_REQUIRED
 test("B: no target → healthAvailability = TARGET_REQUIRED", () => {
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeAggregate(),
     since: "2026-08-01",
     until: "2026-08-31",
@@ -175,7 +187,7 @@ test("B: no target → healthAvailability = TARGET_REQUIRED", () => {
 
 // C: CPL + CONFIDENT results → health available
 test("C: CPL + CONFIDENT → healthAvailability = AVAILABLE, health non-null", () => {
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeConfidentLeadAggregate(100, 10),
     since: "2026-08-01",
     until: "2026-08-31",
@@ -196,7 +208,7 @@ test("C: CPL + CONFIDENT → healthAvailability = AVAILABLE, health non-null", (
 
 // C extra: canonical GREEN at 80% threshold rule (spend=100, results=10, CPL=10, target=20)
 test("C+: CPL=10 EUR, target=20 EUR → GREEN (≤80% of 20)", () => {
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeConfidentLeadAggregate(100, 10),
     since: "2026-08-01",
     until: "2026-08-31",
@@ -207,7 +219,7 @@ test("C+: CPL=10 EUR, target=20 EUR → GREEN (≤80% of 20)", () => {
 
 // C extra: YELLOW boundary — CPL ~= target
 test("C+: CPL=10 EUR, target=10 EUR → YELLOW (=threshold)", () => {
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeConfidentLeadAggregate(100, 10),
     since: "2026-08-01",
     until: "2026-08-31",
@@ -222,7 +234,7 @@ test("C+: CPL=10 EUR, target=10 EUR → YELLOW (=threshold)", () => {
 
 // C extra: RED — CPL above target
 test("C+: CPL=10 EUR, target=8 EUR → RED (above threshold)", () => {
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeConfidentLeadAggregate(100, 10),
     since: "2026-08-01",
     until: "2026-08-31",
@@ -233,7 +245,7 @@ test("C+: CPL=10 EUR, target=8 EUR → RED (above threshold)", () => {
 
 // Beta hardening: small-sample safety (canonical days < 3 OR results < 2)
 test("BETA: 1 result / 7 days → INSUFFICIENT_DATA (not G/Y/R)", () => {
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeConfidentLeadAggregate(50, 1),
     since: "2026-08-01",
     until: "2026-08-07",
@@ -251,7 +263,7 @@ test("BETA: 1 result / 7 days → INSUFFICIENT_DATA (not G/Y/R)", () => {
 });
 
 test("BETA: 10 results / 1 day → INSUFFICIENT_DATA", () => {
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeConfidentLeadAggregate(200, 10),
     since: "2026-08-01",
     until: "2026-08-01",
@@ -266,7 +278,7 @@ test("BETA: 10 results / 1 day → INSUFFICIENT_DATA", () => {
 
 // D: CPL + AMBIGUOUS → RESULT_MAPPING_REQUIRED
 test("D: CPL + AMBIGUOUS → RESULT_MAPPING_REQUIRED", () => {
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeAggregate({ resultMappingConfidence: "AMBIGUOUS" }),
     since: "2026-08-01",
     until: "2026-08-31",
@@ -281,7 +293,7 @@ test("D: CPL + AMBIGUOUS → RESULT_MAPPING_REQUIRED", () => {
 
 // E: CPL + UNKNOWN → RESULT_MAPPING_REQUIRED
 test("E: CPL + UNKNOWN → RESULT_MAPPING_REQUIRED", () => {
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeAggregate({ resultMappingConfidence: "UNKNOWN" }),
     since: "2026-08-01",
     until: "2026-08-31",
@@ -296,7 +308,7 @@ test("E: CPL + UNKNOWN → RESULT_MAPPING_REQUIRED", () => {
 
 // F: CPC target → uses link CPC (0.238)
 test("F: CPC target → health uses link CPC", () => {
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeAggregate({ cpc: 0.238 }),
     since: "2026-08-01",
     until: "2026-08-31",
@@ -310,7 +322,7 @@ test("F: CPC target → health uses link CPC", () => {
 
 // G: CPM target → uses aggregate CPM
 test("G: CPM target → health uses aggregate CPM", () => {
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeAggregate({ cpm: 6.83 }),
     since: "2026-08-01",
     until: "2026-08-31",
@@ -324,7 +336,7 @@ test("G: CPM target → health uses aggregate CPM", () => {
 
 // H: target never inferred — aggregate with no target set
 test("H: target never inferred from Meta data", () => {
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeConfidentLeadAggregate(100, 10),
     since: "2026-08-01",
     until: "2026-08-31",
@@ -338,7 +350,7 @@ test("H: target never inferred from Meta data", () => {
 // I: NONE → targetValue must be null
 test("I: NONE KPI → targetValue is null", () => {
   const noneKpi: MetaMonitoringKpi = "NONE";
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeAggregate(),
     since: "2026-08-01",
     until: "2026-08-31",
@@ -398,7 +410,7 @@ test("N: ALLOWED_KPI list is finite and does not include arbitrary strings", () 
 
 // O: Meta metrics not written to campaign_checks
 test("O: adapter output has no campaign_checks write (source = META_API, no campaignId)", () => {
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeAggregate(),
     since: "2026-08-01",
     until: "2026-08-31",
@@ -428,7 +440,7 @@ test("P: campaign_checks source constraint does not include META_API", () => {
 test("Q: PAUSED effective status → HISTORICAL_REVIEW mode", () => {
   const mode = resolveMonitoringMode("PAUSED");
   assert(mode === "HISTORICAL_REVIEW", `Expected HISTORICAL_REVIEW, got ${mode}`);
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeAggregate(),
     since: "2026-08-01",
     until: "2026-08-31",
@@ -454,12 +466,12 @@ test("S: ACTIVE status → ACTIVE_MONITORING", () => {
 
 // T: adapter is stateless (no writes; daily rows used dynamically)
 test("T: metaInsightsToControlRoomInput is pure (returns output, no side effects)", () => {
-  const out1 = metaInsightsToControlRoomInput({
+  const out1 = cr({
     aggregate: makeAggregate(),
     since: "2026-08-01",
     until: "2026-08-31",
   });
-  const out2 = metaInsightsToControlRoomInput({
+  const out2 = cr({
     aggregate: makeAggregate(),
     since: "2026-08-01",
     until: "2026-08-31",
@@ -525,7 +537,7 @@ test("W: incompatible result types across windows → INSUFFICIENT_TREND_DATA", 
 
 // X: no duplicate monitoring rows — adapter is stateless; identity managed by DB unique constraint
 test("X: adapter produces no rows to persist (stateless, no duplicate rows)", () => {
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeAggregate(),
     since: "2026-08-01",
     until: "2026-08-31",
@@ -538,7 +550,7 @@ test("X: adapter produces no rows to persist (stateless, no duplicate rows)", ()
 
 // Y: no native auto-link — verified by absence of public.campaigns reference in adapter
 test("Y: no native campaign auto-link (no affianco_campaign_id in adapter output)", () => {
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeAggregate(),
     since: "2026-08-01",
     until: "2026-08-31",
@@ -577,7 +589,7 @@ test("Technon: PAUSED + no target → TARGET_REQUIRED + HISTORICAL_REVIEW + no h
     resultMappingConfidence: "UNKNOWN",
     primaryResults: null,
   });
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: technonAggregate,
     since: "2026-08-01",
     until: "2026-08-31",
@@ -665,11 +677,12 @@ asyncTests.push(
 
 // ROAS deferred
 test("ROAS: ROAS_DEFERRED when KPI=ROAS", () => {
-  const out = metaInsightsToControlRoomInput({
+  const out = cr({
     aggregate: makeAggregate({ roas: 3.5 }),
     since: "2026-08-01",
     until: "2026-08-31",
     target: { primaryKpi: "ROAS", targetValue: 2.0 },
+    rawObjective: "OUTCOME_SALES",
   });
   assert(out.healthAvailability === "ROAS_DEFERRED", `Got ${out.healthAvailability}`);
   assert(out.health === null, "health must be null when ROAS is deferred");

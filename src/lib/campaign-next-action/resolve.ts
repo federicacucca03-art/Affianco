@@ -44,6 +44,15 @@ export type ResolveNextActionInput = {
   rowHref: string;
   /** Optional on-demand diagnosis — never required for deterministic actions. */
   diagnosis?: CampaignAiDiagnosis | null;
+  /** M10C — Meta objective family for objective-compatible advice. */
+  performanceFamily?:
+    | "LEADS"
+    | "SALES"
+    | "TRAFFIC"
+    | "AWARENESS"
+    | "ENGAGEMENT"
+    | "UNKNOWN"
+    | null;
 };
 
 function statusUpper(raw: string | null | undefined): string {
@@ -143,7 +152,7 @@ function rationaleForAiAction(
     case "REVIEW_BUDGET":
       return "Ci sono segnali sulla distribuzione: valuta il budget senza cambiarlo automaticamente.";
     case "REVIEW_RESULT_QUALITY":
-      return "Ci sono segnali sulla qualità a valle dei risultati: valuta lead/conversioni senza interventi automatici.";
+      return "Ci sono segnali sulla qualità a valle dei risultati: valuta conversioni/risultati senza interventi automatici.";
     case "WAIT_FOR_MORE_DATA":
       return area === "UNKNOWN"
         ? "I dati non localizzano ancora una causa: meglio raccogliere altre evidenze prima di intervenire."
@@ -210,6 +219,25 @@ export function resolveDeterministicNextAction(
   }
 
   if (availability === "TARGET_REQUIRED" || kind === "ACTIVE_MISSING_TARGET") {
+    const family = (input.performanceFamily ?? "").toUpperCase();
+    if (
+      family === "AWARENESS" ||
+      family === "TRAFFIC" ||
+      family === "ENGAGEMENT" ||
+      family === "UNKNOWN"
+    ) {
+      return buildAction({
+        ...base,
+        actionType: "NO_ACTION",
+        rationale:
+          family === "UNKNOWN"
+            ? "Obiettivo non supportato: Ally mostra solo metriche fattuali, senza target CPL/CPA inventati."
+            : "Per questo obiettivo non è obbligatorio un target economico per leggere la consegna.",
+        confidence: "MEDIUM",
+        eligibility: "ACTION_NOT_NEEDED",
+        actionSource: "DETERMINISTIC",
+      });
+    }
     return buildAction({
       ...base,
       actionType: "SET_TARGET",
@@ -223,6 +251,23 @@ export function resolveDeterministicNextAction(
   }
 
   if (
+    availability === "OBJECTIVE_UNSUPPORTED" ||
+    availability === "NO_ECONOMIC_EVALUATION"
+  ) {
+    return buildAction({
+      ...base,
+      actionType: "NO_ACTION",
+      rationale:
+        availability === "OBJECTIVE_UNSUPPORTED"
+          ? "Obiettivo non supportato per una valutazione strutturata — nessuna azione lead-gen automatica."
+          : "Consegna leggibile senza target economico obbligatorio — nessuna azione di configurazione target.",
+      confidence: "MEDIUM",
+      eligibility: "ACTION_NOT_NEEDED",
+      actionSource: "DETERMINISTIC",
+    });
+  }
+
+  if (
     availability === "RESULT_MAPPING_REQUIRED" ||
     availability === "LINKED_BUT_KPI_INCOMPATIBLE" ||
     kind === "RESULT_MAPPING"
@@ -231,7 +276,9 @@ export function resolveDeterministicNextAction(
       ...base,
       actionType: "VERIFY_TRACKING",
       rationale:
-        "Prima di ottimizzare, verifica che il risultato Meta sia mappato correttamente.",
+        availability === "RESULT_MAPPING_REQUIRED" || kind === "RESULT_MAPPING"
+          ? "I risultati Meta non sono determinabili con certezza: non inventare un CPL e non trattarlo come mancanza di dati."
+          : "Prima di ottimizzare, verifica che il risultato Meta sia mappato correttamente.",
       confidence: "HIGH",
       eligibility: "ACTION_BLOCKED_CONFIGURATION",
       actionSource: "DETERMINISTIC",

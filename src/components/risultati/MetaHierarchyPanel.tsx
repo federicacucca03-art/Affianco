@@ -10,6 +10,10 @@ import {
   type AllyHierarchyOperationalState,
   type HierarchyDataSufficiency,
 } from "@/lib/meta/hierarchy-evaluate";
+import {
+  etichetteHierarchyOutcome,
+  type PerformanceObjectiveFamily,
+} from "@/lib/meta/objective-performance";
 
 type ResultMappingConfidence = "CONFIDENT" | "AMBIGUOUS" | "UNKNOWN";
 
@@ -46,6 +50,8 @@ type HierarchyAdSet = {
 type HierarchyPayload = {
   metaCampaignId: string;
   campaignName: string;
+  rawObjective?: string | null;
+  performanceFamily?: PerformanceObjectiveFamily;
   adSets: HierarchyAdSet[];
   diagnosis: {
     focusAdSetName: string | null;
@@ -56,10 +62,9 @@ type HierarchyPayload = {
 };
 
 const AMBIGUOUS_RESULTS_HINT =
-  "Meta restituisce più tipi di risultato compatibili. Ally evita di scegliere arbitrariamente quale usare.";
+  "Meta restituisce più tipi di risultato compatibili. Ally non calcola il costo per risultato finché non può identificarne uno con certezza.";
 
-const COST_RESULT_HINT =
-  "Meta restituisce più tipi di risultato compatibili; Ally non calcola un costo per risultato senza evidenza sufficiente.";
+const COST_RESULT_HINT = AMBIGUOUS_RESULTS_HINT;
 
 function formatEuro(n: number | null): string {
   if (n == null || !Number.isFinite(n)) return "—";
@@ -114,6 +119,7 @@ function EntityMetrics({
   resultMappingConfidence,
   dataSufficiency,
   operationalState,
+  performanceFamily = "LEADS",
 }: {
   spend: number | null;
   results: number | null;
@@ -121,18 +127,25 @@ function EntityMetrics({
   resultMappingConfidence: ResultMappingConfidence;
   dataSufficiency: HierarchyDataSufficiency;
   operationalState: AllyHierarchyOperationalState;
+  performanceFamily?: PerformanceObjectiveFamily;
 }) {
-  const insufficient = dataSufficiency === "INSUFFICIENT_DATA";
+  const insufficient =
+    dataSufficiency === "INSUFFICIENT_DATA" &&
+    resultMappingConfidence !== "AMBIGUOUS";
+  const labels = etichetteHierarchyOutcome(performanceFamily);
   const resultsAmbiguous =
     resultMappingConfidence === "AMBIGUOUS" ||
     (resultMappingConfidence === "UNKNOWN" &&
       spend != null &&
       spend > 0 &&
-      results == null);
+      results == null &&
+      performanceFamily !== "AWARENESS");
   const showCost =
     costPerResult != null &&
     Number.isFinite(costPerResult) &&
-    resultMappingConfidence === "CONFIDENT";
+    (performanceFamily === "AWARENESS"
+      ? true
+      : resultMappingConfidence === "CONFIDENT");
 
   return (
     <div className="mt-2 space-y-1.5">
@@ -143,39 +156,50 @@ function EntityMetrics({
             {formatEuro(spend)}
           </span>
         </span>
-        <span className="inline-flex items-center">
-          <span className="text-[var(--ink-muted)]">Risultati </span>
-          {resultsAmbiguous ? (
-            <>
+        {performanceFamily !== "AWARENESS" ? (
+          <span className="inline-flex items-center">
+            <span className="text-[var(--ink-muted)]">{labels.results} </span>
+            {resultsAmbiguous ? (
+              <>
+                <span className="ml-1 font-medium text-[var(--ink)]">
+                  non determinabili
+                </span>
+                <InfoDot label={AMBIGUOUS_RESULTS_HINT} />
+              </>
+            ) : results != null ? (
               <span className="ml-1 font-medium text-[var(--ink)]">
-                non determinabili
+                {formatNum(results)}
               </span>
-              <InfoDot label={AMBIGUOUS_RESULTS_HINT} />
-            </>
-          ) : results != null ? (
-            <span className="ml-1 font-medium text-[var(--ink)]">
-              {formatNum(results)}
-            </span>
-          ) : (
-            <span className="ml-1">—</span>
-          )}
-        </span>
+            ) : (
+              <span className="ml-1">—</span>
+            )}
+          </span>
+        ) : null}
         {showCost ? (
           <span>
-            <span className="text-[var(--ink-muted)]">Costo per risultato </span>
+            <span className="text-[var(--ink-muted)]">
+              {labels.costPerResult}{" "}
+            </span>
             <span className="font-medium text-[var(--ink)]">
               {formatEuro(costPerResult)}
             </span>
           </span>
         ) : resultsAmbiguous ? (
           <span className="inline-flex items-center">
-            <span className="text-[var(--ink-muted)]">Costo per risultato </span>
+            <span className="text-[var(--ink-muted)]">
+              {labels.costPerResult}{" "}
+            </span>
             <span className="ml-1">—</span>
             <InfoDot label={COST_RESULT_HINT} />
           </span>
         ) : null}
       </div>
-      {insufficient ? (
+      {resultsAmbiguous && resultMappingConfidence === "AMBIGUOUS" ? (
+        <p className="text-[10px] text-[var(--ink-muted)]">
+          Meta restituisce più tipi di risultato compatibili. Ally non calcola
+          il costo per risultato finché non può identificarne uno con certezza.
+        </p>
+      ) : insufficient ? (
         <div>
           <span className="inline-flex items-center rounded-full bg-[rgba(180,140,60,0.12)] px-2 py-0.5 text-[10px] font-medium text-[var(--ink)]">
             Dati insufficienti
@@ -484,6 +508,9 @@ export function MetaHierarchyPanel({
                             }
                             dataSufficiency={adSet.dataSufficiency}
                             operationalState={adSet.operationalState}
+                            performanceFamily={
+                              data.performanceFamily ?? "LEADS"
+                            }
                           />
                         </div>
 
@@ -547,6 +574,9 @@ export function MetaHierarchyPanel({
                                         }
                                         dataSufficiency={ad.dataSufficiency}
                                         operationalState={ad.operationalState}
+                                        performanceFamily={
+                                          data.performanceFamily ?? "LEADS"
+                                        }
                                       />
                                     </div>
                                   </li>

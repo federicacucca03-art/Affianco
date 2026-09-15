@@ -101,7 +101,7 @@ function trendLine(payload: CampaignDiagnosisAiPayload): string | null {
 
 function mappingLine(payload: CampaignDiagnosisAiPayload): string | null {
   if (payload.resultMappingConfidence === "AMBIGUOUS") {
-    return "Meta restituisce più tipi di risultato compatibili, quindi il KPI principale non è ancora affidabile.";
+    return "I risultati Meta non sono determinabili con certezza (tipi di risultato multipli). Non è un problema di sample size: non inventare CPL/conteggi.";
   }
   if (payload.resultMappingConfidence === "UNKNOWN") {
     return "Il risultato principale Meta non è ancora identificato con certezza.";
@@ -134,6 +134,16 @@ export function buildDiagnosisHumanFactsBrief(
   const reason = payload.attentionReason?.trim();
   if (reason) {
     lines.push(`Contesto Ally: ${reason}`);
+  }
+
+  if (payload.performanceProfile) {
+    const pp = payload.performanceProfile;
+    lines.push(
+      `Profilo performance (deterministico): famiglia ${pp.family}, esito ${pp.primaryOutcomeLabel}, metrica economica ${pp.economicMetric}${pp.economicTargetRequired ? " (target richiesto)" : " (target non obbligatorio)"}.`,
+    );
+    lines.push(
+      `Metriche primarie da usare: ${pp.primaryMetrics.join(", ")}. Non inventare CPL/ROAS fuori da queste evidenze.`,
+    );
   }
 
   const perf = healthLine(payload);

@@ -48,6 +48,7 @@ function emptyInsight(date: string, metaCampaignId: string): NormalizedDailyInsi
     primaryResults: null,
     primaryResultValue: null,
     resultMappingConfidence: "UNKNOWN",
+    outcomeLimitation: null,
   };
 }
 

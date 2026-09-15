@@ -55,6 +55,8 @@ export type AllyCopilotNativePlanningSnapshot = {
   formId: string | null;
   website: string | null;
   bookingChannel: string | null;
+  /** M10B — gates Page/Form launch requirements (no Instant Form invent). */
+  guidedDestination: string | null;
   status: string | null;
   approvedAt: string | null;
 };
@@ -247,6 +249,7 @@ export function buildAllyCopilotConfigurationInventory(
         : richiedeModuloContatti(
               objective as CampagnaObjective | undefined,
               bookingChannel,
+              snap.guidedDestination,
             )
           ? "Modulo contatti"
           : "Destinazione",
@@ -257,11 +260,14 @@ export function buildAllyCopilotConfigurationInventory(
         : richiedeModuloContatti(
               objective as CampagnaObjective | undefined,
               bookingChannel,
+              snap.guidedDestination,
             )
           ? present(snap.formId)
             ? "complete"
             : "missing"
-          : present(snap.website) || present(snap.formId)
+          : present(snap.website) ||
+              present(snap.formId) ||
+              present(snap.guidedDestination)
             ? "complete"
             : "missing",
       "launch",
@@ -269,7 +275,9 @@ export function buildAllyCopilotConfigurationInventory(
         ? "URL presente"
         : present(snap.formId)
           ? "Modulo presente"
-          : null,
+          : present(snap.guidedDestination)
+            ? "Destinazione scelta"
+            : null,
     ),
     field(
       "approval",
@@ -294,6 +302,7 @@ export function buildAllyCopilotConfigurationInventory(
     destinationUrl: snap.website ?? undefined,
     objective: objective as CampagnaObjective | undefined,
     bookingChannel,
+    guidedDestination: snap.guidedDestination,
     haCopySelezionato: snap.copyVariants.length > 0,
     haTitoloAnnuncio: present(snap.headline),
   });

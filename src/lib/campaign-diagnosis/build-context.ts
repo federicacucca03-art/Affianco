@@ -15,6 +15,7 @@ import type {
   CampaignDiagnosisFacts,
   DiagnosisSource,
 } from "@/lib/campaign-diagnosis/types";
+import { resolveObjectivePerformanceProfile } from "@/lib/meta/objective-performance";
 
 export type BuildDiagnosisContextInput = {
   source: DiagnosisSource;
@@ -82,6 +83,7 @@ export function buildDiagnosisFacts(
 export function buildDiagnosisAiPayload(
   input: BuildDiagnosisContextInput,
 ): CampaignDiagnosisAiPayload {
+  const profile = resolveObjectivePerformanceProfile(input.objective);
   return {
     source: input.source,
     objective: input.objective,
@@ -114,6 +116,15 @@ export function buildDiagnosisAiPayload(
     hasCreativeAnalysisEvidence: input.hasCreativeAnalysisEvidence === true,
     trend: input.trend,
     resultMappingConfidence: input.resultMappingConfidence,
+    performanceProfile: {
+      family: profile.family,
+      primaryOutcomeLabel: profile.primaryOutcomeLabel,
+      primaryMetrics: [...profile.primaryMetrics],
+      supportingMetrics: [...profile.supportingMetrics],
+      economicMetric: profile.economicMetric,
+      economicTargetRequired: profile.economicTargetRequired,
+      sufficiencyMode: profile.sufficiencyMode,
+    },
     economics: {
       maxSustainableCpa: input.maxSustainableCpa,
       dailyBudget: input.dailyBudget,

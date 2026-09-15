@@ -181,6 +181,27 @@ export function buildAllyCampaignCopilotContext(input: {
         frequency: payload.comparisons.frequency,
       },
       noPerformanceDataYet,
+      performanceFamily: payload.performanceProfile?.family ?? null,
+      primaryOutcomeLabel:
+        payload.performanceProfile?.primaryOutcomeLabel ?? null,
+      primaryMetricIds: payload.performanceProfile?.primaryMetrics ?? [],
+      supportingMetricIds: payload.performanceProfile?.supportingMetrics ?? [],
+      resultMappingConfidence: payload.resultMappingConfidence,
+      economicMetric: payload.performanceProfile?.economicMetric ?? null,
+      economicTargetRequired:
+        payload.performanceProfile?.economicTargetRequired ?? false,
+      outcomeLimitation: null,
+      dataSufficiencyMode: payload.performanceProfile?.sufficiencyMode ?? null,
+      sampleSufficient:
+        payload.resultMappingConfidence === "AMBIGUOUS"
+          ? true
+          : payload.attentionState === "INSUFFICIENT_DATA"
+            ? false
+            : null,
+      targetMissing:
+        payload.targetValue == null ||
+        payload.targetValue <= 0 ||
+        !payload.primaryKpi,
     },
     decision: {
       nextActionType: identity.nextActionType,

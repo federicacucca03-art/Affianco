@@ -126,6 +126,20 @@ export type AllyCopilotPerformance = {
   };
   /** True when there is no meaningful performance snapshot yet. */
   noPerformanceDataYet: boolean;
+  /** M10C — objective-aware performance facts (deterministic). */
+  performanceFamily: string | null;
+  primaryOutcomeLabel: string | null;
+  primaryMetricIds: string[];
+  supportingMetricIds: string[];
+  resultMappingConfidence: string | null;
+  economicMetric: string | null;
+  economicTargetRequired: boolean;
+  outcomeLimitation: string | null;
+  dataSufficiencyMode: string | null;
+  /** M10C.1 — sample volume met (independent of result ambiguity). */
+  sampleSufficient: boolean | null;
+  /** M10C.1 — economic target missing (independent of result ambiguity). */
+  targetMissing: boolean | null;
 };
 
 export type AllyCopilotDecision = {
@@ -186,7 +200,8 @@ export type AllyCopilotAnswer = {
 
 export const ALLY_COPILOT_MAX_HISTORY_TURNS = 6;
 export const ALLY_COPILOT_MAX_QUESTION_CHARS = 500;
-export const ALLY_COPILOT_MAX_ANSWER_TOKENS = 900;
+/** Headroom for structured JSON + Italian prose (truncation caused silent fallback). */
+export const ALLY_COPILOT_MAX_ANSWER_TOKENS = 1400;
 export const ALLY_COPILOT_TIMEOUT_MS = 25_000;
 /** Soft ceiling for JSON context + history (chars). */
 export const ALLY_COPILOT_MAX_INPUT_CHARS = 8_000;

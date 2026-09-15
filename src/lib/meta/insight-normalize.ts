@@ -1,11 +1,14 @@
 import {
-  extractPrimaryLeadResult,
   extractPurchaseValue,
   normalizeMetaActions,
   outboundClickCount,
   type NormalizedMetaAction,
   type ResultMappingConfidence,
 } from "@/lib/meta/insight-actions";
+import {
+  extractOutcomeForProfile,
+  resolveObjectivePerformanceProfile,
+} from "@/lib/meta/objective-performance";
 
 export type NormalizedDailyInsight = {
   metaCampaignId: string | null;
@@ -26,6 +29,8 @@ export type NormalizedDailyInsight = {
   primaryResults: number | null;
   primaryResultValue: number | null;
   resultMappingConfidence: ResultMappingConfidence;
+  /** M10C — traffic/sales limitation note; null when N/A. */
+  outcomeLimitation: string | null;
 };
 
 function asText(value: unknown): string | null {
@@ -83,17 +88,13 @@ export function normalizeInsightRow(
   if (!dateStart || !dateStop) return null;
   const actions = normalizeMetaActions(row.actions);
   const actionValues = normalizeMetaActions(row.action_values);
-  const objective = (options?.rawObjective ?? "").toUpperCase();
-  const isLeadObjective =
-    objective === "OUTCOME_LEADS" || objective === "LEADS";
-  const lead = isLeadObjective
-    ? extractPrimaryLeadResult(actions)
-    : {
-        primaryResultType: null as string | null,
-        primaryResults: null as number | null,
-        mappingConfidence: "UNKNOWN" as ResultMappingConfidence,
-      };
-  const purchase = extractPurchaseValue(actionValues);
+  const profile = resolveObjectivePerformanceProfile(options?.rawObjective);
+  const outcome = extractOutcomeForProfile(profile, actions, actionValues);
+  // Sales value already on outcome; for LEADS keep purchase value unused for CPL.
+  const purchaseFallback =
+    profile.family === "LEADS"
+      ? extractPurchaseValue(actionValues)
+      : { primaryResultValue: null as number | null };
   return {
     metaCampaignId: asText(row.campaign_id),
     dateStart,
@@ -109,10 +110,12 @@ export function normalizeInsightRow(
     frequency: parseNonNegNumber(row.frequency),
     actions,
     actionValues,
-    primaryResultType: lead.primaryResultType,
-    primaryResults: lead.primaryResults,
-    primaryResultValue: purchase.primaryResultValue,
-    resultMappingConfidence: lead.mappingConfidence,
+    primaryResultType: outcome.primaryResultType,
+    primaryResults: outcome.primaryResults,
+    primaryResultValue:
+      outcome.primaryResultValue ?? purchaseFallback.primaryResultValue,
+    resultMappingConfidence: outcome.mappingConfidence,
+    outcomeLimitation: outcome.outcomeLimitation,
   };
 }
 

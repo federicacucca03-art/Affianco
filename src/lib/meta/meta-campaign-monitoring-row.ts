@@ -188,6 +188,7 @@ export function mapMetaCampaignToMonitoringRow(
           ? { primaryKpi: "NONE", targetValue: null }
           : null,
     effectiveStatus: c.effective_status,
+    rawObjective: c.raw_objective,
   });
 
   const incompatible = resolved.linkState === "LINKED_BUT_KPI_INCOMPATIBLE";

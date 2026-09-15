@@ -252,7 +252,7 @@ export function resolveUrgencyFromSignals(input: {
       return {
         level: "SOON",
         reason:
-          "Il risultato Meta non è abbastanza affidabile per valutare il CPL.",
+          "I risultati Meta non sono determinabili con certezza — non è un problema di sample size.",
       };
     }
     if (
@@ -636,7 +636,7 @@ export function buildMetaAttentionItem(input: {
     case "RESULT_MAPPING_REQUIRED":
       configurationRequired = true;
       configurationReason =
-        "Il risultato principale Meta non è identificato con sufficiente certezza.";
+        "I risultati Meta non sono determinabili con certezza (mapping ambiguo o incompleto).";
       configurationKind = "RESULT_MAPPING";
       health = null;
       break;
@@ -651,8 +651,63 @@ export function buildMetaAttentionItem(input: {
       insufficientReason = "I dati sono ancora insufficienti.";
       health = null;
       break;
+    case "OBJECTIVE_UNSUPPORTED":
+      // Neutral: factual Meta metrics only — not a configuration gap.
+      health = null;
+      break;
+    case "NO_ECONOMIC_EVALUATION":
+      // Awareness/Traffic/Engagement without mandatory economic target.
+      health = null;
+      break;
     case "AVAILABLE":
       break;
+  }
+
+  if (
+    row.healthAvailability === "OBJECTIVE_UNSUPPORTED" ||
+    row.healthAvailability === "NO_ECONOMIC_EVALUATION"
+  ) {
+    const attentionState: AttentionState = "MONITOR";
+    const reason =
+      row.healthAvailability === "OBJECTIVE_UNSUPPORTED"
+        ? "Obiettivo Meta non supportato per una valutazione strutturata — solo metriche fattuali."
+        : "Obiettivo senza target economico obbligatorio — Ally mostra consegna e metriche compatibili.";
+    const urgency = resolveUrgencyFromSignals({
+      attentionState,
+      health: null,
+      trend,
+      campaignStatus: row.effectiveStatus,
+      configurationKind: null,
+    });
+    return {
+      campaignId: row.id,
+      clientId: row.clientId,
+      clientName: row.clientName,
+      campaignName: row.name,
+      source: "META",
+      campaignStatus: row.effectiveStatus,
+      attentionState,
+      reason,
+      urgencyLevel: urgency.level,
+      urgencyReason: urgency.reason,
+      primaryMetric: row.primaryKpi ? kpiLabel(row.primaryKpi) : null,
+      primaryMetricValue:
+        row.primaryKpi === "CPC"
+          ? row.cpc
+          : row.primaryKpi === "CPM"
+            ? row.cpm
+            : null,
+      targetValue: row.targetValue,
+      trend,
+      lastUpdated: row.lastSyncedAt,
+      href: "/risultati",
+      healthStatus: null,
+      suppressedByLink: false,
+      insightsLastSyncedAt: row.insightsLastSyncedAt ?? null,
+      resultsCount: row.primaryResults ?? null,
+      healthAvailability: row.healthAvailability ?? null,
+      configurationKind: null,
+    };
   }
 
   // Fundamentals beat trend: no target + worsening still CONFIGURATION_REQUIRED.

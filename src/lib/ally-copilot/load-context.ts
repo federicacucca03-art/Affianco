@@ -148,6 +148,7 @@ function snapshotFromNativeRow(row: NativeRow): {
       formId: row.form_id?.trim() || null,
       website: clientJoin?.website?.trim() || null,
       bookingChannel: row.booking_channel?.trim() || null,
+      guidedDestination: null,
       status: row.status,
       approvedAt: row.approved_at,
     },

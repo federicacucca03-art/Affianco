@@ -22,6 +22,49 @@ function extractJsonObject(raw: string): unknown {
   }
 }
 
+/**
+ * When max_tokens cuts mid-JSON, recover at least the answer string so Ask Ally
+ * does not collapse to the generic fallback for a partial but usable reply.
+ */
+function recoverPartialAllyJson(raw: string): Record<string, unknown> | null {
+  const start = raw.indexOf("{");
+  if (start < 0) return null;
+  const slice = raw.slice(start);
+  const m = slice.match(/"answer"\s*:\s*"/);
+  if (!m || m.index == null) return null;
+  const valueStart = m.index + m[0].length;
+  let i = valueStart;
+  let out = "";
+  while (i < slice.length) {
+    const ch = slice[i];
+    if (ch === "\\") {
+      out += slice.slice(i, i + 2);
+      i += 2;
+      continue;
+    }
+    if (ch === '"') break;
+    out += ch;
+    i += 1;
+  }
+  let answer: string;
+  try {
+    answer = JSON.parse(`"${out}"`) as string;
+  } catch {
+    answer = out.replace(/\\n/g, "\n").replace(/\\"/g, '"').trim();
+  }
+  answer = answer.trim();
+  if (!answer) return null;
+  return {
+    answer,
+    confidence: "LOW",
+    evidence: [],
+    hypotheses: [],
+    missing_information: [],
+    suggested_next_questions: [],
+    recommended_action_href: null,
+  };
+}
+
 function asStringArray(raw: unknown, max: number): string[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -91,9 +134,23 @@ export function parseAllyCopilotAnswer(
   raw: string,
   context: AllyCampaignCopilotContext,
 ): AllyCopilotAnswer {
-  const parsed = extractJsonObject(raw) as Record<string, unknown>;
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = extractJsonObject(raw) as Record<string, unknown>;
+  } catch {
+    const recovered = recoverPartialAllyJson(raw);
+    if (!recovered) throw new Error("JSON non valido");
+    parsed = recovered;
+  }
   let answer =
     typeof parsed.answer === "string" ? parsed.answer.trim() : "";
+  if (!answer) {
+    const recovered = recoverPartialAllyJson(raw);
+    if (recovered && typeof recovered.answer === "string") {
+      answer = recovered.answer.trim();
+      parsed = { ...recovered, ...parsed, answer };
+    }
+  }
   if (!answer) {
     throw new Error("Risposta vuota");
   }

@@ -377,7 +377,12 @@ test("MetaHierarchyPanel Italian + no Anthropic", () => {
   assert(ui.includes("Riprova"), "retry action");
   assert(ui.includes("In pausa su Meta") || ui.includes("etichettaMetaDeliveryStatus"), "meta status labels");
   assert(ui.includes("non determinabili"), "ambiguous results copy");
-  assert(ui.includes("Costo per risultato"), "cost label full");
+  const labelsSrc = read("src/lib/meta/objective-performance/labels.ts");
+  assert(
+    ui.includes("etichetteHierarchyOutcome") &&
+      labelsSrc.includes("Costo per risultato"),
+    "cost label full",
+  );
   assert(!ui.includes("Costo/ris."), "no abbreviated cost");
   assert(ui.includes("Dati insufficienti"), "single insufficient label");
   assert(ui.includes("Anteprima non disponibile"), "creative placeholder");

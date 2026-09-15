@@ -33,6 +33,99 @@ import type { ResultMappingConfidence } from "@/lib/meta/insight-actions";
 import { ChiediAdAllyPanel } from "@/components/campagne/ChiediAdAllyPanel";
 import { MetaHierarchyPanel } from "@/components/risultati/MetaHierarchyPanel";
 import { etichettaMetaObjectiveUtente } from "@/lib/meta/meta-ui-labels";
+import {
+  etichettaPerformanceMetric,
+  resolveObjectivePerformanceProfile,
+  resolvePerformanceFamily,
+  type PerformanceMetricId,
+} from "@/lib/meta/objective-performance";
+
+function formatMetricDisplay(
+  id: PerformanceMetricId,
+  value: number,
+): string {
+  switch (id) {
+    case "spend":
+    case "cpc":
+    case "cpm":
+    case "cost_per_result":
+    case "cost_per_purchase":
+    case "cost_per_lpv":
+    case "cost_per_engagement":
+      return formatEuro(value);
+    case "ctr":
+      return `${value.toFixed(2)}%`;
+    case "frequency":
+    case "roas":
+      return value.toFixed(2);
+    default:
+      return value.toLocaleString("it-IT");
+  }
+}
+
+/** M10C — pick available primary metrics from monitoring row (no inventions). */
+function objectiveAwareMetricCards(row: MetaCampaignMonitoringRow): {
+  id: PerformanceMetricId;
+  label: string;
+  display: string;
+}[] {
+  const profile = resolveObjectivePerformanceProfile(row.rawObjective);
+  const costPerResult =
+    row.primaryResults != null &&
+    row.primaryResults > 0 &&
+    row.spend != null
+      ? Math.round((row.spend / row.primaryResults) * 100) / 100
+      : null;
+  const values: Partial<Record<PerformanceMetricId, number | null>> = {
+    spend: row.spend,
+    impressions: row.impressions,
+    link_clicks: row.linkClicks,
+    ctr: row.ctr,
+    cpc: row.cpc,
+    cpm: row.cpm,
+    frequency: row.frequency,
+    results: row.primaryResults,
+    purchases: row.primaryResults,
+    landing_page_views: row.primaryResults,
+    engagement: row.primaryResults,
+    cost_per_result: costPerResult,
+    cost_per_purchase: costPerResult,
+    cost_per_lpv: costPerResult,
+    cost_per_engagement: costPerResult,
+    reach: null,
+    roas: null,
+  };
+  const cards: { id: PerformanceMetricId; label: string; display: string }[] =
+    [];
+  for (const id of profile.primaryMetrics) {
+    const v = values[id];
+    if (v == null || !Number.isFinite(v)) continue;
+    // Never show cost/result metrics when primary results missing (ambiguous).
+    if (
+      (id === "cost_per_result" ||
+        id === "cost_per_purchase" ||
+        id === "cost_per_lpv" ||
+        id === "cost_per_engagement") &&
+      row.primaryResults == null
+    ) {
+      continue;
+    }
+    cards.push({
+      id,
+      label: etichettaPerformanceMetric(id),
+      display: formatMetricDisplay(id, v),
+    });
+  }
+  // Fallback: always show spend if nothing matched but spend exists.
+  if (cards.length === 0 && row.spend != null) {
+    cards.push({
+      id: "spend",
+      label: etichettaPerformanceMetric("spend"),
+      display: formatEuro(row.spend),
+    });
+  }
+  return cards.slice(0, 5);
+}
 
 // ------------------------------------------------------------------
 // Sub-component: target setter
@@ -65,6 +158,8 @@ function TargetSetter({
   const isLead =
     rawObjective?.toUpperCase() === "OUTCOME_LEADS" ||
     rawObjective?.toUpperCase() === "LEADS";
+  const family = resolvePerformanceFamily(rawObjective);
+  const profile = resolveObjectivePerformanceProfile(rawObjective);
 
   const [kpi, setKpi] = useState<MetaMonitoringKpi | "">(currentKpi ?? "");
   const [value, setValue] = useState<string>(
@@ -106,12 +201,29 @@ function TargetSetter({
     }
   }
 
+  const targetHint =
+    isLead && !currentKpi
+      ? "L'obiettivo è generazione lead — puoi usare CPL come KPI."
+      : family === "SALES" && !currentKpi
+        ? "Obiettivo vendite — preferisci CPA (o ROAS quando il valore acquisti è affidabile)."
+        : family === "AWARENESS" && !currentKpi
+          ? "Obiettivo notorietà — il target economico non è obbligatorio; CPM è opzionale."
+          : family === "TRAFFIC" && !currentKpi
+            ? "Obiettivo traffico — CPC è un target opzionale; non si usa CPL."
+            : family === "UNKNOWN" && !currentKpi
+              ? "Obiettivo non supportato per una valutazione strutturata — evita target CPL/CPA inventati."
+              : null;
+
   return (
     <div className="mt-3 rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--ally-surface)] px-4 py-4 text-sm shadow-[var(--shadow-soft)]">
       <p className="font-medium text-[var(--ink)]">Imposta target</p>
-      {isLead && !currentKpi && (
+      {targetHint && (
+        <p className="mt-1 text-xs text-[var(--ink-muted)]">{targetHint}</p>
+      )}
+      {!profile.economicTargetRequired && (
         <p className="mt-1 text-xs text-[var(--ink-muted)]">
-          L&apos;obiettivo è generazione lead — puoi usare CPL come KPI.
+          Per questo obiettivo Ally non richiede un target di business per
+          leggere la consegna.
         </p>
       )}
       <div className="mt-3 flex flex-wrap gap-3">
@@ -338,13 +450,19 @@ function MetaCampaignCard({
   const noTargetMessage =
     row.healthAvailability === "LINKED_BUT_KPI_INCOMPATIBLE"
       ? "Campagna collegata, ma il KPI pianificato non è compatibile con i risultati Meta disponibili."
-      : row.healthAvailability === "TARGET_REQUIRED"
-        ? "Dati disponibili — imposta un target per valutare la performance."
-        : row.healthAvailability === "RESULT_MAPPING_REQUIRED"
-          ? "Tipo di risultato non determinabile — monitoraggio parziale disponibile."
+      : row.healthAvailability === "RESULT_MAPPING_REQUIRED"
+        ? "I dati di spesa e traffico sono disponibili, ma i risultati Meta non sono determinabili con certezza."
+        : row.healthAvailability === "TARGET_REQUIRED"
+          ? "Dati disponibili — imposta un target per valutare la performance."
           : row.healthAvailability === "ROAS_DEFERRED"
             ? "ROAS non ancora valutabile in Control Room."
-            : null;
+            : row.healthAvailability === "OBJECTIVE_UNSUPPORTED"
+              ? "Obiettivo Meta non supportato per una valutazione strutturata — solo metriche fattuali."
+              : row.healthAvailability === "NO_ECONOMIC_EVALUATION"
+                ? "Per questo obiettivo non serve un target economico obbligatorio."
+                : null;
+
+  const metricCards = objectiveAwareMetricCards(row);
 
   return (
     <div className="rounded-[var(--radius)] border border-[rgba(0,0,0,0.06)] bg-[var(--ally-surface)] px-4 py-3.5 shadow-[var(--shadow-card)] sm:px-5">
@@ -401,58 +519,14 @@ function MetaCampaignCard({
         </div>
       </div>
 
-      {(row.spend != null ||
-        row.impressions != null ||
-        row.linkClicks != null) && (
+      {metricCards.length > 0 && (
         <dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3 lg:grid-cols-5">
-          {row.spend != null && (
-            <div className="aff-metric aff-metric--compact">
-              <dt className="aff-metric__label">Spesa</dt>
-              <dd className="aff-metric__value text-[15px]">
-                {formatEuro(row.spend)}
-              </dd>
+          {metricCards.map((m) => (
+            <div key={m.id} className="aff-metric aff-metric--compact">
+              <dt className="aff-metric__label">{m.label}</dt>
+              <dd className="aff-metric__value text-[15px]">{m.display}</dd>
             </div>
-          )}
-          {row.impressions != null && (
-            <div className="aff-metric aff-metric--compact">
-              <dt className="aff-metric__label">Impression</dt>
-              <dd className="aff-metric__value text-[15px]">
-                {row.impressions.toLocaleString("it-IT")}
-              </dd>
-            </div>
-          )}
-          {row.linkClicks != null && (
-            <div className="aff-metric aff-metric--compact">
-              <dt className="aff-metric__label">Link click</dt>
-              <dd className="aff-metric__value text-[15px]">
-                {row.linkClicks.toLocaleString("it-IT")}
-              </dd>
-            </div>
-          )}
-          {row.ctr != null && (
-            <div className="aff-metric aff-metric--compact">
-              <dt className="aff-metric__label">CTR</dt>
-              <dd className="aff-metric__value text-[15px]">
-                {row.ctr.toFixed(2)}%
-              </dd>
-            </div>
-          )}
-          {row.cpc != null && (
-            <div className="aff-metric aff-metric--compact">
-              <dt className="aff-metric__label">CPC</dt>
-              <dd className="aff-metric__value text-[15px]">
-                {formatEuro(row.cpc)}
-              </dd>
-            </div>
-          )}
-          {row.frequency != null && (
-            <div className="aff-metric aff-metric--compact">
-              <dt className="aff-metric__label">Frequenza</dt>
-              <dd className="aff-metric__value text-[15px]">
-                {row.frequency.toFixed(2)}
-              </dd>
-            </div>
-          )}
+          ))}
         </dl>
       )}
 
@@ -826,8 +900,8 @@ export function MetaCampagneSection({
     <section className="mt-8">
       <h2 className="text-lg font-medium text-[var(--ink)]">Campagne Meta</h2>
       <p className="mt-1 text-sm text-[var(--ink-muted)]">
-        Monitoraggio separato dalle campagne Ally. Imposta un target per
-        valutare la performance.
+        Monitora le campagne Meta e aggiungi un target per contestualizzare la
+        performance.
       </p>
       <div className="mt-4 space-y-4">
         {rows.map((row) => (
