@@ -191,6 +191,27 @@ export type AllyCopilotMetaConfiguration = {
   unknownFields: string[];
 };
 
+/** M10E — measurement reliability for Ask Ally (deterministic). */
+export type AllyCopilotTrackingHealth = {
+  status: string;
+  reliability: string;
+  reliabilityLabel: string;
+  summary: string;
+  performanceConfidence: string;
+  signals: string[];
+  issues: Array<{
+    severity: string;
+    title: string;
+    explanation: string;
+  }>;
+  unknowns: string[];
+  pixelVisibility: string;
+  /** Outcome-relevant action types that justify result-signal claims. */
+  relevantResultActions: string[];
+  /** Other observed actions (engagement/delivery) — secondary. */
+  otherObservedActions: string[];
+};
+
 /** Canonical compact context sent to the model (plus question + short history). */
 export type AllyCampaignCopilotContext = {
   identity: AllyCopilotIdentity;
@@ -203,6 +224,7 @@ export type AllyCampaignCopilotContext = {
   linkedNativeId: string | null;
   hierarchy: AllyCopilotHierarchy | null;
   metaConfiguration: AllyCopilotMetaConfiguration | null;
+  trackingHealth: AllyCopilotTrackingHealth | null;
 };
 
 export type AllyCopilotAnswer = {

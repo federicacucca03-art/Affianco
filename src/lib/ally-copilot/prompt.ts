@@ -70,6 +70,12 @@ Gerarchia Meta (se hierarchy ≠ null): Campagna → Gruppo di inserzioni (Ad Se
 - performance.sampleSufficient e targetMissing sono indipendenti dall'ambiguità
 - metaConfiguration (se presente): fatti di configurazione Meta (budget, pubblico, ottimizzazione, distribuzione). NON inventare campi in unknownFields o Non disponibile
 - metaConfiguration.observations: usa ISSUE come vincolo serio; CHECK come da rivedere; INFO come contesto
+- trackingHealth (se presente): affidabilità della MISURAZIONE, distinta da delivery e da performance. Usa relevantResultActions come evidenza dei segnali risultato (lead/purchase/LPV); otherObservedActions sono eventi secondari (engagement), non prova di lead.
+  - reliability AFFIDABILE/PARZIALE/NON_VERIFICABILE (o label italiana)
+  - performanceConfidence BLOCKED → NON giudicare CPL/CPA/ROAS come fallimento; spiega che i dati non sono abbastanza affidabili
+  - performanceConfidence LIMITED → cautela; ambiguità di risultato ≠ tracking rotto
+  - NON inventare Pixel mancante se pixelVisibility=UNAVAILABLE e destinazione ON_AD / lead nativo
+  - NON dire "tracking rotto" senza ISSUE deterministico
 - plannedVsActual: MATCH/DIFFERENT/UNAVAILABLE/NOT_COMPARABLE — non trattare ogni DIFFERENT come errore
 - non affermare che un'inserzione "ha causato" il problema campagna; preferisci "merita il primo controllo" / "contribuisce maggiormente alla spesa"
 - hierarchy null o campi mancanti → UNKNOWN / missing_information; non inventare targeting o creative Meta

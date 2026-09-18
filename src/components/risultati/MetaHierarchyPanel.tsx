@@ -81,6 +81,20 @@ type HierarchyPayload = {
   };
   hierarchyAvailable: boolean;
   configuration?: ConfigPresentation | null;
+  trackingHealth?: {
+    beginnerLabel: string;
+    beginnerSummary: string;
+    reliability: string;
+    status: string;
+    performanceConfidence: string;
+    pixelVisibility: string;
+    issues: Array<{
+      severity: string;
+      title: string;
+      explanation: string;
+    }>;
+    professionalLines: Array<{ key: string; label: string; value: string }>;
+  } | null;
 };
 
 const AMBIGUOUS_RESULTS_HINT =
@@ -119,6 +133,61 @@ function MetaDeliveryBadge({ status }: { status: string | null }) {
     <span className="inline-flex items-center rounded-full border border-[rgba(0,0,0,0.08)] bg-[rgba(0,0,0,0.03)] px-2 py-0.5 text-[10px] font-medium tracking-wide text-[var(--ink-muted)]">
       {label}
     </span>
+  );
+}
+
+function TrackingHealthSummary({
+  health,
+}: {
+  health: NonNullable<HierarchyPayload["trackingHealth"]>;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-2 border-t border-[rgba(0,0,0,0.05)] pt-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
+        Affidabilità misurazione
+      </p>
+      <p className="mt-1 text-[12px] font-medium text-[var(--ink)]">
+        {health.beginnerLabel}
+      </p>
+      <p className="mt-0.5 text-[11px] leading-snug text-[var(--ink-muted)]">
+        {health.beginnerSummary}
+      </p>
+      {health.issues
+        .filter((i) => i.severity === "ISSUE" || i.severity === "CHECK")
+        .slice(0, 2)
+        .map((i) => (
+          <p
+            key={i.title}
+            className="mt-1 text-[10px] leading-snug text-[var(--ink-muted)]"
+          >
+            {i.title}. {i.explanation}
+          </p>
+        ))}
+      {health.performanceConfidence === "BLOCKED" ? (
+        <p className="mt-1 text-[10px] leading-snug text-[var(--ink-muted)]">
+          Ally non formula giudizi forti sulla performance economica finché la
+          misurazione non è verificabile.
+        </p>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="mt-1.5 text-[11px] font-medium text-[var(--accent)]"
+      >
+        {open ? "Nascondi dettagli misurazione" : "Mostra dettagli misurazione"}
+      </button>
+      {open ? (
+        <dl className="mt-1.5 space-y-0.5 border-t border-[rgba(0,0,0,0.04)] pt-1.5">
+          {health.professionalLines.map((row) => (
+            <div key={row.key} className="flex gap-2 text-[10px] leading-snug">
+              <dt className="shrink-0 text-[var(--ink-muted)]">{row.label}:</dt>
+              <dd className="min-w-0 text-[var(--ink)]">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+    </div>
   );
 }
 
@@ -568,6 +637,13 @@ export function MetaHierarchyPanel({
                 {data.configuration ? (
                   <div className="rounded-[var(--radius)] border border-[rgba(0,0,0,0.06)] bg-[rgba(0,0,0,0.015)] px-3 py-2.5">
                     <ConfigurationSummary config={data.configuration} />
+                    {data.trackingHealth ? (
+                      <TrackingHealthSummary health={data.trackingHealth} />
+                    ) : null}
+                  </div>
+                ) : data.trackingHealth ? (
+                  <div className="rounded-[var(--radius)] border border-[rgba(0,0,0,0.06)] bg-[rgba(0,0,0,0.015)] px-3 py-2.5">
+                    <TrackingHealthSummary health={data.trackingHealth} />
                   </div>
                 ) : null}
 

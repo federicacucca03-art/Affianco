@@ -25,6 +25,10 @@ import {
   type AllyPlannedConfigSnapshot,
   type ConfigPresentation,
 } from "@/lib/meta/configuration";
+import {
+  buildTrackingHealth,
+  type TrackingHealth,
+} from "@/lib/meta/tracking-health";
 import { MetaError } from "@/lib/meta/errors";
 import type { NormalizedDailyInsight } from "@/lib/meta/insight-normalize";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
@@ -85,6 +89,7 @@ export type CampaignHierarchyView = {
   };
   hierarchyAvailable: boolean;
   configuration: ConfigPresentation | null;
+  trackingHealth: TrackingHealth | null;
 };
 
 type DailyInsightDb = {
@@ -383,6 +388,7 @@ export async function loadCampaignHierarchyView(
       diagnosis: { focusAdSetName: null, focusAdName: null, lines: [] },
       hierarchyAvailable: false,
       configuration: null,
+      trackingHealth: null,
     };
   }
 
@@ -642,6 +648,87 @@ export async function loadCampaignHierarchyView(
     focusAd: focusAd ? { name: focusAd.name } : null,
   });
 
+  // M10E — derive tracking health from primary ad set config + observed insights
+  const primaryAs = adSetRows[0];
+  const allInsightRows: NormalizedDailyInsight[] = [];
+  for (const list of adSetInsightById.values()) allInsightRows.push(...list);
+  if (allInsightRows.length === 0) {
+    for (const list of adInsightById.values()) allInsightRows.push(...list);
+  }
+  const observedActionTypes = new Set<string>();
+  let hasPurchaseValue = false;
+  let spendSum = 0;
+  let spendSaw = false;
+  let impressionsSum = 0;
+  let impressionsSaw = false;
+  let linkClicksSum = 0;
+  let linkClicksSaw = false;
+  let lpvSum = 0;
+  for (const row of allInsightRows) {
+    if (row.spend != null) {
+      spendSaw = true;
+      spendSum += row.spend;
+    }
+    if (row.impressions != null) {
+      impressionsSaw = true;
+      impressionsSum += row.impressions;
+    }
+    if (row.linkClicks != null) {
+      linkClicksSaw = true;
+      linkClicksSum += row.linkClicks;
+    }
+    for (const a of row.actions) {
+      if (a.value > 0) observedActionTypes.add(a.actionType);
+      if (
+        (a.actionType === "landing_page_view" ||
+          a.actionType === "omni_landing_page_view") &&
+        a.value > 0
+      ) {
+        lpvSum += a.value;
+      }
+    }
+    for (const v of row.actionValues) {
+      if (
+        (v.actionType === "purchase" ||
+          v.actionType === "omni_purchase" ||
+          v.actionType === "offsite_conversion.fb_pixel_purchase") &&
+        v.value > 0
+      ) {
+        hasPurchaseValue = true;
+      }
+    }
+  }
+  const campaignAgg = aggregateDailyInsights(allInsightRows, {
+    reach: null,
+    frequency: null,
+  });
+  const promotedRaw = primaryAs?.promoted_object;
+  const promotedObject =
+    promotedRaw &&
+    typeof promotedRaw === "object" &&
+    !Array.isArray(promotedRaw)
+      ? (promotedRaw as Record<string, unknown>)
+      : null;
+
+  const trackingHealth =
+    primaryAs || allInsightRows.length > 0
+      ? buildTrackingHealth({
+          objective: rawObjective,
+          optimizationGoal: primaryAs?.optimization_goal ?? null,
+          destinationType: primaryAs?.destination_type ?? null,
+          promotedObject,
+          attributionSpec: primaryAs?.attribution_spec ?? null,
+          observedActionTypes: [...observedActionTypes],
+          hasPurchaseValue,
+          resultMappingConfidence: campaignAgg.resultMappingConfidence,
+          primaryResultType: campaignAgg.primaryResultType,
+          spend: spendSaw ? spendSum : null,
+          impressions: impressionsSaw ? impressionsSum : null,
+          linkClicks: linkClicksSaw ? linkClicksSum : null,
+          landingPageViews: lpvSum > 0 ? lpvSum : null,
+        })
+      : null;
+
   return {
     metaCampaignId: campaign.metaCampaignId,
     campaignName:
@@ -657,5 +744,6 @@ export async function loadCampaignHierarchyView(
     },
     hierarchyAvailable: adSets.length > 0,
     configuration: campaignPresentation,
+    trackingHealth,
   };
 }

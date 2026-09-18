@@ -436,6 +436,30 @@ export async function loadAllyCampaignCopilotContext(
                 };
               })()
             : null,
+          trackingHealth: view.trackingHealth
+            ? {
+                status: view.trackingHealth.status,
+                reliability: view.trackingHealth.reliability,
+                reliabilityLabel: view.trackingHealth.beginnerLabel,
+                summary: view.trackingHealth.beginnerSummary,
+                performanceConfidence:
+                  view.trackingHealth.performanceConfidence,
+                signals: view.trackingHealth.signals.map((s) => s.code),
+                issues: view.trackingHealth.issues.map((i) => ({
+                  severity: i.severity,
+                  title: i.title,
+                  explanation: i.explanation,
+                })),
+                unknowns: [...view.trackingHealth.unknowns],
+                pixelVisibility: view.trackingHealth.pixelVisibility,
+                relevantResultActions: [
+                  ...view.trackingHealth.relevantResultActions,
+                ],
+                otherObservedActions: [
+                  ...view.trackingHealth.otherObservedActions,
+                ],
+              }
+            : null,
         };
         if (hierarchy?.focusHint && context.decision.nextActionType) {
           const refined = applyHierarchyToNextAction(
@@ -458,7 +482,7 @@ export async function loadAllyCampaignCopilotContext(
         }
       }
     } catch {
-      context = { ...context, hierarchy: null };
+      context = { ...context, hierarchy: null, trackingHealth: null };
     }
   }
 
