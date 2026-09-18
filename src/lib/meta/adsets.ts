@@ -17,8 +17,11 @@ import {
 import { MetaError } from "@/lib/meta/errors";
 import { graphApiBase, mapGraphErrorToMetaError } from "@/lib/meta/graph";
 
+import { normalizeTargetingSummary } from "@/lib/meta/configuration/normalize-targeting";
+import type { MetaTargetingSummaryStored } from "@/lib/meta/configuration/types";
+
 export const META_ADSET_FIELDS =
-  "id,name,campaign_id,status,effective_status";
+  "id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget,optimization_goal,billing_event,bid_strategy,bid_amount,start_time,end_time,destination_type,attribution_spec,promoted_object,targeting{geo_locations,age_min,age_max,genders,custom_audiences,excluded_custom_audiences,flexible_spec,publisher_platforms,facebook_positions,instagram_positions,messenger_positions,audience_network_positions,device_platforms}";
 export const META_ADSETS_PAGE_LIMIT = 50;
 export const META_ADSETS_MAX_PAGES = 5;
 
@@ -73,8 +76,15 @@ export type MetaAdSetSummary = {
   dailyBudget: number | null;
   lifetimeBudget: number | null;
   optimizationGoal: string | null;
+  billingEvent: string | null;
+  bidStrategy: string | null;
+  bidAmount: number | null;
   startAt: string | null;
   endAt: string | null;
+  destinationType: string | null;
+  attributionSpec: unknown;
+  promotedObject: Record<string, unknown> | null;
+  targetingSummary: MetaTargetingSummaryStored;
 };
 
 type FetchLike = (
@@ -131,8 +141,20 @@ export function normalizeMetaAdSet(
     dailyBudget: asBudget(row.daily_budget),
     lifetimeBudget: asBudget(row.lifetime_budget),
     optimizationGoal: asText(row.optimization_goal),
+    billingEvent: asText(row.billing_event),
+    bidStrategy: asText(row.bid_strategy),
+    bidAmount: asBudget(row.bid_amount),
     startAt: asIso(row.start_time),
     endAt: asIso(row.end_time),
+    destinationType: asText(row.destination_type),
+    attributionSpec: row.attribution_spec ?? null,
+    promotedObject:
+      row.promoted_object &&
+      typeof row.promoted_object === "object" &&
+      !Array.isArray(row.promoted_object)
+        ? (row.promoted_object as Record<string, unknown>)
+        : null,
+    targetingSummary: normalizeTargetingSummary(row.targeting),
   };
 }
 

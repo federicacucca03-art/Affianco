@@ -17,6 +17,25 @@ import {
 
 type ResultMappingConfidence = "CONFIDENT" | "AMBIGUOUS" | "UNKNOWN";
 
+type ConfigLine = { key: string; label: string; value: string };
+type ConfigObservation = {
+  severity: "INFO" | "CHECK" | "ISSUE";
+  title: string;
+  explanation: string;
+};
+type ConfigPresentation = {
+  beginner: ConfigLine[];
+  professional: ConfigLine[];
+  observations: ConfigObservation[];
+  plannedVsActual: Array<{
+    field: string;
+    label: string;
+    state: string;
+    plannedLabel: string | null;
+    actualLabel: string | null;
+  }> | null;
+};
+
 type HierarchyAd = {
   metaAdId: string;
   name: string;
@@ -31,6 +50,7 @@ type HierarchyAd = {
   creativeThumbnailUrl: string | null;
   creativeTitle: string | null;
   creativeBody: string | null;
+  configuration?: ConfigPresentation | null;
 };
 
 type HierarchyAdSet = {
@@ -45,6 +65,7 @@ type HierarchyAdSet = {
   dataSufficiency: HierarchyDataSufficiency;
   operationalState: AllyHierarchyOperationalState;
   ads: HierarchyAd[];
+  configuration?: ConfigPresentation | null;
 };
 
 type HierarchyPayload = {
@@ -59,6 +80,7 @@ type HierarchyPayload = {
     lines: string[];
   };
   hierarchyAvailable: boolean;
+  configuration?: ConfigPresentation | null;
 };
 
 const AMBIGUOUS_RESULTS_HINT =
@@ -97,6 +119,78 @@ function MetaDeliveryBadge({ status }: { status: string | null }) {
     <span className="inline-flex items-center rounded-full border border-[rgba(0,0,0,0.08)] bg-[rgba(0,0,0,0.03)] px-2 py-0.5 text-[10px] font-medium tracking-wide text-[var(--ink-muted)]">
       {label}
     </span>
+  );
+}
+
+function ConfigurationSummary({
+  config,
+}: {
+  config: ConfigPresentation | null | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!config || config.beginner.length === 0) return null;
+  return (
+    <div className="mt-2 border-t border-[rgba(0,0,0,0.05)] pt-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
+        Configurazione
+      </p>
+      <dl className="mt-1 space-y-0.5">
+        {config.beginner.slice(0, 6).map((row) => (
+          <div key={row.key} className="flex gap-2 text-[11px] leading-snug">
+            <dt className="shrink-0 text-[var(--ink-muted)]">{row.label}:</dt>
+            <dd className="min-w-0 text-[var(--ink)]">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+      {config.observations
+        .filter((o) => o.severity === "ISSUE" || o.severity === "CHECK")
+        .slice(0, 2)
+        .map((o) => (
+          <p
+            key={o.title}
+            className="mt-1 text-[10px] leading-snug text-[var(--ink-muted)]"
+          >
+            {o.severity === "ISSUE" ? "Da verificare: " : ""}
+            {o.title}. {o.explanation}
+          </p>
+        ))}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="mt-1.5 text-[11px] font-medium text-[var(--accent)]"
+      >
+        {open ? "Nascondi dettagli tecnici" : "Mostra configurazione"}
+      </button>
+      {open ? (
+        <dl className="mt-1.5 space-y-0.5 border-t border-[rgba(0,0,0,0.04)] pt-1.5">
+          {config.professional.map((row) => (
+            <div key={row.key} className="flex gap-2 text-[10px] leading-snug">
+              <dt className="shrink-0 text-[var(--ink-muted)]">{row.label}:</dt>
+              <dd className="min-w-0 text-[var(--ink)]">{row.value}</dd>
+            </div>
+          ))}
+          {config.plannedVsActual && config.plannedVsActual.length > 0 ? (
+            <div className="mt-2 space-y-0.5">
+              <p className="text-[10px] font-medium text-[var(--ink)]">
+                Pianificato Ally vs Meta
+              </p>
+              {config.plannedVsActual.map((row) => (
+                <p key={row.field} className="text-[10px] text-[var(--ink-muted)]">
+                  {row.label}:{" "}
+                  {row.state === "MATCH"
+                    ? "Coincide"
+                    : row.state === "DIFFERENT"
+                      ? "Diverso su Meta"
+                      : row.state === "NOT_COMPARABLE"
+                        ? "Non confrontabile"
+                        : "Non disponibile"}
+                </p>
+              ))}
+            </div>
+          ) : null}
+        </dl>
+      ) : null}
+    </div>
   );
 }
 
@@ -471,6 +565,12 @@ export function MetaHierarchyPanel({
                   </ul>
                 )}
 
+                {data.configuration ? (
+                  <div className="rounded-[var(--radius)] border border-[rgba(0,0,0,0.06)] bg-[rgba(0,0,0,0.015)] px-3 py-2.5">
+                    <ConfigurationSummary config={data.configuration} />
+                  </div>
+                ) : null}
+
                 <div className="rounded-[var(--radius)] border border-[rgba(0,0,0,0.06)] bg-[rgba(0,0,0,0.015)] px-3 py-2.5">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
                     Gruppo di inserzioni
@@ -512,6 +612,7 @@ export function MetaHierarchyPanel({
                               data.performanceFamily ?? "LEADS"
                             }
                           />
+                          <ConfigurationSummary config={adSet.configuration} />
                         </div>
 
                         <button
@@ -577,6 +678,9 @@ export function MetaHierarchyPanel({
                                         performanceFamily={
                                           data.performanceFamily ?? "LEADS"
                                         }
+                                      />
+                                      <ConfigurationSummary
+                                        config={ad.configuration}
                                       />
                                     </div>
                                   </li>

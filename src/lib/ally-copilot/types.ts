@@ -174,6 +174,23 @@ export type AllyCopilotHierarchy = {
   diagnosisLines: string[];
 };
 
+/** M10D — compact read-only Meta configuration for Ask Ally. */
+export type AllyCopilotMetaConfiguration = {
+  beginnerLines: Array<{ label: string; value: string }>;
+  observations: Array<{
+    severity: string;
+    title: string;
+    explanation: string;
+  }>;
+  plannedVsActual: Array<{
+    field: string;
+    state: string;
+    plannedLabel: string | null;
+    actualLabel: string | null;
+  }> | null;
+  unknownFields: string[];
+};
+
 /** Canonical compact context sent to the model (plus question + short history). */
 export type AllyCampaignCopilotContext = {
   identity: AllyCopilotIdentity;
@@ -185,6 +202,7 @@ export type AllyCampaignCopilotContext = {
   configuration: AllyCopilotConfiguration;
   linkedNativeId: string | null;
   hierarchy: AllyCopilotHierarchy | null;
+  metaConfiguration: AllyCopilotMetaConfiguration | null;
 };
 
 export type AllyCopilotAnswer = {

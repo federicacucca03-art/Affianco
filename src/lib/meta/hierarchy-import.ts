@@ -41,6 +41,15 @@ export async function persistAdSets(input: {
     daily_budget: a.dailyBudget,
     lifetime_budget: a.lifetimeBudget,
     optimization_goal: a.optimizationGoal,
+    billing_event: a.billingEvent,
+    bid_strategy: a.bidStrategy,
+    bid_amount: a.bidAmount,
+    start_time: a.startAt,
+    end_time: a.endAt,
+    destination_type: a.destinationType,
+    attribution_spec: a.attributionSpec,
+    promoted_object: a.promotedObject,
+    targeting_summary: a.targetingSummary,
     last_synced_at: now,
   }));
   const { error } = await adminClient()

@@ -22,6 +22,8 @@ type PersistRow = {
   buying_type: string | null;
   daily_budget: number | null;
   lifetime_budget: number | null;
+  special_ad_categories?: unknown;
+  is_adset_budget_sharing_enabled?: boolean | null;
   meta_created_at: string | null;
   meta_start_at: string | null;
   meta_stop_at: string | null;
@@ -59,6 +61,15 @@ function toImported(row: PersistRow): ImportedMetaCampaign {
     stopAt: row.meta_stop_at,
     dailyBudget: row.daily_budget,
     lifetimeBudget: row.lifetime_budget,
+    specialAdCategories: Array.isArray(row.special_ad_categories)
+      ? row.special_ad_categories.filter(
+          (c): c is string => typeof c === "string",
+        )
+      : [],
+    isAdsetBudgetSharingEnabled:
+      typeof row.is_adset_budget_sharing_enabled === "boolean"
+        ? row.is_adset_budget_sharing_enabled
+        : null,
     lastSyncedAt: row.last_synced_at,
   };
 }
@@ -184,6 +195,8 @@ export async function importClientMetaCampaigns(
     buying_type: c.buyingType,
     daily_budget: c.dailyBudget,
     lifetime_budget: c.lifetimeBudget,
+    special_ad_categories: c.specialAdCategories,
+    is_adset_budget_sharing_enabled: c.isAdsetBudgetSharingEnabled,
     meta_created_at: c.createdAt,
     meta_start_at: c.startAt,
     meta_stop_at: c.stopAt,

@@ -20,7 +20,7 @@ import type { CampagnaObjective } from "@/types/campagne";
 import type { ObjectiveMappingConfidence } from "@/lib/meta/campaign-objective";
 
 export const META_CAMPAIGN_FIELDS =
-  "id,name,objective,status,effective_status,buying_type,created_time,start_time,stop_time,daily_budget,lifetime_budget";
+  "id,name,objective,status,effective_status,buying_type,created_time,start_time,stop_time,daily_budget,lifetime_budget,special_ad_categories,is_adset_budget_sharing_enabled";
 export const META_CAMPAIGNS_PAGE_LIMIT = 50;
 export const META_CAMPAIGNS_MAX_PAGES = 10;
 
@@ -57,6 +57,8 @@ export type MetaCampaignSummary = {
   stopAt: string | null;
   dailyBudget: number | null;
   lifetimeBudget: number | null;
+  specialAdCategories: string[];
+  isAdsetBudgetSharingEnabled: boolean | null;
 };
 
 type FetchLike = (
@@ -111,6 +113,11 @@ export function normalizeMetaCampaign(
   const metaCampaignId = asText(row.id);
   if (!metaCampaignId) return null;
   const mapped = mapMetaObjectiveToAffianco(asText(row.objective));
+  const cats = Array.isArray(row.special_ad_categories)
+    ? row.special_ad_categories
+        .map((c) => (typeof c === "string" ? c.trim() : ""))
+        .filter(Boolean)
+    : [];
   return {
     metaCampaignId,
     metaAdAccountId,
@@ -126,6 +133,11 @@ export function normalizeMetaCampaign(
     stopAt: asIso(row.stop_time),
     dailyBudget: asBudget(row.daily_budget),
     lifetimeBudget: asBudget(row.lifetime_budget),
+    specialAdCategories: cats,
+    isAdsetBudgetSharingEnabled:
+      typeof row.is_adset_budget_sharing_enabled === "boolean"
+        ? row.is_adset_budget_sharing_enabled
+        : null,
   };
 }
 

@@ -390,7 +390,53 @@ export async function loadAllyCampaignCopilotContext(
               diagnosisLines: view.diagnosis.lines,
             }
           : null;
-        context = { ...context, hierarchy };
+        context = {
+          ...context,
+          hierarchy,
+          metaConfiguration: view.configuration
+            ? (() => {
+                const primaryAdSet = view.adSets[0]?.configuration ?? null;
+                const beginnerLines = [
+                  ...view.configuration.beginner.map((l) => ({
+                    label: l.label,
+                    value: l.value,
+                  })),
+                  ...(primaryAdSet?.beginner ?? []).map((l) => ({
+                    label: l.label,
+                    value: l.value,
+                  })),
+                ];
+                const unknownFields = [
+                  ...view.configuration.beginner
+                    .filter((l) => /non disponibile/i.test(l.value))
+                    .map((l) => l.key),
+                  ...(primaryAdSet?.beginner ?? [])
+                    .filter((l) => /non disponibile/i.test(l.value))
+                    .map((l) => `adSet.${l.key}`),
+                  ...(primaryAdSet?.professional ?? [])
+                    .filter((l) => /non disponibile/i.test(l.value))
+                    .map((l) => `adSet.${l.key}`),
+                ];
+                return {
+                  beginnerLines,
+                  observations: view.configuration.observations.map((o) => ({
+                    severity: o.severity,
+                    title: o.title,
+                    explanation: o.explanation,
+                  })),
+                  plannedVsActual: view.configuration.plannedVsActual
+                    ? view.configuration.plannedVsActual.map((p) => ({
+                        field: p.field,
+                        state: p.state,
+                        plannedLabel: p.plannedLabel,
+                        actualLabel: p.actualLabel,
+                      }))
+                    : null,
+                  unknownFields: [...new Set(unknownFields)],
+                };
+              })()
+            : null,
+        };
         if (hierarchy?.focusHint && context.decision.nextActionType) {
           const refined = applyHierarchyToNextAction(
             {

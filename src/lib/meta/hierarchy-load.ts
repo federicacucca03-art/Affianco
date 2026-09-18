@@ -12,6 +12,19 @@ import {
   type HierarchyDataSufficiency,
 } from "@/lib/meta/hierarchy-evaluate";
 import { resolvePerformanceFamily } from "@/lib/meta/objective-performance";
+import {
+  buildAdConfiguration,
+  buildAdSetConfiguration,
+  buildCampaignConfiguration,
+  buildConfigurationObservations,
+  buildConfigPresentation,
+  buildAdSetConfigPresentation,
+  comparePlannedVsActual,
+  parseStoredTargetingSummary,
+  presentAdConfig,
+  type AllyPlannedConfigSnapshot,
+  type ConfigPresentation,
+} from "@/lib/meta/configuration";
 import { MetaError } from "@/lib/meta/errors";
 import type { NormalizedDailyInsight } from "@/lib/meta/insight-normalize";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
@@ -41,6 +54,7 @@ export type HierarchyAdView = {
   creativeThumbnailUrl: string | null;
   creativeTitle: string | null;
   creativeBody: string | null;
+  configuration: ConfigPresentation | null;
 };
 
 export type HierarchyAdSetView = {
@@ -55,6 +69,7 @@ export type HierarchyAdSetView = {
   dataSufficiency: HierarchyDataSufficiency;
   operationalState: AllyHierarchyOperationalState;
   ads: HierarchyAdView[];
+  configuration: ConfigPresentation | null;
 };
 
 export type CampaignHierarchyView = {
@@ -69,6 +84,7 @@ export type CampaignHierarchyView = {
     lines: string[];
   };
   hierarchyAvailable: boolean;
+  configuration: ConfigPresentation | null;
 };
 
 type DailyInsightDb = {
@@ -244,6 +260,7 @@ export async function loadCampaignHierarchyView(
   userId: string,
   clientId: string,
   metaCampaignUuid: string,
+  options?: { planned?: AllyPlannedConfigSnapshot | null },
 ): Promise<CampaignHierarchyView> {
   const campaign = await getOwnedImportedMetaCampaign(
     userId,
@@ -251,26 +268,41 @@ export async function loadCampaignHierarchyView(
     metaCampaignUuid,
   );
 
-  const { data: campRow, error: campErr } = await adminClient()
+  const { data: campRowRaw, error: campErr } = await adminClient()
     .from("meta_campaigns")
-    .select("id, name, primary_kpi, target_value")
+    .select(
+      "id, name, primary_kpi, target_value, raw_objective, status, effective_status, buying_type, daily_budget, lifetime_budget, special_ad_categories, is_adset_budget_sharing_enabled",
+    )
     .eq("user_id", userId)
     .eq("client_id", clientId)
     .eq("meta_campaign_id", campaign.metaCampaignId)
     .maybeSingle();
-  if (campErr) {
-    throw new MetaError(
-      "META_CAMPAIGN_DISCOVERY_FAILED",
-      "Lettura campagna Meta non riuscita.",
-    );
+
+  let campRow: Record<string, unknown> | null =
+    !campErr && campRowRaw
+      ? (campRowRaw as Record<string, unknown>)
+      : null;
+  if (campErr || !campRow) {
+    const retry = await adminClient()
+      .from("meta_campaigns")
+      .select("id, name, primary_kpi, target_value")
+      .eq("user_id", userId)
+      .eq("client_id", clientId)
+      .eq("meta_campaign_id", campaign.metaCampaignId)
+      .maybeSingle();
+    if (retry.error) {
+      throw new MetaError(
+        "META_CAMPAIGN_DISCOVERY_FAILED",
+        "Lettura campagna Meta non riuscita.",
+      );
+    }
+    campRow = (retry.data as Record<string, unknown> | null) ?? null;
   }
   const primaryKpi =
-    campRow && typeof (campRow as { primary_kpi?: unknown }).primary_kpi === "string"
-      ? ((campRow as { primary_kpi: string }).primary_kpi)
+    campRow && typeof campRow.primary_kpi === "string"
+      ? campRow.primary_kpi
       : null;
-  const rawTarget = campRow
-    ? (campRow as { target_value?: unknown }).target_value
-    : null;
+  const rawTarget = campRow ? campRow.target_value : null;
   const targetValue =
     typeof rawTarget === "number" && Number.isFinite(rawTarget)
       ? rawTarget
@@ -280,41 +312,65 @@ export async function loadCampaignHierarchyView(
   const safeTarget =
     targetValue != null && Number.isFinite(targetValue) ? targetValue : null;
 
-  const [adSetsRes, adsRes, adSetInsightsRes, adInsightsRes] =
-    await Promise.all([
-      adminClient()
-        .from("meta_ad_sets")
-        .select(
-          "meta_ad_set_id, name, status, effective_status",
-        )
-        .eq("user_id", userId)
-        .eq("client_id", clientId)
-        .eq("meta_campaign_id", campaign.metaCampaignId),
-      adminClient()
-        .from("meta_ads")
-        .select(
-          "meta_ad_id, meta_ad_set_id, name, status, effective_status, creative_thumbnail_url, creative_title, creative_body",
-        )
-        .eq("user_id", userId)
-        .eq("client_id", clientId)
-        .eq("meta_campaign_id", campaign.metaCampaignId),
-      adminClient()
-        .from("meta_ad_set_insights_daily")
-        .select(
-          "meta_ad_set_id, date_start, date_stop, spend, impressions, reach, clicks, link_clicks, meta_ctr, meta_cpc, meta_cpm, frequency, actions, action_values, primary_result_type, primary_results, primary_result_value, result_mapping_confidence",
-        )
-        .eq("user_id", userId)
-        .eq("client_id", clientId)
-        .eq("meta_campaign_id", campaign.metaCampaignId),
-      adminClient()
-        .from("meta_ad_insights_daily")
-        .select(
-          "meta_ad_id, meta_ad_set_id, date_start, date_stop, spend, impressions, reach, clicks, link_clicks, meta_ctr, meta_cpc, meta_cpm, frequency, actions, action_values, primary_result_type, primary_results, primary_result_value, result_mapping_confidence",
-        )
-        .eq("user_id", userId)
-        .eq("client_id", clientId)
-        .eq("meta_campaign_id", campaign.metaCampaignId),
-    ]);
+  const ADSET_SELECT_FULL =
+    "meta_ad_set_id, name, status, effective_status, daily_budget, lifetime_budget, optimization_goal, billing_event, bid_strategy, bid_amount, start_time, end_time, destination_type, attribution_spec, promoted_object, targeting_summary";
+  const ADSET_SELECT_BASIC =
+    "meta_ad_set_id, name, status, effective_status";
+  const AD_SELECT_FULL =
+    "meta_ad_id, meta_ad_set_id, name, status, effective_status, creative_id, creative_thumbnail_url, creative_title, creative_body, creative_cta, creative_link_url";
+  const AD_SELECT_BASIC =
+    "meta_ad_id, meta_ad_set_id, name, status, effective_status, creative_thumbnail_url, creative_title, creative_body";
+
+  let adSetsRes: { data: unknown; error: { message?: string } | null } =
+    await adminClient()
+      .from("meta_ad_sets")
+      .select(ADSET_SELECT_FULL)
+      .eq("user_id", userId)
+      .eq("client_id", clientId)
+      .eq("meta_campaign_id", campaign.metaCampaignId);
+  if (adSetsRes.error) {
+    adSetsRes = await adminClient()
+      .from("meta_ad_sets")
+      .select(ADSET_SELECT_BASIC)
+      .eq("user_id", userId)
+      .eq("client_id", clientId)
+      .eq("meta_campaign_id", campaign.metaCampaignId);
+  }
+
+  let adsRes: { data: unknown; error: { message?: string } | null } =
+    await adminClient()
+      .from("meta_ads")
+      .select(AD_SELECT_FULL)
+      .eq("user_id", userId)
+      .eq("client_id", clientId)
+      .eq("meta_campaign_id", campaign.metaCampaignId);
+  if (adsRes.error) {
+    adsRes = await adminClient()
+      .from("meta_ads")
+      .select(AD_SELECT_BASIC)
+      .eq("user_id", userId)
+      .eq("client_id", clientId)
+      .eq("meta_campaign_id", campaign.metaCampaignId);
+  }
+
+  const [adSetInsightsRes, adInsightsRes] = await Promise.all([
+    adminClient()
+      .from("meta_ad_set_insights_daily")
+      .select(
+        "meta_ad_set_id, date_start, date_stop, spend, impressions, reach, clicks, link_clicks, meta_ctr, meta_cpc, meta_cpm, frequency, actions, action_values, primary_result_type, primary_results, primary_result_value, result_mapping_confidence",
+      )
+      .eq("user_id", userId)
+      .eq("client_id", clientId)
+      .eq("meta_campaign_id", campaign.metaCampaignId),
+    adminClient()
+      .from("meta_ad_insights_daily")
+      .select(
+        "meta_ad_id, meta_ad_set_id, date_start, date_stop, spend, impressions, reach, clicks, link_clicks, meta_ctr, meta_cpc, meta_cpm, frequency, actions, action_values, primary_result_type, primary_results, primary_result_value, result_mapping_confidence",
+      )
+      .eq("user_id", userId)
+      .eq("client_id", clientId)
+      .eq("meta_campaign_id", campaign.metaCampaignId),
+  ]);
 
   // Tables may not exist yet (migration not applied) — degrade gracefully
   if (adSetsRes.error || adsRes.error) {
@@ -326,25 +382,44 @@ export async function loadCampaignHierarchyView(
       adSets: [],
       diagnosis: { focusAdSetName: null, focusAdName: null, lines: [] },
       hierarchyAvailable: false,
+      configuration: null,
     };
   }
 
-  const adSetRows = (adSetsRes.data ?? []) as {
+  type AdSetRow = {
     meta_ad_set_id: string;
     name: string;
     status: string | null;
     effective_status: string | null;
-  }[];
-  const adRows = (adsRes.data ?? []) as {
+    daily_budget?: number | null;
+    lifetime_budget?: number | null;
+    optimization_goal?: string | null;
+    billing_event?: string | null;
+    bid_strategy?: string | null;
+    bid_amount?: number | null;
+    start_time?: string | null;
+    end_time?: string | null;
+    destination_type?: string | null;
+    attribution_spec?: unknown;
+    promoted_object?: unknown;
+    targeting_summary?: unknown;
+  };
+  type AdRow = {
     meta_ad_id: string;
     meta_ad_set_id: string;
     name: string;
     status: string | null;
     effective_status: string | null;
+    creative_id?: string | null;
     creative_thumbnail_url: string | null;
     creative_title: string | null;
     creative_body: string | null;
-  }[];
+    creative_cta?: string | null;
+    creative_link_url?: string | null;
+  };
+
+  const adSetRows = (adSetsRes.data ?? []) as AdSetRow[];
+  const adRows = (adsRes.data ?? []) as AdRow[];
 
   const adSetInsightById = new Map<string, NormalizedDailyInsight[]>();
   for (const row of (adSetInsightsRes.data ?? []) as DailyInsightDb[]) {
@@ -363,6 +438,78 @@ export async function loadCampaignHierarchyView(
 
   const rawObjective = campaign.rawObjective ?? null;
 
+  const anyAdSetBudget = adSetRows.some(
+    (a) =>
+      (typeof a.daily_budget === "number" && a.daily_budget > 0) ||
+      (typeof a.lifetime_budget === "number" && a.lifetime_budget > 0),
+  );
+  const campaignConfig = buildCampaignConfiguration({
+    objective:
+      (typeof campRow?.raw_objective === "string"
+        ? campRow.raw_objective
+        : null) ?? rawObjective,
+    status:
+      (typeof campRow?.status === "string" ? campRow.status : null) ??
+      campaign.status,
+    effectiveStatus:
+      (typeof campRow?.effective_status === "string"
+        ? campRow.effective_status
+        : null) ?? campaign.effectiveStatus,
+    buyingType:
+      (typeof campRow?.buying_type === "string" ? campRow.buying_type : null) ??
+      campaign.buyingType,
+    specialAdCategories: campRow?.special_ad_categories ?? null,
+    dailyBudget:
+      typeof campRow?.daily_budget === "number"
+        ? campRow.daily_budget
+        : campaign.dailyBudget,
+    lifetimeBudget:
+      typeof campRow?.lifetime_budget === "number"
+        ? campRow.lifetime_budget
+        : campaign.lifetimeBudget,
+    isAdsetBudgetSharingEnabled:
+      typeof campRow?.is_adset_budget_sharing_enabled === "boolean"
+        ? campRow.is_adset_budget_sharing_enabled
+        : null,
+    anyAdSetBudget,
+  });
+
+  const adSetConfigs = adSetRows.map((as) =>
+    buildAdSetConfiguration({
+      name: as.name,
+      status: as.status,
+      effectiveStatus: as.effective_status,
+      dailyBudget: as.daily_budget ?? null,
+      lifetimeBudget: as.lifetime_budget ?? null,
+      optimizationGoal: as.optimization_goal ?? null,
+      billingEvent: as.billing_event ?? null,
+      bidStrategy: as.bid_strategy ?? null,
+      bidAmount: as.bid_amount ?? null,
+      startAt: as.start_time ?? null,
+      endAt: as.end_time ?? null,
+      destinationType: as.destination_type ?? null,
+      attributionSpec: as.attribution_spec ?? null,
+      promotedObject: as.promoted_object ?? null,
+      targetingSummary: parseStoredTargetingSummary(as.targeting_summary),
+    }),
+  );
+
+  const observations = buildConfigurationObservations({
+    campaign: campaignConfig,
+    adSets: adSetConfigs,
+  });
+  const plannedVsActual = comparePlannedVsActual({
+    planned: options?.planned ?? null,
+    campaign: campaignConfig,
+    primaryAdSet: adSetConfigs[0] ?? null,
+  });
+  const campaignPresentation = buildConfigPresentation({
+    campaign: campaignConfig,
+    primaryAdSet: adSetConfigs[0] ?? null,
+    observations,
+    plannedVsActual,
+  });
+
   const adsByAdSet = new Map<string, HierarchyAdView[]>();
   for (const ad of adRows) {
     const metrics = evaluateFromRows(
@@ -371,6 +518,17 @@ export async function loadCampaignHierarchyView(
       safeTarget,
       rawObjective,
     );
+    const adConfig = buildAdConfiguration({
+      name: ad.name,
+      status: ad.status,
+      effectiveStatus: ad.effective_status,
+      creativeId: ad.creative_id ?? null,
+      creativeName: null,
+      creativeTitle: ad.creative_title,
+      creativeCta: ad.creative_cta ?? null,
+      creativeLinkUrl: ad.creative_link_url ?? null,
+    });
+    const { beginner, professional } = presentAdConfig(adConfig);
     const view: HierarchyAdView = {
       metaAdId: ad.meta_ad_id,
       name: ad.name,
@@ -385,19 +543,35 @@ export async function loadCampaignHierarchyView(
       creativeThumbnailUrl: ad.creative_thumbnail_url,
       creativeTitle: ad.creative_title,
       creativeBody: ad.creative_body,
+      configuration: {
+        beginner,
+        professional,
+        observations: [],
+        plannedVsActual: null,
+      },
     };
     const list = adsByAdSet.get(ad.meta_ad_set_id) ?? [];
     list.push(view);
     adsByAdSet.set(ad.meta_ad_set_id, list);
   }
 
-  const adSets: HierarchyAdSetView[] = adSetRows.map((as) => {
+  const adSets: HierarchyAdSetView[] = adSetRows.map((as, idx) => {
     const metrics = evaluateFromRows(
       adSetInsightById.get(as.meta_ad_set_id) ?? [],
       primaryKpi,
       safeTarget,
       rawObjective,
     );
+    const cfg = adSetConfigs[idx]!;
+    const presentation = buildAdSetConfigPresentation({
+      adSet: cfg,
+      campaignBudgetLevel: campaignConfig.budgetLevel,
+      observations: observations.filter(
+        (o) =>
+          o.scope === "AD_SET" &&
+          o.evidence.some((e) => e.includes(as.name)),
+      ),
+    });
     return {
       metaAdSetId: as.meta_ad_set_id,
       name: as.name,
@@ -410,6 +584,7 @@ export async function loadCampaignHierarchyView(
       dataSufficiency: metrics.dataSufficiency,
       operationalState: metrics.operationalState,
       ads: adsByAdSet.get(as.meta_ad_set_id) ?? [],
+      configuration: presentation,
     };
   });
 
@@ -470,7 +645,8 @@ export async function loadCampaignHierarchyView(
   return {
     metaCampaignId: campaign.metaCampaignId,
     campaignName:
-      (campRow as { name?: string } | null)?.name?.trim() || campaign.name,
+      (typeof campRow?.name === "string" && campRow.name.trim()) ||
+      campaign.name,
     rawObjective,
     performanceFamily: resolvePerformanceFamily(rawObjective),
     adSets,
@@ -480,5 +656,6 @@ export async function loadCampaignHierarchyView(
       lines,
     },
     hierarchyAvailable: adSets.length > 0,
+    configuration: campaignPresentation,
   };
 }

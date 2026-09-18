@@ -18,7 +18,7 @@ import { MetaError } from "@/lib/meta/errors";
 import { graphApiBase, mapGraphErrorToMetaError } from "@/lib/meta/graph";
 
 export const META_AD_FIELDS =
-  "id,name,adset_id,campaign_id,status,effective_status";
+  "id,name,adset_id,campaign_id,status,effective_status,creative{id,name,title,body,call_to_action_type,thumbnail_url,image_url,link_url,object_url}";
 export const META_ADS_PAGE_LIMIT = 50;
 export const META_ADS_MAX_PAGES = 5;
 

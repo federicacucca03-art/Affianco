@@ -211,6 +211,7 @@ export function buildAllyCampaignCopilotContext(input: {
     configuration,
     linkedNativeId: identity.linkedNativeId,
     hierarchy: null,
+    metaConfiguration: null,
   };
 }
 
@@ -273,6 +274,24 @@ export function fitAllyCopilotInput(input: {
             ? { ...input.context.hierarchy.focusHint }
             : null,
           diagnosisLines: [...input.context.hierarchy.diagnosisLines],
+        }
+      : null,
+    metaConfiguration: input.context.metaConfiguration
+      ? {
+          beginnerLines: input.context.metaConfiguration.beginnerLines.map(
+            (l) => ({ ...l }),
+          ),
+          observations: input.context.metaConfiguration.observations.map(
+            (o) => ({ ...o }),
+          ),
+          plannedVsActual: input.context.metaConfiguration.plannedVsActual
+            ? input.context.metaConfiguration.plannedVsActual.map((p) => ({
+                ...p,
+              }))
+            : null,
+          unknownFields: [
+            ...input.context.metaConfiguration.unknownFields,
+          ],
         }
       : null,
   };

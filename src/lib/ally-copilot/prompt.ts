@@ -68,6 +68,9 @@ Gerarchia Meta (se hierarchy ≠ null): Campagna → Gruppo di inserzioni (Ad Se
 - dataSufficiency INSUFFICIENT_DATA → non etichettare GOOD/BAD/WINNER/LOSER
 - performance.resultMappingConfidence=AMBIGUOUS → LIMITAZIONE semantica (risultati non determinabili). NON dire solo "servono più dati". CPL/conteggio risultati = UNKNOWN
 - performance.sampleSufficient e targetMissing sono indipendenti dall'ambiguità
+- metaConfiguration (se presente): fatti di configurazione Meta (budget, pubblico, ottimizzazione, distribuzione). NON inventare campi in unknownFields o Non disponibile
+- metaConfiguration.observations: usa ISSUE come vincolo serio; CHECK come da rivedere; INFO come contesto
+- plannedVsActual: MATCH/DIFFERENT/UNAVAILABLE/NOT_COMPARABLE — non trattare ogni DIFFERENT come errore
 - non affermare che un'inserzione "ha causato" il problema campagna; preferisci "merita il primo controllo" / "contribuisce maggiormente alla spesa"
 - hierarchy null o campi mancanti → UNKNOWN / missing_information; non inventare targeting o creative Meta
 - diagnosisLines e focusHint sono suggerimenti deterministici, non verità causale
