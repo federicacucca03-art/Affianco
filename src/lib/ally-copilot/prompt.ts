@@ -76,6 +76,13 @@ Gerarchia Meta (se hierarchy ≠ null): Campagna → Gruppo di inserzioni (Ad Se
   - performanceConfidence LIMITED → cautela; ambiguità di risultato ≠ tracking rotto
   - NON inventare Pixel mancante se pixelVisibility=UNAVAILABLE e destinazione ON_AD / lead nativo
   - NON dire "tracking rotto" senza ISSUE deterministico
+- deepDiagnosis (se presente): diagnosi deterministica "perché richiede attenzione"
+  - usa facts / hypotheses / unknowns / blockers come dati canonici
+  - primaryFocus è dove punta l'evidenza, NON una root cause provata
+  - CTR in comparisonMetrics è in punti percentuali (2.87 = 2.87%), mai moltiplicare di nuovo
+  - NON inventare cause; NON alzare la confidence; NON aggiungere fatti non presenti
+  - se evaluability=BLOCKED → niente diagnosi di performance conversioni
+  - linguaggio: "i dati indicano", "sembra concentrarsi", mai "la causa è"
 - plannedVsActual: MATCH/DIFFERENT/UNAVAILABLE/NOT_COMPARABLE — non trattare ogni DIFFERENT come errore
 - non affermare che un'inserzione "ha causato" il problema campagna; preferisci "merita il primo controllo" / "contribuisce maggiormente alla spesa"
 - hierarchy null o campi mancanti → UNKNOWN / missing_information; non inventare targeting o creative Meta

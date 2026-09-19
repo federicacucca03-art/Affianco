@@ -460,6 +460,26 @@ export async function loadAllyCampaignCopilotContext(
                 ],
               }
             : null,
+          deepDiagnosis: view.deepDiagnosis
+            ? {
+                evaluability: view.deepDiagnosis.evaluability,
+                primaryFocus: view.deepDiagnosis.primaryFocus,
+                confidence: view.deepDiagnosis.confidence,
+                label: view.deepDiagnosis.beginnerLabel,
+                summary: view.deepDiagnosis.beginnerSummary,
+                facts: [...view.deepDiagnosis.facts],
+                hypotheses: [...view.deepDiagnosis.hypotheses],
+                unknowns: [...view.deepDiagnosis.unknowns],
+                blockers: [...view.deepDiagnosis.blockers],
+                nextCheck: view.deepDiagnosis.nextCheck,
+                selfComparison: view.deepDiagnosis.selfComparison,
+                comparisonWindowLabel:
+                  view.deepDiagnosis.comparisonWindowLabel,
+                comparisonMetrics: view.deepDiagnosis.comparisonMetrics
+                  ? { ...view.deepDiagnosis.comparisonMetrics }
+                  : null,
+              }
+            : null,
         };
         if (hierarchy?.focusHint && context.decision.nextActionType) {
           const refined = applyHierarchyToNextAction(
@@ -482,7 +502,12 @@ export async function loadAllyCampaignCopilotContext(
         }
       }
     } catch {
-      context = { ...context, hierarchy: null, trackingHealth: null };
+      context = {
+        ...context,
+        hierarchy: null,
+        trackingHealth: null,
+        deepDiagnosis: null,
+      };
     }
   }
 

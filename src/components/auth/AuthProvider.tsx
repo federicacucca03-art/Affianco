@@ -6,10 +6,12 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { clearAllySessionUiForUser } from "@/lib/ally-session-ui";
 
 type AuthContextValue = {
   user: User | null;
@@ -26,11 +28,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const lastUserIdRef = useRef<string | null>(null);
 
   const syncFromSession = useCallback((next: Session | null) => {
     setSession(next);
     setUser(next?.user ?? null);
   }, []);
+
+  useEffect(() => {
+    if (user?.id) lastUserIdRef.current = user.id;
+  }, [user?.id]);
 
   const refresh = useCallback(async () => {
     const { data, error } = await supabase.auth.getSession();
@@ -58,8 +65,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange(
-      (_event, nextSession) => {
+      (event, nextSession) => {
         if (!attivo) return;
+        if (event === "SIGNED_OUT" && lastUserIdRef.current) {
+          clearAllySessionUiForUser(lastUserIdRef.current);
+          lastUserIdRef.current = null;
+        }
         syncFromSession(nextSession);
         setLoading(false);
       },
@@ -72,10 +83,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [syncFromSession]);
 
   const signOut = useCallback(async () => {
+    const uid = lastUserIdRef.current ?? user?.id ?? null;
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    if (uid) clearAllySessionUiForUser(uid);
+    lastUserIdRef.current = null;
     syncFromSession(null);
-  }, [syncFromSession]);
+  }, [syncFromSession, user?.id]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

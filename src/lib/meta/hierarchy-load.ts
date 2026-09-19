@@ -29,6 +29,11 @@ import {
   buildTrackingHealth,
   type TrackingHealth,
 } from "@/lib/meta/tracking-health";
+import {
+  buildDeepDiagnosis,
+  type DeepDiagnosis,
+} from "@/lib/meta/deep-diagnosis";
+import { computeMetaTrend } from "@/lib/meta/meta-trend";
 import { MetaError } from "@/lib/meta/errors";
 import type { NormalizedDailyInsight } from "@/lib/meta/insight-normalize";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
@@ -90,6 +95,7 @@ export type CampaignHierarchyView = {
   hierarchyAvailable: boolean;
   configuration: ConfigPresentation | null;
   trackingHealth: TrackingHealth | null;
+  deepDiagnosis: DeepDiagnosis | null;
 };
 
 type DailyInsightDb = {
@@ -389,6 +395,7 @@ export async function loadCampaignHierarchyView(
       hierarchyAvailable: false,
       configuration: null,
       trackingHealth: null,
+      deepDiagnosis: null,
     };
   }
 
@@ -729,6 +736,68 @@ export async function loadCampaignHierarchyView(
         })
       : null;
 
+  const trend =
+    allInsightRows.length > 0 ? computeMetaTrend(allInsightRows) : null;
+  const campaignStatus =
+    (typeof campRow?.effective_status === "string" &&
+      campRow.effective_status) ||
+    (typeof campRow?.status === "string" && campRow.status) ||
+    null;
+  const statusUpper = (campaignStatus ?? "").toUpperCase();
+  const isHistorical =
+    statusUpper === "PAUSED" ||
+    statusUpper.includes("PAUSED") ||
+    statusUpper === "DELETED" ||
+    statusUpper === "ARCHIVED";
+
+  const campaignMetrics = evaluateFromRows(
+    allInsightRows,
+    primaryKpi,
+    safeTarget,
+    rawObjective,
+  );
+
+  const deepDiagnosis =
+    trackingHealth ||
+    campaignPresentation ||
+    allInsightRows.length > 0 ||
+    adSets.length > 0
+      ? buildDeepDiagnosis({
+          objective: rawObjective,
+          performanceFamily: resolvePerformanceFamily(rawObjective),
+          destinationType: primaryAs?.destination_type ?? null,
+          effectiveStatus: campaignStatus,
+          isHistorical,
+          spend: campaignAgg.spend,
+          impressions: campaignAgg.impressions,
+          linkClicks: campaignAgg.linkClicks,
+          landingPageViews: lpvSum > 0 ? lpvSum : null,
+          ctr: campaignAgg.ctr,
+          cpc: campaignAgg.cpc,
+          frequency: null,
+          resultMappingConfidence: campaignAgg.resultMappingConfidence,
+          primaryResults: campaignMetrics.results,
+          costPerResult: campaignMetrics.costPerResult,
+          hasTarget: safeTarget != null,
+          targetValue: safeTarget,
+          sampleSufficient:
+            campaignMetrics.dataSufficiency === "SUFFICIENT"
+              ? true
+              : campaignMetrics.dataSufficiency === "INSUFFICIENT_DATA"
+                ? false
+                : null,
+          trackingHealth,
+          configuration: campaignPresentation,
+          plannedVsActual: campaignPresentation?.plannedVsActual ?? null,
+          trend,
+          hierarchyFocus: {
+            focusAdSetName: focusAdSet?.name ?? null,
+            focusAdName: focusAd?.name ?? null,
+            lines,
+          },
+        })
+      : null;
+
   return {
     metaCampaignId: campaign.metaCampaignId,
     campaignName:
@@ -745,5 +814,6 @@ export async function loadCampaignHierarchyView(
     hierarchyAvailable: adSets.length > 0,
     configuration: campaignPresentation,
     trackingHealth,
+    deepDiagnosis,
   };
 }

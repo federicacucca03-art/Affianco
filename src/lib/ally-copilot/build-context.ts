@@ -213,6 +213,7 @@ export function buildAllyCampaignCopilotContext(input: {
     hierarchy: null,
     metaConfiguration: null,
     trackingHealth: null,
+    deepDiagnosis: null,
   };
 }
 
@@ -307,6 +308,18 @@ export function fitAllyCopilotInput(input: {
           otherObservedActions: [
             ...input.context.trackingHealth.otherObservedActions,
           ],
+        }
+      : null,
+    deepDiagnosis: input.context.deepDiagnosis
+      ? {
+          ...input.context.deepDiagnosis,
+          facts: [...input.context.deepDiagnosis.facts],
+          hypotheses: [...input.context.deepDiagnosis.hypotheses],
+          unknowns: [...input.context.deepDiagnosis.unknowns],
+          blockers: [...input.context.deepDiagnosis.blockers],
+          comparisonMetrics: input.context.deepDiagnosis.comparisonMetrics
+            ? { ...input.context.deepDiagnosis.comparisonMetrics }
+            : null,
         }
       : null,
   };

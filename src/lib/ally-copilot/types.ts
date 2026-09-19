@@ -212,6 +212,31 @@ export type AllyCopilotTrackingHealth = {
   otherObservedActions: string[];
 };
 
+/** M10F — deterministic deep diagnosis for Ask Ally. */
+export type AllyCopilotDeepDiagnosis = {
+  evaluability: string;
+  primaryFocus: string | null;
+  confidence: string;
+  label: string;
+  summary: string;
+  facts: string[];
+  hypotheses: string[];
+  unknowns: string[];
+  blockers: string[];
+  nextCheck: string | null;
+  selfComparison: string;
+  comparisonWindowLabel: string | null;
+  /** CTR values are percentage points (2.87 = 2.87%). */
+  comparisonMetrics: {
+    ctrPrevious: number | null;
+    ctrCurrent: number | null;
+    ctrDeltaPercent: number | null;
+    cpcPrevious: number | null;
+    cpcCurrent: number | null;
+    cpcDeltaPercent: number | null;
+  } | null;
+};
+
 /** Canonical compact context sent to the model (plus question + short history). */
 export type AllyCampaignCopilotContext = {
   identity: AllyCopilotIdentity;
@@ -225,6 +250,7 @@ export type AllyCampaignCopilotContext = {
   hierarchy: AllyCopilotHierarchy | null;
   metaConfiguration: AllyCopilotMetaConfiguration | null;
   trackingHealth: AllyCopilotTrackingHealth | null;
+  deepDiagnosis: AllyCopilotDeepDiagnosis | null;
 };
 
 export type AllyCopilotAnswer = {

@@ -1,7 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { supabase } from "@/lib/supabase";
+import {
+  ALLY_SESSION_UI_VERSION,
+  idsToRecord,
+  readResultsUiSession,
+  recordToIds,
+  writeResultsUiSession,
+  type ResultsUiSessionState,
+} from "@/lib/ally-session-ui";
 import {
   etichettaHierarchyState,
   etichettaMetaDeliveryStatus,
@@ -95,6 +104,18 @@ type HierarchyPayload = {
     }>;
     professionalLines: Array<{ key: string; label: string; value: string }>;
   } | null;
+  deepDiagnosis?: {
+    beginnerLabel: string;
+    beginnerSummary: string;
+    evaluability: string;
+    primaryFocus: string | null;
+    confidence: string;
+    facts: string[];
+    hypotheses: string[];
+    unknowns: string[];
+    nextCheck: string | null;
+    professionalLines: Array<{ key: string; label: string; value: string }>;
+  } | null;
 };
 
 const AMBIGUOUS_RESULTS_HINT =
@@ -138,10 +159,13 @@ function MetaDeliveryBadge({ status }: { status: string | null }) {
 
 function TrackingHealthSummary({
   health,
+  open,
+  onOpenChange,
 }: {
   health: NonNullable<HierarchyPayload["trackingHealth"]>;
+  open: boolean;
+  onOpenChange: (next: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
   return (
     <div className="mt-2 border-t border-[rgba(0,0,0,0.05)] pt-2">
       <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
@@ -172,7 +196,7 @@ function TrackingHealthSummary({
       ) : null}
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => onOpenChange(!open)}
         className="mt-1.5 text-[11px] font-medium text-[var(--accent)]"
       >
         {open ? "Nascondi dettagli misurazione" : "Mostra dettagli misurazione"}
@@ -191,12 +215,61 @@ function TrackingHealthSummary({
   );
 }
 
+function DeepDiagnosisSummary({
+  diagnosis,
+  open,
+  onOpenChange,
+}: {
+  diagnosis: NonNullable<HierarchyPayload["deepDiagnosis"]>;
+  open: boolean;
+  onOpenChange: (next: boolean) => void;
+}) {
+  return (
+    <div className="mt-2 border-t border-[rgba(0,0,0,0.05)] pt-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
+        Diagnosi
+      </p>
+      <p className="mt-1 text-[12px] font-medium text-[var(--ink)]">
+        {diagnosis.beginnerLabel}
+      </p>
+      <p className="mt-0.5 text-[11px] leading-snug text-[var(--ink-muted)]">
+        {diagnosis.beginnerSummary}
+      </p>
+      {diagnosis.nextCheck ? (
+        <p className="mt-1 text-[10px] leading-snug text-[var(--ink-muted)]">
+          Prossimo controllo: {diagnosis.nextCheck}
+        </p>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => onOpenChange(!open)}
+        className="mt-1.5 text-[11px] font-medium text-[var(--accent)]"
+      >
+        {open ? "Nascondi evidenze" : "Mostra evidenze"}
+      </button>
+      {open ? (
+        <dl className="mt-1.5 space-y-0.5 border-t border-[rgba(0,0,0,0.04)] pt-1.5">
+          {diagnosis.professionalLines.map((row) => (
+            <div key={row.key} className="flex gap-2 text-[10px] leading-snug">
+              <dt className="shrink-0 text-[var(--ink-muted)]">{row.label}:</dt>
+              <dd className="min-w-0 text-[var(--ink)]">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+    </div>
+  );
+}
+
 function ConfigurationSummary({
   config,
+  open,
+  onOpenChange,
 }: {
   config: ConfigPresentation | null | undefined;
+  open: boolean;
+  onOpenChange: (next: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
   if (!config || config.beginner.length === 0) return null;
   return (
     <div className="mt-2 border-t border-[rgba(0,0,0,0.05)] pt-2">
@@ -225,7 +298,7 @@ function ConfigurationSummary({
         ))}
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => onOpenChange(!open)}
         className="mt-1.5 text-[11px] font-medium text-[var(--accent)]"
       >
         {open ? "Nascondi dettagli tecnici" : "Mostra configurazione"}
@@ -432,13 +505,70 @@ export function MetaHierarchyPanel({
   /** Ally UUID of meta_campaigns.id — not Meta Graph campaign id. */
   campaignId: string;
 }) {
+  const { user } = useAuth();
+  const userId = user?.id ?? "";
+  const scopeKey = userId && campaignId ? `${userId}:${campaignId}` : "";
+
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [campaignConfigOpen, setCampaignConfigOpen] = useState(false);
+  const [measurementDetailsOpen, setMeasurementDetailsOpen] = useState(false);
+  const [diagnosisEvidenceOpen, setDiagnosisEvidenceOpen] = useState(false);
+  const [adSetConfigOpen, setAdSetConfigOpen] = useState<
+    Record<string, boolean>
+  >({});
+  const [adConfigOpen, setAdConfigOpen] = useState<Record<string, boolean>>({});
+  const [activeUiScope, setActiveUiScope] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<HierarchyPayload | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const requestGen = useRef(0);
+
+  // SSR-safe: restore session UI only after mount (never during render).
+  useEffect(() => {
+    if (!scopeKey) {
+      setActiveUiScope(null);
+      return;
+    }
+    const ui = readResultsUiSession(userId, campaignId);
+    setOpen(ui.hierarchyOpen);
+    setExpanded(idsToRecord(ui.adSetExpandedIds));
+    setCampaignConfigOpen(ui.campaignConfigOpen);
+    setMeasurementDetailsOpen(ui.measurementDetailsOpen);
+    setDiagnosisEvidenceOpen(ui.diagnosisEvidenceOpen);
+    setAdSetConfigOpen(idsToRecord(ui.adSetConfigOpenIds));
+    setAdConfigOpen(idsToRecord(ui.adConfigOpenIds));
+    setActiveUiScope(scopeKey);
+  }, [scopeKey, userId, campaignId]);
+
+  useEffect(() => {
+    if (!scopeKey || activeUiScope !== scopeKey) return;
+    const state: ResultsUiSessionState = {
+      version: ALLY_SESSION_UI_VERSION,
+      hierarchyOpen: open,
+      adSetExpandedIds: recordToIds(expanded),
+      campaignConfigOpen,
+      measurementDetailsOpen,
+      diagnosisEvidenceOpen,
+      adSetConfigOpenIds: recordToIds(adSetConfigOpen),
+      adConfigOpenIds: recordToIds(adConfigOpen),
+    };
+    writeResultsUiSession(userId, campaignId, state);
+  }, [
+    scopeKey,
+    activeUiScope,
+    userId,
+    campaignId,
+    open,
+    expanded,
+    campaignConfigOpen,
+    measurementDetailsOpen,
+    diagnosisEvidenceOpen,
+    adSetConfigOpen,
+    adConfigOpen,
+  ]);
 
   const load = useCallback(async () => {
     abortRef.current?.abort();
@@ -547,10 +677,10 @@ export function MetaHierarchyPanel({
     };
   }, []);
 
+  // Canonical hierarchy payload always reloads on campaign change (fresh server data).
   useEffect(() => {
     setData(null);
     setError(null);
-    setExpanded({});
   }, [clientId, campaignId]);
 
   const adSetCount = data?.adSets.length ?? 0;
@@ -636,14 +766,42 @@ export function MetaHierarchyPanel({
 
                 {data.configuration ? (
                   <div className="rounded-[var(--radius)] border border-[rgba(0,0,0,0.06)] bg-[rgba(0,0,0,0.015)] px-3 py-2.5">
-                    <ConfigurationSummary config={data.configuration} />
+                    <ConfigurationSummary
+                      config={data.configuration}
+                      open={campaignConfigOpen}
+                      onOpenChange={setCampaignConfigOpen}
+                    />
                     {data.trackingHealth ? (
-                      <TrackingHealthSummary health={data.trackingHealth} />
+                      <TrackingHealthSummary
+                        health={data.trackingHealth}
+                        open={measurementDetailsOpen}
+                        onOpenChange={setMeasurementDetailsOpen}
+                      />
+                    ) : null}
+                    {data.deepDiagnosis ? (
+                      <DeepDiagnosisSummary
+                        diagnosis={data.deepDiagnosis}
+                        open={diagnosisEvidenceOpen}
+                        onOpenChange={setDiagnosisEvidenceOpen}
+                      />
                     ) : null}
                   </div>
-                ) : data.trackingHealth ? (
+                ) : data.trackingHealth || data.deepDiagnosis ? (
                   <div className="rounded-[var(--radius)] border border-[rgba(0,0,0,0.06)] bg-[rgba(0,0,0,0.015)] px-3 py-2.5">
-                    <TrackingHealthSummary health={data.trackingHealth} />
+                    {data.trackingHealth ? (
+                      <TrackingHealthSummary
+                        health={data.trackingHealth}
+                        open={measurementDetailsOpen}
+                        onOpenChange={setMeasurementDetailsOpen}
+                      />
+                    ) : null}
+                    {data.deepDiagnosis ? (
+                      <DeepDiagnosisSummary
+                        diagnosis={data.deepDiagnosis}
+                        open={diagnosisEvidenceOpen}
+                        onOpenChange={setDiagnosisEvidenceOpen}
+                      />
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -688,7 +846,16 @@ export function MetaHierarchyPanel({
                               data.performanceFamily ?? "LEADS"
                             }
                           />
-                          <ConfigurationSummary config={adSet.configuration} />
+                          <ConfigurationSummary
+                            config={adSet.configuration}
+                            open={Boolean(adSetConfigOpen[adSet.metaAdSetId])}
+                            onOpenChange={(next) =>
+                              setAdSetConfigOpen((prev) => ({
+                                ...prev,
+                                [adSet.metaAdSetId]: next,
+                              }))
+                            }
+                          />
                         </div>
 
                         <button
@@ -757,6 +924,15 @@ export function MetaHierarchyPanel({
                                       />
                                       <ConfigurationSummary
                                         config={ad.configuration}
+                                        open={Boolean(
+                                          adConfigOpen[ad.metaAdId],
+                                        )}
+                                        onOpenChange={(next) =>
+                                          setAdConfigOpen((prev) => ({
+                                            ...prev,
+                                            [ad.metaAdId]: next,
+                                          }))
+                                        }
                                       />
                                     </div>
                                   </li>

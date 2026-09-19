@@ -3,12 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AllyPanel } from "@/components/shell/AllyPanel";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { readBearerToken } from "@/lib/meta-import-client";
 import {
   ALLY_COPILOT_MAX_HISTORY_TURNS,
   type AllyCopilotAnswer,
   type AllyCopilotHistoryTurn,
 } from "@/lib/ally-copilot";
+import {
+  ALLY_SESSION_UI_VERSION,
+  readAskAllySession,
+  writeAskAllySession,
+  type AskAllySessionState,
+} from "@/lib/ally-session-ui";
 
 type Source = "NATIVE" | "META";
 
@@ -41,11 +48,48 @@ function provisionalSuggestions(statusHint: string | null | undefined): string[]
   ];
 }
 
+function toPersistedLatest(
+  latest: AllyCopilotAnswer | null,
+): AskAllySessionState["latest"] {
+  if (!latest) return null;
+  return {
+    answer: latest.answer,
+    confidence: latest.confidence,
+    evidence: latest.evidence,
+    hypotheses: latest.hypotheses,
+    missingInformation: latest.missingInformation,
+    suggestedNextQuestions: latest.suggestedNextQuestions,
+    recommendedActionHref: latest.recommendedActionHref,
+    fromAi: latest.fromAi,
+  };
+}
+
+function fromPersistedLatest(
+  latest: AskAllySessionState["latest"],
+): AllyCopilotAnswer | null {
+  if (!latest) return null;
+  return {
+    answer: latest.answer,
+    confidence: latest.confidence as AllyCopilotAnswer["confidence"],
+    evidence: latest.evidence,
+    hypotheses: latest.hypotheses,
+    missingInformation: latest.missingInformation,
+    suggestedNextQuestions: latest.suggestedNextQuestions,
+    recommendedActionHref: latest.recommendedActionHref,
+    fromAi: latest.fromAi,
+  };
+}
+
 export function ChiediAdAllyPanel({
   campaignId,
   source,
   statusHint,
 }: Props) {
+  const { user } = useAuth();
+  const userId = user?.id ?? "";
+  const scopeKey =
+    userId && campaignId ? `${userId}:${campaignId}:${source}` : "";
+
   const [suggestions, setSuggestions] = useState<string[]>(() =>
     provisionalSuggestions(statusHint),
   );
@@ -54,6 +98,44 @@ export function ChiediAdAllyPanel({
   const [latest, setLatest] = useState<AllyCopilotAnswer | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeUiScope, setActiveUiScope] = useState<string | null>(null);
+
+  // SSR-safe session restore — never persist/restore loading; AI calls on restore = 0.
+  useEffect(() => {
+    if (!scopeKey) {
+      setActiveUiScope(null);
+      return;
+    }
+    const stored = readAskAllySession(userId, campaignId, source);
+    setHistory(stored.history);
+    setLatest(fromPersistedLatest(stored.latest));
+    setQuestion(stored.draft);
+    setError(stored.error);
+    setLoading(false);
+    setActiveUiScope(scopeKey);
+  }, [scopeKey, userId, campaignId, source]);
+
+  useEffect(() => {
+    if (!scopeKey || activeUiScope !== scopeKey) return;
+    const state: AskAllySessionState = {
+      version: ALLY_SESSION_UI_VERSION,
+      history: history.slice(-ALLY_COPILOT_MAX_HISTORY_TURNS),
+      latest: toPersistedLatest(latest),
+      draft: question,
+      error,
+    };
+    writeAskAllySession(userId, campaignId, source, state);
+  }, [
+    scopeKey,
+    activeUiScope,
+    userId,
+    campaignId,
+    source,
+    history,
+    latest,
+    question,
+    error,
+  ]);
 
   useEffect(() => {
     let attivo = true;
