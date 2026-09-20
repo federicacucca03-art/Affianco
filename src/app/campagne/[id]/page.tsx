@@ -21,6 +21,7 @@ import { PannelloAssetStrategia } from "@/components/campagne/PannelloAssetStrat
 import { PannelloDiagnosiPerformance } from "@/components/campagne/PannelloDiagnosiPerformance";
 import { DiarioBordo } from "@/components/campagne/DiarioBordo";
 import { ChiediAdAllyPanel } from "@/components/campagne/ChiediAdAllyPanel";
+import { MetaWritePreviewPanel } from "@/components/campagne/MetaWritePreviewPanel";
 import { etichettaHealth } from "@/lib/control-room";
 import { StatoChip, chipDaHealth } from "@/components/nuova-contatti/StatoChip";
 import {
@@ -427,6 +428,9 @@ export default function DettaglioCampagnaPage() {
             campagna={campagna}
             onEsportata={() => setDiarioRefreshKey((k) => k + 1)}
           />
+          {campagna.id ? (
+            <MetaWritePreviewPanel campaignId={campagna.id} />
+          ) : null}
         </div>
       ) : (
         <PannelloDiagnosiPerformance campagna={campagna} />
