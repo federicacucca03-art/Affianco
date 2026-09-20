@@ -15,7 +15,6 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { useOnboardingCampagna } from "@/components/OnboardingCampagnaContext";
 import { useAllySetupNav } from "@/components/shell/AllySetupNavProvider";
 import type { AllyNavItemId } from "@/lib/ally-nav";
 import { allyNavItemVisible } from "@/lib/ally-nav";
@@ -82,7 +81,6 @@ type Props = {
 export function SecondarySidebar({ aperta, onChiudi }: Props) {
   const pathname = usePathname();
   const router = useRouter();
-  const { apriModaleCampagna } = useOnboardingCampagna();
   const { nav } = useAllySetupNav();
   const [importBusy, setImportBusy] = useState(false);
 
@@ -139,8 +137,8 @@ export function SecondarySidebar({ aperta, onChiudi }: Props) {
               <button
                 type="button"
                 onClick={() => {
-                  apriModaleCampagna();
                   onChiudi();
+                  router.push("/campagne/nuova");
                 }}
                 className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-[var(--border)] bg-white px-3.5 text-[13.5px] font-semibold text-[var(--ink)] hover:bg-[var(--surface-hover)]"
               >
