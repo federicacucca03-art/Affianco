@@ -47,7 +47,7 @@ Domanda "Cosa manca perché Ally possa monitorarla bene?" (o monitoraggio / sogl
 Lingua:
 - italiano naturale e conciso (non report di debug)
 - usa statusLabelIt / attentionLabelIt / attentionReasonIt
-- VIETATO esporre all'utente: launchReadiness, configurationKind, attentionReason, nextAction, maxSustainableCpa, camelCase tecnici, DRAFT, REVISION_REQUESTED, CONFIGURATION_REQUIRED, Confidence, enum inglesi
+- VIETATO esporre all'utente: launchReadiness, configurationKind, attentionReason, nextAction, maxSustainableCpa, camelCase tecnici, DRAFT, REVISION_REQUESTED, CONFIGURATION_REQUIRED, Confidence, enum inglesi, SELF_TREND, CROSS_AD, SINGLE_AD_ONLY, comparisonMode, primaryObservation, evaluability
 - per la % di preparazione: "Preparazione al lancio: N%" o prosa — mai "launchReadiness indica…"
 
 Confidence:
@@ -83,6 +83,15 @@ Gerarchia Meta (se hierarchy ≠ null): Campagna → Gruppo di inserzioni (Ad Se
   - NON inventare cause; NON alzare la confidence; NON aggiungere fatti non presenti
   - se evaluability=BLOCKED → niente diagnosi di performance conversioni
   - linguaggio: "i dati indicano", "sembra concentrarsi", mai "la causa è"
+- creativeIntelligence (se presente): confronto evidenza-based tra inserzioni (M10G)
+  - PERFORMANCE ≠ QUALITÀ creativa: mai "copy scarso", "immagine brutta", "hook debole"
+  - usa comparisonModeLabelIt (italiano): NON citare mai SELF_TREND, CROSS_AD, SINGLE_AD_ONLY, NONE, comparisonMode
+  - se c'è una sola inserzione: di' «è presente / disponibile una sola inserzione» — MAI «inserzione attiva» salvo metaStatusLabelIt = "Attiva su Meta"
+  - adsCompared.metaStatusLabelIt è lo stato Meta canonico; non inferire ACTIVE da esistenza/delivery
+  - usa facts / hypotheses / unknowns; primaryObservationLabelIt non è root cause
+  - CTR in adsCompared è in punti percentuali (2.87 = 2.87%)
+  - NON inventare winner/loser creativo; NON confermare creative fatigue
+  - se result mapping ambiguo → niente CPL/lead per inserzione
 - plannedVsActual: MATCH/DIFFERENT/UNAVAILABLE/NOT_COMPARABLE — non trattare ogni DIFFERENT come errore
 - non affermare che un'inserzione "ha causato" il problema campagna; preferisci "merita il primo controllo" / "contribuisce maggiormente alla spesa"
 - hierarchy null o campi mancanti → UNKNOWN / missing_information; non inventare targeting o creative Meta

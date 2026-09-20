@@ -237,6 +237,27 @@ export type AllyCopilotDeepDiagnosis = {
   } | null;
 };
 
+/** M10G — evidence-based creative intelligence for Ask Ally. */
+export type AllyCopilotCreativeIntelligence = {
+  /** Italian only — never raw SELF_TREND / CROSS_AD enums. */
+  comparisonModeLabelIt: string;
+  confidence: string;
+  primaryObservationLabelIt: string;
+  label: string;
+  summary: string;
+  facts: string[];
+  hypotheses: string[];
+  unknowns: string[];
+  nextTest: string | null;
+  adsCompared: Array<{
+    name: string;
+    metaStatusLabelIt: string | null;
+    ctr: number | null;
+    cpc: number | null;
+    spendShare: number | null;
+  }>;
+};
+
 /** Canonical compact context sent to the model (plus question + short history). */
 export type AllyCampaignCopilotContext = {
   identity: AllyCopilotIdentity;
@@ -251,6 +272,7 @@ export type AllyCampaignCopilotContext = {
   metaConfiguration: AllyCopilotMetaConfiguration | null;
   trackingHealth: AllyCopilotTrackingHealth | null;
   deepDiagnosis: AllyCopilotDeepDiagnosis | null;
+  creativeIntelligence: AllyCopilotCreativeIntelligence | null;
 };
 
 export type AllyCopilotAnswer = {

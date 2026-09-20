@@ -1,6 +1,6 @@
 /**
  * M10F — Deterministic deep diagnosis (measurement → delivery → … → hypothesis).
- * Read-only. No Meta writes. No creative scoring (M10G).
+ * Read-only. No Meta writes. No creative scoring (see M10G).
  */
 
 import type { PerformanceObjectiveFamily } from "@/lib/meta/objective-performance";

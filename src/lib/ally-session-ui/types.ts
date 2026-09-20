@@ -12,6 +12,7 @@ export type ResultsUiSessionState = {
   campaignConfigOpen: boolean;
   measurementDetailsOpen: boolean;
   diagnosisEvidenceOpen: boolean;
+  creativeEvidenceOpen: boolean;
   /** Ad-set configuration technical disclosure by metaAdSetId. */
   adSetConfigOpenIds: string[];
   /** Ad configuration technical disclosure by metaAdId. */
@@ -42,6 +43,7 @@ export const DEFAULT_RESULTS_UI_SESSION: ResultsUiSessionState = {
   campaignConfigOpen: false,
   measurementDetailsOpen: false,
   diagnosisEvidenceOpen: false,
+  creativeEvidenceOpen: false,
   adSetConfigOpenIds: [],
   adConfigOpenIds: [],
 };

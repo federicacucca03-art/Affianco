@@ -43,6 +43,10 @@ export function parseResultsUiSession(raw: unknown): ResultsUiSessionState | nul
   if (typeof o.campaignConfigOpen !== "boolean") return null;
   if (typeof o.measurementDetailsOpen !== "boolean") return null;
   if (typeof o.diagnosisEvidenceOpen !== "boolean") return null;
+  const creativeEvidenceOpen =
+    typeof o.creativeEvidenceOpen === "boolean"
+      ? o.creativeEvidenceOpen
+      : false;
   if (!isStringArray(o.adSetExpandedIds)) return null;
   if (!isStringArray(o.adSetConfigOpenIds)) return null;
   const adConfigOpenIds = isStringArray(o.adConfigOpenIds)
@@ -55,6 +59,7 @@ export function parseResultsUiSession(raw: unknown): ResultsUiSessionState | nul
     campaignConfigOpen: o.campaignConfigOpen,
     measurementDetailsOpen: o.measurementDetailsOpen,
     diagnosisEvidenceOpen: o.diagnosisEvidenceOpen,
+    creativeEvidenceOpen,
     adSetConfigOpenIds: o.adSetConfigOpenIds.slice(0, 50),
     adConfigOpenIds: adConfigOpenIds.slice(0, 50),
   };

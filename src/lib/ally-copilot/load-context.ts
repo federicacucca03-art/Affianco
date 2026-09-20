@@ -24,6 +24,7 @@ import {
   creativeSemanticNoteForAlly,
   currentPrincipalSemanticSnapshot,
 } from "@/lib/creative-semantic-fit";
+import { etichettaMetaDeliveryStatus } from "@/lib/meta/hierarchy-evaluate";
 
 function admin() {
   try {
@@ -480,6 +481,31 @@ export async function loadAllyCampaignCopilotContext(
                   : null,
               }
             : null,
+          creativeIntelligence: view.creativeIntelligence
+            ? {
+                comparisonModeLabelIt:
+                  view.creativeIntelligence.comparisonModeLabelIt,
+                confidence: view.creativeIntelligence.confidence,
+                primaryObservationLabelIt:
+                  view.creativeIntelligence.beginnerLabel,
+                label: view.creativeIntelligence.beginnerLabel,
+                summary: view.creativeIntelligence.beginnerSummary,
+                facts: [...view.creativeIntelligence.facts],
+                hypotheses: [...view.creativeIntelligence.hypotheses],
+                unknowns: [...view.creativeIntelligence.unknowns],
+                nextTest: view.creativeIntelligence.nextTest,
+                adsCompared: view.creativeIntelligence.ads.map((a) => ({
+                  name: a.name,
+                  metaStatusLabelIt:
+                    etichettaMetaDeliveryStatus(
+                      a.effectiveStatus ?? a.status,
+                    ) ?? null,
+                  ctr: a.ctr,
+                  cpc: a.cpc,
+                  spendShare: a.spendShare,
+                })),
+              }
+            : null,
         };
         if (hierarchy?.focusHint && context.decision.nextActionType) {
           const refined = applyHierarchyToNextAction(
@@ -507,6 +533,7 @@ export async function loadAllyCampaignCopilotContext(
         hierarchy: null,
         trackingHealth: null,
         deepDiagnosis: null,
+        creativeIntelligence: null,
       };
     }
   }

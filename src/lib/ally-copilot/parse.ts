@@ -109,6 +109,10 @@ function safeHref(
 const PROHIBITED =
   /pausa(re)?\s+la\s+campagna|aumenta(re)?\s+il\s+budget|riduci\s+il\s+budget|pubblica\s+su\s+meta|scrivi\s+su\s+meta|access_token/i;
 
+export function scrubAllyCopilotUserFacingText(text: string): string {
+  return scrubInternalLabels(text);
+}
+
 function scrubInternalLabels(text: string): string {
   return text
     .replace(/\blaunchReadiness\b/gi, "preparazione al lancio")
@@ -126,6 +130,17 @@ function scrubInternalLabels(text: string): string {
     .replace(/\bConfidence:\s*MEDIUM\b/gi, "")
     .replace(/\bConfidence:\s*LOW\b/gi, "")
     .replace(/\bConfidence:\s*UNKNOWN\b/gi, "")
+    // M10G.1 — never leak creative comparison enums / invent ACTIVE from presence
+    .replace(/\bcomparisonMode\s*:?\s*/gi, "")
+    .replace(/\bSELF_TREND\b/g, "andamento della stessa inserzione nel tempo")
+    .replace(/\bCROSS_AD\b/g, "confronto tra inserzioni")
+    .replace(/\bSINGLE_AD_ONLY\b/g, "una sola inserzione disponibile per l'analisi")
+    .replace(/\bprimaryObservation\b/gi, "osservazione")
+    .replace(/\bevaluability\b/gi, "valutabilità")
+    .replace(/\bun['’]?\s*sola\s+inserzione\s+attiva\b/gi, "una sola inserzione")
+    .replace(/\bsola\s+inserzione\s+attiva\b/gi, "sola inserzione")
+    .replace(/\binserzioni\s+attive\b/gi, "inserzioni")
+    .replace(/\binserzione\s+attiva\b/gi, "inserzione")
     .replace(/\s{2,}/g, " ")
     .trim();
 }

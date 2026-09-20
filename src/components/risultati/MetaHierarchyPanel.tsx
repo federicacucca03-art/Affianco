@@ -116,6 +116,25 @@ type HierarchyPayload = {
     nextCheck: string | null;
     professionalLines: Array<{ key: string; label: string; value: string }>;
   } | null;
+  creativeIntelligence?: {
+    beginnerLabel: string;
+    beginnerSummary: string;
+    evaluability: string;
+    comparisonMode: string;
+    confidence: string;
+    primaryObservation: string;
+    nextTest: string | null;
+    facts: string[];
+    hypotheses: string[];
+    unknowns: string[];
+    ads: Array<{
+      name: string;
+      creativeTitle: string | null;
+      creativeBody: string | null;
+      creativeCta: string | null;
+    }>;
+    professionalLines: Array<{ key: string; label: string; value: string }>;
+  } | null;
 };
 
 const AMBIGUOUS_RESULTS_HINT =
@@ -250,6 +269,69 @@ function DeepDiagnosisSummary({
       {open ? (
         <dl className="mt-1.5 space-y-0.5 border-t border-[rgba(0,0,0,0.04)] pt-1.5">
           {diagnosis.professionalLines.map((row) => (
+            <div key={row.key} className="flex gap-2 text-[10px] leading-snug">
+              <dt className="shrink-0 text-[var(--ink-muted)]">{row.label}:</dt>
+              <dd className="min-w-0 text-[var(--ink)]">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+    </div>
+  );
+}
+
+function CreativeIntelligenceSummary({
+  creative,
+  open,
+  onOpenChange,
+}: {
+  creative: NonNullable<HierarchyPayload["creativeIntelligence"]>;
+  open: boolean;
+  onOpenChange: (next: boolean) => void;
+}) {
+  const metaAd = creative.ads[0];
+  return (
+    <div className="mt-2 border-t border-[rgba(0,0,0,0.05)] pt-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
+        Intelligenza creativa
+      </p>
+      <p className="mt-1 text-[12px] font-medium text-[var(--ink)]">
+        {creative.beginnerLabel}
+      </p>
+      <p className="mt-0.5 text-[11px] leading-snug text-[var(--ink-muted)]">
+        {creative.beginnerSummary}
+      </p>
+      {creative.ads.length === 1 && metaAd ? (
+        <div className="mt-1.5 space-y-0.5 text-[10px] leading-snug text-[var(--ink-muted)]">
+          {metaAd.creativeTitle ? (
+            <p>
+              Titolo:{" "}
+              <span className="text-[var(--ink)]">{metaAd.creativeTitle}</span>
+            </p>
+          ) : null}
+          {metaAd.creativeCta ? (
+            <p>
+              CTA:{" "}
+              <span className="text-[var(--ink)]">{metaAd.creativeCta}</span>
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      {creative.nextTest ? (
+        <p className="mt-1 text-[10px] leading-snug text-[var(--ink-muted)]">
+          Prossimo test: {creative.nextTest}
+        </p>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => onOpenChange(!open)}
+        className="mt-1.5 text-[11px] font-medium text-[var(--accent)]"
+      >
+        {open ? "Nascondi evidenze" : "Mostra evidenze"}
+      </button>
+      {open ? (
+        <dl className="mt-1.5 space-y-0.5 border-t border-[rgba(0,0,0,0.04)] pt-1.5">
+          {creative.professionalLines.map((row) => (
             <div key={row.key} className="flex gap-2 text-[10px] leading-snug">
               <dt className="shrink-0 text-[var(--ink-muted)]">{row.label}:</dt>
               <dd className="min-w-0 text-[var(--ink)]">{row.value}</dd>
@@ -514,6 +596,7 @@ export function MetaHierarchyPanel({
   const [campaignConfigOpen, setCampaignConfigOpen] = useState(false);
   const [measurementDetailsOpen, setMeasurementDetailsOpen] = useState(false);
   const [diagnosisEvidenceOpen, setDiagnosisEvidenceOpen] = useState(false);
+  const [creativeEvidenceOpen, setCreativeEvidenceOpen] = useState(false);
   const [adSetConfigOpen, setAdSetConfigOpen] = useState<
     Record<string, boolean>
   >({});
@@ -538,6 +621,7 @@ export function MetaHierarchyPanel({
     setCampaignConfigOpen(ui.campaignConfigOpen);
     setMeasurementDetailsOpen(ui.measurementDetailsOpen);
     setDiagnosisEvidenceOpen(ui.diagnosisEvidenceOpen);
+    setCreativeEvidenceOpen(ui.creativeEvidenceOpen);
     setAdSetConfigOpen(idsToRecord(ui.adSetConfigOpenIds));
     setAdConfigOpen(idsToRecord(ui.adConfigOpenIds));
     setActiveUiScope(scopeKey);
@@ -552,6 +636,7 @@ export function MetaHierarchyPanel({
       campaignConfigOpen,
       measurementDetailsOpen,
       diagnosisEvidenceOpen,
+      creativeEvidenceOpen,
       adSetConfigOpenIds: recordToIds(adSetConfigOpen),
       adConfigOpenIds: recordToIds(adConfigOpen),
     };
@@ -566,6 +651,7 @@ export function MetaHierarchyPanel({
     campaignConfigOpen,
     measurementDetailsOpen,
     diagnosisEvidenceOpen,
+    creativeEvidenceOpen,
     adSetConfigOpen,
     adConfigOpen,
   ]);
@@ -802,6 +888,16 @@ export function MetaHierarchyPanel({
                         onOpenChange={setDiagnosisEvidenceOpen}
                       />
                     ) : null}
+                  </div>
+                ) : null}
+
+                {data.creativeIntelligence ? (
+                  <div className="rounded-[var(--radius)] border border-[rgba(0,0,0,0.06)] bg-[rgba(0,0,0,0.015)] px-3 py-2.5">
+                    <CreativeIntelligenceSummary
+                      creative={data.creativeIntelligence}
+                      open={creativeEvidenceOpen}
+                      onOpenChange={setCreativeEvidenceOpen}
+                    />
                   </div>
                 ) : null}
 

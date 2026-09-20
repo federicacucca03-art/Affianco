@@ -33,6 +33,11 @@ import {
   buildDeepDiagnosis,
   type DeepDiagnosis,
 } from "@/lib/meta/deep-diagnosis";
+import {
+  buildCreativeIntelligence,
+  type CreativeIntelligence,
+  type CreativeAdInput,
+} from "@/lib/meta/creative-intelligence";
 import { computeMetaTrend } from "@/lib/meta/meta-trend";
 import { MetaError } from "@/lib/meta/errors";
 import type { NormalizedDailyInsight } from "@/lib/meta/insight-normalize";
@@ -96,6 +101,7 @@ export type CampaignHierarchyView = {
   configuration: ConfigPresentation | null;
   trackingHealth: TrackingHealth | null;
   deepDiagnosis: DeepDiagnosis | null;
+  creativeIntelligence: CreativeIntelligence | null;
 };
 
 type DailyInsightDb = {
@@ -396,6 +402,7 @@ export async function loadCampaignHierarchyView(
       configuration: null,
       trackingHealth: null,
       deepDiagnosis: null,
+      creativeIntelligence: null,
     };
   }
 
@@ -798,6 +805,93 @@ export async function loadCampaignHierarchyView(
         })
       : null;
 
+  const adSetNameById = new Map(
+    adSetRows.map((as) => [as.meta_ad_set_id, as.name] as const),
+  );
+  const creativeAdInputs: CreativeAdInput[] = [];
+  for (const ad of adRows) {
+    const rows = adInsightById.get(ad.meta_ad_id) ?? [];
+    const agg = aggregateDailyInsights(rows, {
+      reach: null,
+      frequency: null,
+    });
+    const metrics = evaluateFromRows(
+      rows,
+      primaryKpi,
+      safeTarget,
+      rawObjective,
+    );
+    creativeAdInputs.push({
+      metaAdId: ad.meta_ad_id,
+      metaAdSetId: ad.meta_ad_set_id,
+      adSetName: adSetNameById.get(ad.meta_ad_set_id) ?? ad.meta_ad_set_id,
+      name: ad.name,
+      status: ad.status,
+      effectiveStatus: ad.effective_status,
+      creativeId: ad.creative_id ?? null,
+      creativeTitle: ad.creative_title,
+      creativeBody: ad.creative_body,
+      creativeCta: ad.creative_cta ?? null,
+      creativeLinkUrl: ad.creative_link_url ?? null,
+      creativeThumbnailUrl: ad.creative_thumbnail_url,
+      spend: agg.spend,
+      impressions: agg.impressions,
+      linkClicks: agg.linkClicks,
+      ctr: agg.ctr,
+      cpc: agg.cpc,
+      cpm: agg.cpm,
+      results: metrics.results,
+      costPerResult: metrics.costPerResult,
+      resultMappingConfidence: metrics.resultMappingConfidence,
+      dayCount: agg.dayCount,
+      insightRows: rows,
+    });
+  }
+
+  let creativeIntelligence: CreativeIntelligence | null =
+    creativeAdInputs.length > 0 || adSets.length > 0
+      ? buildCreativeIntelligence({
+          objective: rawObjective,
+          performanceFamily: resolvePerformanceFamily(rawObjective),
+          isHistorical,
+          trackingPerformanceConfidence:
+            trackingHealth?.performanceConfidence ?? null,
+          campaignResultMapping: campaignAgg.resultMappingConfidence,
+          ads: creativeAdInputs,
+        })
+      : null;
+
+  // M10F enrichment: strong creative concentration may add one fact — never a root cause.
+  let deepDiagnosisOut = deepDiagnosis;
+  if (
+    deepDiagnosisOut &&
+    creativeIntelligence &&
+    (creativeIntelligence.primaryObservation ===
+      "ONE_AD_HAS_HIGHER_CLICK_EFFICIENCY" ||
+      creativeIntelligence.primaryObservation ===
+        "ONE_AD_CONCENTRATES_TRAFFIC_DECLINE") &&
+    !isHistorical
+  ) {
+    const enrichment = creativeIntelligence.beginnerSummary;
+    if (
+      enrichment &&
+      !deepDiagnosisOut.facts.some((f) => f.includes("inserzione"))
+    ) {
+      deepDiagnosisOut = {
+        ...deepDiagnosisOut,
+        facts: [...deepDiagnosisOut.facts, enrichment],
+        professionalLines: [
+          ...deepDiagnosisOut.professionalLines,
+          {
+            key: "creative_layer",
+            label: "Layer creativo (M10G)",
+            value: enrichment,
+          },
+        ],
+      };
+    }
+  }
+
   return {
     metaCampaignId: campaign.metaCampaignId,
     campaignName:
@@ -814,6 +908,7 @@ export async function loadCampaignHierarchyView(
     hierarchyAvailable: adSets.length > 0,
     configuration: campaignPresentation,
     trackingHealth,
-    deepDiagnosis,
+    deepDiagnosis: deepDiagnosisOut,
+    creativeIntelligence,
   };
 }
