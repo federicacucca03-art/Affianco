@@ -57,6 +57,7 @@ function read(rel: string): string {
 const config = {
   appId: "111222333",
   loginConfigId: "cfg_readonly_test",
+  writeLoginConfigId: null,
   redirectUri: "https://affianco.vercel.app/api/meta/oauth/callback",
   graphApiVersion: "v21.0",
 };
@@ -78,7 +79,7 @@ assert(!parsed.searchParams.has("scope"), "A niente scope ridondante");
 assert(!url1.includes("ads_management"), "B ads_management assente");
 assert(!url1.includes("business_management"), "C business_management assente");
 assert(s1.nonce !== s2.nonce && url1 !== url2, "D state casuale");
-assert(s1.cookieValue.startsWith("v2."), "cookie versionata");
+assert(s1.cookieValue.startsWith("v3."), "cookie versionata");
 assert(!s1.nonce.includes("user-a"), "state URL senza user_id");
 
 console.log("\n=== M2B.2 E–G CSRF / code ===");
@@ -179,7 +180,7 @@ const stSrc = read("src/app/api/meta/connection/route.ts");
 const dsSrc = read("src/app/api/meta/disconnect/route.ts");
 const uiSrc = read("src/components/clienti/PannelloAccountMetaCliente.tsx");
 assert(startSrc.includes("requireRouteUserId"), "start auth");
-assert(startSrc.includes("{ authorizationUrl }"), "I solo URL al client");
+assert(startSrc.includes("authorizationUrl"), "I solo URL al client");
 assert(startSrc.includes("assertClientOwnedByUser"), "start ownership cliente");
 assert(!startSrc.includes("access_token"), "I start senza token");
 assert(cbSrc.includes("metaOAuthReturnUrl"), "callback redirect helper");
@@ -197,7 +198,12 @@ assert(!uiSrc.includes("dialog/oauth"), "UI non costruisce OAuth URL");
 
 const oauthSrc = read("src/lib/meta/oauth.ts");
 assert(!oauthSrc.includes("adaccounts"), "M2C adaccounts assente");
-assert(!oauthSrc.includes("ads_management"), "ads_management assente dal modulo");
+assert(oauthSrc.includes('META_WRITE_SCOPE = "ads_management"'), "write scope constant only");
+assert(
+  !/searchParams\.set\(\s*["']scope["']/.test(oauthSrc) &&
+    !oauthSrc.includes("scope=ads_management"),
+  "no silent ads_management URL escalation",
+);
 assert(oauthSrc.includes("META_LONG_LIVED_EXCHANGE_ENABLED = false"), "no fake long-lived");
 assert(!/console\.(log|info|debug|error|warn)\(/.test(oauthSrc), "P no console oauth");
 

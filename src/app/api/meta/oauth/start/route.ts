@@ -32,23 +32,61 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { clientId?: unknown };
+  let body: { clientId?: unknown; campaignId?: unknown; purpose?: unknown };
   try {
-    body = (await request.json()) as { clientId?: unknown };
+    body = (await request.json()) as {
+      clientId?: unknown;
+      campaignId?: unknown;
+      purpose?: unknown;
+    };
   } catch {
     return NextResponse.json({ error: "Body JSON non valido." }, { status: 400 });
   }
-  const clientId = typeof body.clientId === "string" ? body.clientId.trim() : "";
+  let clientId = typeof body.clientId === "string" ? body.clientId.trim() : "";
+  const campaignId =
+    typeof body.campaignId === "string" ? body.campaignId.trim() : "";
+  if (!isUuid(clientId) && isUuid(campaignId)) {
+    const { createSupabaseAdmin } = await import("@/lib/supabase-admin");
+    const admin = createSupabaseAdmin();
+    const { data: camp } = await admin
+      .from("campaigns")
+      .select("client_id,user_id")
+      .eq("id", campaignId)
+      .maybeSingle();
+    if (camp?.user_id === userId && isUuid(camp.client_id ?? "")) {
+      clientId = camp.client_id!;
+    }
+  }
   if (!isUuid(clientId)) {
     return NextResponse.json({ error: "Cliente mancante." }, { status: 400 });
   }
+  const purpose =
+    body.purpose === "write_upgrade" ? "write_upgrade" : "read";
 
   try {
     await assertClientOwnedByUser(userId, clientId);
     const config = getMetaServerConfig();
-    const state = createMetaOAuthState(userId, clientId);
-    const authorizationUrl = buildMetaAuthorizationUrl(config, state.nonce);
-    const res = NextResponse.json({ authorizationUrl });
+    if (purpose === "write_upgrade" && !config.writeLoginConfigId) {
+      return NextResponse.json(
+        {
+          error:
+            "Per autorizzare la creazione su Meta serve una configurazione Login for Business con permesso ads_management (META_WRITE_LOGIN_CONFIG_ID).",
+          code: "META_WRITE_LOGIN_CONFIG_MISSING",
+        },
+        { status: 503 },
+      );
+    }
+    const state = createMetaOAuthState(userId, clientId, purpose);
+    const authorizationUrl = buildMetaAuthorizationUrl(
+      config,
+      state.nonce,
+      purpose,
+    );
+    const res = NextResponse.json({
+      authorizationUrl,
+      purpose,
+      writeScopeRequested: purpose === "write_upgrade",
+    });
     res.cookies.set(
       META_OAUTH_STATE_COOKIE,
       state.cookieValue,

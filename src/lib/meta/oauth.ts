@@ -4,6 +4,7 @@ import { isUuid } from "@/lib/meta/ids";
 import {
   getMetaAppSecret,
   getMetaServerConfig,
+  isMetaServerConfigReady,
   type MetaServerConfig,
 } from "@/lib/meta/config";
 import {
@@ -12,10 +13,20 @@ import {
 } from "@/lib/meta/connections";
 import { assertMetaConnectionHasScope } from "@/lib/meta/scopes";
 
+import type { MetaOAuthPurpose } from "@/lib/meta/oauth-state";
+export type { MetaOAuthPurpose } from "@/lib/meta/oauth-state";
+
+/** Canonical read minimum — never silently escalate. */
 export const META_REQUIRED_SCOPE = "ads_read";
+/** Write capability — requested only via explicit upgrade + write login config. */
+export const META_WRITE_SCOPE = "ads_management";
 export const META_CLIENTI_PATH = "/clienti";
 
-export type MetaOAuthResultQuery = "connected" | "cancelled" | "error";
+export type MetaOAuthResultQuery =
+  | "connected"
+  | "cancelled"
+  | "error"
+  | "expired";
 
 export type ParsedMetaTokenResponse = {
   accessToken: string;
@@ -37,23 +48,44 @@ function graphBase(version: string, path: string): string {
 }
 
 /**
- * Facebook Login for Business: i permessi li definisce la login configuration
- * (META_LOGIN_CONFIG_ID). Non si aggiunge `scope` nell'URL.
+ * Facebook Login for Business: i permessi li definisce la login configuration.
+ * Non si aggiunge `scope` nell'URL (config_id sostituisce scope).
  *
- * Parametri: client_id, redirect_uri, state, config_id, response_type=code.
+ * Read: META_LOGIN_CONFIG_ID (ads_read).
+ * Write upgrade: META_WRITE_LOGIN_CONFIG_ID (must include ads_management).
  */
 export function buildMetaAuthorizationUrl(
   config: MetaServerConfig,
   state: string,
+  purpose: MetaOAuthPurpose = "read",
 ): string {
   const version = config.graphApiVersion.replace(/^\/+|\/+$/g, "");
   const url = new URL(`https://www.facebook.com/${version}/dialog/oauth`);
   url.searchParams.set("client_id", config.appId);
   url.searchParams.set("redirect_uri", config.redirectUri);
   url.searchParams.set("state", state);
-  url.searchParams.set("config_id", config.loginConfigId);
+  const configId =
+    purpose === "write_upgrade"
+      ? config.writeLoginConfigId
+      : config.loginConfigId;
+  if (!configId?.trim()) {
+    throw new MetaError(
+      "META_CONFIG_MISSING",
+      purpose === "write_upgrade"
+        ? "Configurazione permesso scrittura Meta mancante (META_WRITE_LOGIN_CONFIG_ID)."
+        : "Configurazione Meta incompleta.",
+    );
+  }
+  url.searchParams.set("config_id", configId.trim());
   url.searchParams.set("response_type", "code");
   return url.toString();
+}
+
+export function isMetaWriteLoginConfigReady(
+  config?: MetaServerConfig,
+): boolean {
+  const cfg = config ?? (isMetaServerConfigReady() ? getMetaServerConfig() : null);
+  return Boolean(cfg?.writeLoginConfigId?.trim());
 }
 
 export function oauthResultFromMetaErrorParams(

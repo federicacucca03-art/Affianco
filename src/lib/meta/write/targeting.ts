@@ -1,5 +1,6 @@
 /**
- * M11A.1 — Targeting translator.
+ * M11A.1 — Targeting translator (geo).
+ * Age fields applied separately via age-model (Advantage vs Manual).
  * Never invent interests. Never map B2B/B2C to Meta targeting.
  * City text without Meta geo key → MISSING_GEO_RESOLUTION.
  */
@@ -24,26 +25,16 @@ export function translateWriteTargeting(input: {
   etaMax: number | null;
   targetType: string | null;
 }): TargetingResolve {
-  void input.targetType; // intentional: business label must not become targeting
-
-  const ageMin = input.etaMin;
-  const ageMax = input.etaMax;
-  if (
-    (ageMin != null && (!Number.isFinite(ageMin) || ageMin < 13 || ageMin > 65)) ||
-    (ageMax != null && (!Number.isFinite(ageMax) || ageMax < 13 || ageMax > 65))
-  ) {
-    return { ok: false, reason: "INVALID_AGE" };
-  }
-  if (ageMin != null && ageMax != null && ageMin > ageMax) {
-    return { ok: false, reason: "INVALID_AGE" };
-  }
+  void input.targetType;
+  // Age is resolved by resolveWriteAgeFields (Advantage vs Manual).
+  void input.etaMin;
+  void input.etaMax;
 
   const country = (input.countryCode ?? "").trim().toUpperCase();
   const city = (input.citta ?? "").trim();
   const geoKey = (input.metaGeoKey ?? "").trim();
 
   if (city && !geoKey) {
-    // Have a city label but no Meta key — do not invent.
     return { ok: false, reason: "MISSING_GEO_RESOLUTION" };
   }
 
@@ -68,8 +59,6 @@ export function translateWriteTargeting(input: {
   const targeting: Record<string, unknown> = {
     geo_locations,
   };
-  if (ageMin != null) targeting.age_min = Math.round(ageMin);
-  if (ageMax != null) targeting.age_max = Math.round(ageMax);
 
   const notes: string[] = [];
   if (input.targetType) {

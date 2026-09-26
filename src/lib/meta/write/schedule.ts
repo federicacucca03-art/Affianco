@@ -1,6 +1,7 @@
 /**
- * M11A.1 — Schedule normalization against ad account timezone.
+ * M11A.1/M11A.2 — Schedule normalization against ad account timezone.
  * Browser/server local TZ are never write authority.
+ * Historical / past starts block write until user updates.
  */
 
 export type ScheduleResolve =
@@ -12,18 +13,23 @@ export type ScheduleResolve =
     }
   | {
       ok: false;
-      reason: "MISSING_TIMEZONE" | "INVALID_RANGE" | "MISSING_SCHEDULE";
+      reason:
+        | "MISSING_TIMEZONE"
+        | "INVALID_RANGE"
+        | "MISSING_SCHEDULE"
+        | "PAST_SCHEDULE";
     };
 
 /**
  * If both start and end absent → MISSING_SCHEDULE (no silent continuous default).
  * If start present → validate end > start when end set.
- * Times stored as ISO; timezone_name recorded for future Graph formatting.
+ * Past starts (before now − 1h) → PAST_SCHEDULE (no auto-shift).
  */
 export function resolveWriteSchedule(input: {
   startAtIso: string | null;
   endAtIso: string | null;
   timezoneName: string | null;
+  nowMs?: number;
 }): ScheduleResolve {
   const tz = (input.timezoneName ?? "").trim();
   if (!tz) return { ok: false, reason: "MISSING_TIMEZONE" };
@@ -39,6 +45,10 @@ export function resolveWriteSchedule(input: {
     const startMs = Date.parse(start);
     if (!Number.isFinite(startMs)) {
       return { ok: false, reason: "INVALID_RANGE" };
+    }
+    const now = input.nowMs ?? Date.now();
+    if (startMs < now - 60 * 60 * 1000) {
+      return { ok: false, reason: "PAST_SCHEDULE" };
     }
   }
   if (end) {

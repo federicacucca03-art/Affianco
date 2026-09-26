@@ -87,6 +87,9 @@ function messaggioQuery(meta: string | null): string | null {
     return "Meta collegato. Seleziona l'account pubblicitario, poi importa le campagne.";
   }
   if (meta === "cancelled") return "Connessione annullata.";
+  if (meta === "expired") {
+    return "L'autorizzazione Meta è scaduta. Riprova e completa l'accesso senza chiudere la procedura.";
+  }
   if (meta === "error") return "Collegamento Meta non riuscito.";
   return null;
 }

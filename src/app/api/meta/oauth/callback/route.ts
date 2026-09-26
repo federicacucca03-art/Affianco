@@ -15,6 +15,7 @@ import {
   metaOAuthCookieOptions,
   peekMetaOAuthState,
 } from "@/lib/meta/oauth-state";
+import { assertWriteUpgradeScopesForPersist } from "@/lib/meta/scopes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,6 +62,13 @@ export async function GET(request: Request) {
     }
     const token = await exchangeAuthorizationCode(code);
     const debug = await inspectMetaUserToken(token.accessToken);
+
+    // Write upgrade: prove ads_read + ads_management BEFORE replacing
+    // the existing connection. Partial grant → fail-closed, no overwrite.
+    if (identity.purpose === "write_upgrade") {
+      assertWriteUpgradeScopesForPersist(debug.scopes);
+    }
+
     await persistExchangedMetaConnection(
       identity.userId,
       identity.clientId,
@@ -71,6 +79,9 @@ export async function GET(request: Request) {
   } catch (error) {
     if (isMetaError(error) && error.code === "META_OAUTH_CANCELLED") {
       return redirectWithClearedCookie(request, "cancelled", peeked?.clientId);
+    }
+    if (isMetaError(error) && error.code === "META_OAUTH_STATE_EXPIRED") {
+      return redirectWithClearedCookie(request, "expired", peeked?.clientId);
     }
     return redirectWithClearedCookie(request, "error", peeked?.clientId);
   }

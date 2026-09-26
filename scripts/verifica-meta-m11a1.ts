@@ -64,6 +64,7 @@ function basePlan(
     raggioKm: null,
     countryCode: "IT",
     metaGeoKey: null,
+    geoLabel: null,
     etaMin: 25,
     etaMax: 55,
     placementsAdvantage: true,
@@ -72,6 +73,9 @@ function basePlan(
     creativitaCount: 0,
     targetType: "B2B",
     isImportedMetaOnly: false,
+    existingMetaCampaignId: null,
+    partialHierarchyPending: false,
+    writeHierarchyCompleted: false,
     grantedScopes: ["ads_read"],
     hasMetaConnection: true,
     hasAdAccount: true,
@@ -103,10 +107,16 @@ console.log("\n=== M11A.1 META WRITE FOUNDATION ===\n");
   );
 }
 
-// No Marketing API creates
+// No Marketing API creates in M11A.1 foundation modules (M11A.2 graph-write is separate)
 {
   const writeDir = join(process.cwd(), "src/lib/meta/write");
-  const files = readdirSync(writeDir).filter((f) => f.endsWith(".ts"));
+  const files = readdirSync(writeDir).filter(
+    (f) =>
+      f.endsWith(".ts") &&
+      f !== "graph-write.ts" &&
+      f !== "execute.ts" &&
+      f !== "geo-search.ts",
+  );
   let createHits = 0;
   for (const f of files) {
     const src = read(`src/lib/meta/write/${f}`);
@@ -122,9 +132,15 @@ console.log("\n=== M11A.1 META WRITE FOUNDATION ===\n");
   }
   const route = read("src/app/api/meta/write-preview/route.ts");
   assert(!/\/campaigns/.test(route) || !/method:\s*["']POST["']/.test(route), "preview route no create POST");
-  assert(createHits === 0, `META MARKETING CREATE CALLS: ${createHits}`);
-  assert(route.includes("writeEnabled: false"), "writeEnabled false");
-  assert(route.includes("metaWrites: 0"), "metaWrites 0");
+  assert(createHits === 0, `META MARKETING CREATE CALLS (foundation): ${createHits}`);
+  assert(route.includes("metaWrites: 0"), "preview metaWrites 0");
+  assert(
+    route.includes("writeEnabled:") &&
+      (route.includes("bundle.preview.canWrite") ||
+        route.includes("preview.canWrite") ||
+        route.includes("writeEnabled: false")),
+    "preview writeEnabled gated",
+  );
 }
 
 // Migration safety
@@ -380,13 +396,17 @@ console.log("\n=== M11A.1 META WRITE FOUNDATION ===\n");
     }),
   );
   assert(
-    p.summaryIt.adSetLines.some((l) => /Zona pianificata:\s*Roma/.test(l)),
+    p.summaryIt.adSetLines.some((l) => /Località:.*Roma/.test(l)),
     "PREVIEW B Roma visible",
   );
   assert(
     p.summaryIt.adSetLines.some((l) =>
-      /Zona Meta:.*da risolvere/i.test(l),
-    ),
+      /Località: chiave geografica da risolvere|Località:.*Roma/.test(l),
+    ) &&
+      (p.summaryIt.missingLines.some((l) =>
+        /chiave geografica da risolvere/i.test(l),
+      ) ||
+        p.blockersIt.some((l) => /chiave geografica da risolvere/i.test(l))),
     "PREVIEW B Meta key unresolved",
   );
   assert(
@@ -426,7 +446,7 @@ console.log("\n=== M11A.1 META WRITE FOUNDATION ===\n");
   );
   assert(
     p.summaryIt.campaignLines.some((l) =>
-      /Categoria speciale Meta:\s*Da confermare/.test(l),
+      /Categoria speciale:\s*Da confermare/.test(l),
     ),
     "PREVIEW D category Da confermare",
   );
@@ -446,7 +466,9 @@ console.log("\n=== M11A.1 META WRITE FOUNDATION ===\n");
   assert(p.campaign?.status === "PAUSED", "PREVIEW E campaign PAUSED");
   assert(p.adSet?.status === "PAUSED", "PREVIEW E adset PAUSED");
   assert(
-    p.summaryIt.campaignLines.some((l) => /Stato su Meta:\s*Non attiva/.test(l)),
+    p.summaryIt.campaignLines.some((l) =>
+      /Stato campagna:\s*Non attiva/.test(l),
+    ),
     "PREVIEW E Non attiva primary",
   );
   assert(
@@ -487,13 +509,18 @@ console.log("\n=== M11A.1 META WRITE FOUNDATION ===\n");
 {
   const ui = read("src/components/campagne/MetaWritePreviewPanel.tsx");
   assert(ui.includes("Verifica configurazione Meta"), "preview CTA");
-  assert(ui.includes("Crea su Meta"), "create label present");
-  assert(ui.includes("disabled"), "create disabled");
+  assert(ui.includes("Conferma creazione su Meta"), "confirm label present");
+  assert(
+    ui.includes("disabled={!confirmEnabled}") &&
+      ui.includes("preview?.canWrite"),
+    "confirm gated by canWrite",
+  );
   assert(/non\s+attivo/i.test(ui), "non attivo copy");
   assert(ui.includes("Categoria speciale Meta"), "category label IT");
   assert(
-    ui.includes("Manca il permesso per creare campagne su Meta"),
-    "permission human copy",
+    ui.includes("Manca il permesso per creare campagne su Meta") ||
+      ui.includes("Autorizza creazione su Meta"),
+    "permission human copy / upgrade CTA",
   );
   assert(!/Bozza Meta|Pubblica su Meta/.test(ui), "no Bozza Meta / Pubblica");
   const page = read("src/app/campagne/[id]/page.tsx");

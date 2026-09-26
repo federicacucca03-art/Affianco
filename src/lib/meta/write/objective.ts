@@ -1,5 +1,5 @@
 /**
- * M11A.1 — Map Ally objective → Meta OUTCOME_* for dry-run.
+ * M11A.1/M11A.2E — Map Ally objective → Meta OUTCOME_* + optimization/destination.
  */
 
 import { mapBusinessIntentToMetaArchitecture } from "@/lib/meta/guided-plan/map-intent";
@@ -55,15 +55,35 @@ export function resolveOptimizationAndDestination(input: {
   }
 
   if (dest === "WEBSITE") {
+    // AWARENESS + WEBSITE must NOT invent LINK_CLICKS (ODAX: REACH/IMPRESSIONS).
+    if (obj === "OUTCOME_AWARENESS") {
+      return {
+        optimizationGoal: "REACH",
+        destinationType: "WEBSITE",
+        promotedObject: null,
+        needsPage: false,
+        needsForm: false,
+        needsUrl: true,
+        needsTracking: false,
+      };
+    }
+    // OUTCOME_TRAFFIC: Meta destination_type matrix does NOT allow WEBSITE.
+    // Omit destination_type (defaults to UNDEFINED). Website URL → creative later.
+    if (obj === "OUTCOME_TRAFFIC") {
+      return {
+        optimizationGoal: "LINK_CLICKS",
+        destinationType: null,
+        promotedObject: null,
+        needsPage: false,
+        needsForm: false,
+        needsUrl: false,
+        needsTracking: false,
+      };
+    }
     const needsTracking =
       obj === "OUTCOME_LEADS" || obj === "OUTCOME_SALES";
     return {
-      optimizationGoal:
-        obj === "OUTCOME_TRAFFIC"
-          ? "LINK_CLICKS"
-          : needsTracking
-            ? "OFFSITE_CONVERSIONS"
-            : "LINK_CLICKS",
+      optimizationGoal: needsTracking ? "OFFSITE_CONVERSIONS" : null,
       destinationType: "WEBSITE",
       promotedObject: null,
       needsPage: false,
@@ -100,6 +120,18 @@ export function resolveOptimizationAndDestination(input: {
   if (obj === "OUTCOME_AWARENESS") {
     return {
       optimizationGoal: "REACH",
+      destinationType: null,
+      promotedObject: null,
+      needsPage: false,
+      needsForm: false,
+      needsUrl: false,
+      needsTracking: false,
+    };
+  }
+
+  if (obj === "OUTCOME_TRAFFIC") {
+    return {
+      optimizationGoal: "LINK_CLICKS",
       destinationType: null,
       promotedObject: null,
       needsPage: false,

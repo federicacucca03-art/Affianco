@@ -4,13 +4,17 @@ import { MetaError } from "@/lib/meta/errors";
 import { isUuid } from "@/lib/meta/ids";
 import { metaTokenEncryptionKeyBytes } from "@/lib/meta/token-crypto";
 
+export type MetaOAuthPurpose = "read" | "write_upgrade";
+
 export const META_OAUTH_STATE_COOKIE = "affianco_meta_oauth";
 export const META_OAUTH_STATE_TTL_SEC = 10 * 60;
-export const META_OAUTH_STATE_VERSION = "v2";
+/** v3 adds purpose (read | write_upgrade). */
+export const META_OAUTH_STATE_VERSION = "v3";
 
 export type MetaOAuthStateIdentity = {
   userId: string;
   clientId: string;
+  purpose: MetaOAuthPurpose;
 };
 
 type StatePayload = {
@@ -18,6 +22,7 @@ type StatePayload = {
   c: string;
   n: string;
   e: number;
+  p?: MetaOAuthPurpose;
 };
 
 function hmac(data: string): Buffer {
@@ -33,7 +38,11 @@ function safeEqual(a: Buffer, b: Buffer): boolean {
 function decodeSignedPayload(cookieValue: string): StatePayload {
   const cookie = cookieValue.trim();
   const parts = cookie.split(".");
-  if (parts.length !== 3 || parts[0] !== META_OAUTH_STATE_VERSION) {
+  const version = parts[0] ?? "";
+  if (
+    parts.length !== 3 ||
+    (version !== META_OAUTH_STATE_VERSION && version !== "v2")
+  ) {
     throw new MetaError("META_OAUTH_STATE_INVALID", "Stato OAuth non valido.");
   }
 
@@ -63,15 +72,23 @@ function decodeSignedPayload(cookieValue: string): StatePayload {
   }
 
   if (payload.e < Date.now()) {
-    throw new MetaError("META_OAUTH_STATE_EXPIRED", "Sessione di collegamento scaduta.");
+    throw new MetaError(
+      "META_OAUTH_STATE_EXPIRED",
+      "L'autorizzazione Meta è scaduta. Riprova e completa l'accesso senza chiudere la procedura.",
+    );
   }
 
   return payload;
 }
 
+function purposeFromPayload(payload: StatePayload): MetaOAuthPurpose {
+  return payload.p === "write_upgrade" ? "write_upgrade" : "read";
+}
+
 export function createMetaOAuthState(
   userId: string,
   clientId: string,
+  purpose: MetaOAuthPurpose = "read",
 ): {
   nonce: string;
   cookieValue: string;
@@ -88,6 +105,7 @@ export function createMetaOAuthState(
     c: cid,
     n: nonce,
     e: Date.now() + META_OAUTH_STATE_TTL_SEC * 1000,
+    p: purpose,
   };
   const body = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
   const cookieValue = `${META_OAUTH_STATE_VERSION}.${body}.${hmac(body).toString("base64url")}`;
@@ -100,7 +118,11 @@ export function peekMetaOAuthState(
   if (!cookieValue?.trim()) return null;
   try {
     const payload = decodeSignedPayload(cookieValue);
-    return { userId: payload.u, clientId: payload.c };
+    return {
+      userId: payload.u,
+      clientId: payload.c,
+      purpose: purposeFromPayload(payload),
+    };
   } catch {
     return null;
   }
@@ -123,7 +145,11 @@ export function consumeMetaOAuthState(
     throw new MetaError("META_OAUTH_STATE_INVALID", "Stato OAuth non valido.");
   }
 
-  return { userId: payload.u, clientId: payload.c };
+  return {
+    userId: payload.u,
+    clientId: payload.c,
+    purpose: purposeFromPayload(payload),
+  };
 }
 
 export function metaOAuthCookieOptions(maxAgeSec: number) {

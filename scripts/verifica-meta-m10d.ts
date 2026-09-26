@@ -428,10 +428,20 @@ test("No Meta writes / ads_management in configuration module", () => {
   );
 });
 
-test("OAuth still ads_read only", () => {
+test("OAuth read minimum preserved; write scope explicit constant only", () => {
   const oauth = read("src/lib/meta/oauth.ts");
-  assert(oauth.includes("ads_read") || read("src/lib/meta/scopes.ts").includes("ads_read"), "ads_read");
-  assert(!/ads_management/.test(oauth), "no ads_management oauth");
+  assert(oauth.includes('META_REQUIRED_SCOPE = "ads_read"'), "ads_read required");
+  assert(oauth.includes('META_WRITE_SCOPE = "ads_management"'), "write scope constant");
+  assert(
+    oauth.includes("writeLoginConfigId") ||
+      read("src/lib/meta/config.ts").includes("META_WRITE_LOGIN_CONFIG_ID"),
+    "separate write login config",
+  );
+  assert(
+    !oauth.includes('scope=ads_management') &&
+      !/searchParams\.set\(\s*["']scope["']/.test(oauth),
+    "no silent scope= URL escalation",
+  );
 });
 
 console.log(
