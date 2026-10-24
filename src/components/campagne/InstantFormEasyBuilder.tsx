@@ -20,6 +20,7 @@ import {
   etichettaSpecialAdCategoryEasy,
 } from "@/lib/meta/write/special-ad-categories";
 import { CanonicalCampaignReviewPanel } from "@/components/campagne/CanonicalCampaignReviewPanel";
+import { MetaFullPublishCta } from "@/components/campagne/MetaFullPublishCta";
 import { EasyBuilderSingleImageInput } from "@/components/campagne/EasyBuilderSingleImageInput";
 import { runPreWriteLaunchGuardian } from "@/lib/meta/launch-guardian/prewrite";
 import { canonicalV2FromInstantFormDraft } from "@/lib/campagne-canonical-v2";
@@ -1799,6 +1800,9 @@ export function InstantFormEasyBuilder({ campaignId, campagna }: Props) {
                   setStepId(target);
                 }
               }}
+              publishControls={
+                <MetaFullPublishCta campaignId={campaignId} compact />
+              }
             />
 
             <button
