@@ -12,39 +12,74 @@ import { graphApiBase } from "@/lib/meta/graph";
 import { META_WRITE_SAFE_STATUS } from "@/lib/meta/write/types";
 import { normalizeMetaWriteError } from "@/lib/meta/write/error-normalize";
 
+/** URLSearchParams for JSON-ish fields; FormData for binary media uploads. */
+export type MetaGraphWriteBody = URLSearchParams | FormData;
+
 export type MetaGraphWriteTransport = (input: {
   url: string;
-  body: URLSearchParams;
+  body: MetaGraphWriteBody;
 }) => Promise<{ ok: boolean; status: number; json: unknown }>;
+
+/** Sanitized Graph error bits retained for QA/debug — never tokens/headers. */
+export type MetaGraphErrorDiagnostics = {
+  code: number | null;
+  subcode: number | null;
+  type: string | null;
+  message: string | null;
+  userTitle: string | null;
+  userMsg: string | null;
+  blameFields: string[] | null;
+  isTransient: boolean | null;
+  errorDataSafe: Record<string, unknown> | null;
+  source: "validate_only" | "create";
+};
+
+type MetaWriteFailureFields = {
+  category: ReturnType<typeof normalizeMetaWriteError>["category"];
+  /** User-facing normalized Italian message (safe). */
+  safeMessage: string;
+  graphCode: number | null;
+  errorSubcode?: number | null;
+  blameFields?: string[] | null;
+  /** Sanitized Meta user-facing bits — never tokens. */
+  metaUserTitle?: string | null;
+  metaUserMsg?: string | null;
+  metaMessageSafe?: string | null;
+  metaErrorType?: string | null;
+  metaIsTransient?: boolean | null;
+  metaErrorDataSafe?: Record<string, unknown> | null;
+};
 
 export type MetaWriteCreateResult =
   | { ok: true; id: string }
-  | {
-      ok: false;
-      category: ReturnType<typeof normalizeMetaWriteError>["category"];
-      safeMessage: string;
-      graphCode: number | null;
-    };
+  | ({ ok: false } & MetaWriteFailureFields);
 
 export type MetaWriteValidateResult =
   | { ok: true; createdIdLeaked: false }
-  | {
+  | ({
       ok: false;
-      category: ReturnType<typeof normalizeMetaWriteError>["category"];
-      safeMessage: string;
-      graphCode: number | null;
-      errorSubcode?: number | null;
-      blameFields?: string[] | null;
       /** True if Meta unexpectedly returned an object id (mutation leak). */
       createdIdLeaked: boolean;
-      /** Sanitized Meta user-facing bits — never tokens. */
-      metaUserTitle?: string | null;
-      metaUserMsg?: string | null;
-      metaMessageSafe?: string | null;
-      metaErrorType?: string | null;
-      metaIsTransient?: boolean | null;
-      metaErrorDataSafe?: Record<string, unknown> | null;
-    };
+    } & MetaWriteFailureFields);
+
+/** Build a persistable Graph error object (no tokens / secrets). */
+export function toSafeGraphErrorDiagnostics(
+  fail: MetaWriteFailureFields,
+  source: MetaGraphErrorDiagnostics["source"],
+): MetaGraphErrorDiagnostics {
+  return {
+    code: fail.graphCode ?? null,
+    subcode: fail.errorSubcode ?? null,
+    type: fail.metaErrorType ?? null,
+    message: fail.metaMessageSafe ?? null,
+    userTitle: fail.metaUserTitle ?? null,
+    userMsg: fail.metaUserMsg ?? null,
+    blameFields: fail.blameFields ?? null,
+    isTransient: fail.metaIsTransient ?? null,
+    errorDataSafe: fail.metaErrorDataSafe ?? null,
+    source,
+  };
+}
 
 /** Official Graph/Marketing API: campaigns + adsets accept validate_only. */
 export const META_CAMPAIGN_VALIDATE_ONLY_SUPPORTED = true;
@@ -52,7 +87,7 @@ export const META_ADSET_VALIDATE_ONLY_SUPPORTED = true;
 
 async function defaultTransport(input: {
   url: string;
-  body: URLSearchParams;
+  body: MetaGraphWriteBody;
 }): Promise<{ ok: boolean; status: number; json: unknown }> {
   const res = await fetch(input.url, {
     method: "POST",
@@ -181,46 +216,21 @@ function isValidateSuccess(json: unknown): boolean {
 function graphFail(
   status: number,
   json: unknown,
-): MetaWriteCreateResult {
-  const err =
-    json && typeof json === "object" && "error" in json
-      ? (json as { error: Record<string, unknown> }).error
-      : null;
-  const code =
-    err && typeof err.code === "number" ? err.code : null;
-  const message =
-    err && typeof err.message === "string" ? err.message : null;
+): Extract<MetaWriteCreateResult, { ok: false }> {
+  const bits = extractGraphErrorBits(json);
   const norm = normalizeMetaWriteError({
     httpStatus: status,
-    graphCode: code,
-    message,
+    graphCode: bits.code,
+    graphSubcode: bits.subcode,
+    message: bits.message,
   });
   return {
     ok: false,
     category: norm.category,
     safeMessage: norm.safeMessage,
     graphCode: norm.graphCode,
-  };
-}
-
-function validateFail(
-  status: number,
-  json: unknown,
-  createdIdLeaked: boolean,
-): MetaWriteValidateResult {
-  const fail = graphFail(status, json);
-  const bits = extractGraphErrorBits(json);
-  if (fail.ok) {
-    return { ok: true, createdIdLeaked: false };
-  }
-  return {
-    ok: false,
-    category: fail.category,
-    safeMessage: fail.safeMessage,
-    graphCode: fail.graphCode ?? bits.code,
     errorSubcode: bits.subcode,
     blameFields: bits.blameFields,
-    createdIdLeaked,
     metaUserTitle: bits.userTitle,
     metaUserMsg: bits.userMsg,
     metaMessageSafe: bits.message,
@@ -230,11 +240,24 @@ function validateFail(
   };
 }
 
+function validateFail(
+  status: number,
+  json: unknown,
+  createdIdLeaked: boolean,
+): MetaWriteValidateResult {
+  const fail = graphFail(status, json);
+  return {
+    ...fail,
+    createdIdLeaked,
+  };
+}
+
 function campaignBody(input: {
   accessToken: string;
   name: string;
   objective: string;
   specialAdCategories: string[];
+  specialAdCategoryCountry?: string[] | null;
   dailyBudgetMinor?: number | null;
   isAdsetBudgetSharingEnabled?: boolean | null;
   validateOnly?: boolean;
@@ -244,6 +267,16 @@ function campaignBody(input: {
   body.set("objective", input.objective);
   body.set("status", META_WRITE_SAFE_STATUS);
   body.set("special_ad_categories", JSON.stringify(input.specialAdCategories));
+  if (
+    input.specialAdCategories.length > 0 &&
+    Array.isArray(input.specialAdCategoryCountry) &&
+    input.specialAdCategoryCountry.length > 0
+  ) {
+    body.set(
+      "special_ad_category_country",
+      JSON.stringify(input.specialAdCategoryCountry),
+    );
+  }
   body.set("buying_type", "AUCTION");
   if (input.dailyBudgetMinor != null) {
     body.set("daily_budget", String(input.dailyBudgetMinor));
@@ -315,6 +348,7 @@ export async function createMetaCampaignPaused(input: {
   name: string;
   objective: string;
   specialAdCategories: string[];
+  specialAdCategoryCountry?: string[] | null;
   dailyBudgetMinor?: number | null;
   isAdsetBudgetSharingEnabled?: boolean | null;
   transport?: MetaGraphWriteTransport;
@@ -341,6 +375,7 @@ export async function validateMetaCampaignPaused(input: {
   name: string;
   objective: string;
   specialAdCategories: string[];
+  specialAdCategoryCountry?: string[] | null;
   dailyBudgetMinor?: number | null;
   isAdsetBudgetSharingEnabled?: boolean | null;
   transport?: MetaGraphWriteTransport;

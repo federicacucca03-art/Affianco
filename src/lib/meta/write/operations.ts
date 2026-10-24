@@ -180,12 +180,120 @@ export async function getMetaWriteOperationByIdempotency(input: {
   return data as MetaWriteOperationRow;
 }
 
+export async function getProtectedFullPublishOperation(input: {
+  userId: string;
+  allyCampaignId: string;
+}): Promise<MetaWriteOperationRow | null> {
+  const admin = createSupabaseAdmin();
+  const { data, error } = await admin
+    .from("meta_write_operations")
+    .select(
+      "id,user_id,client_id,ally_campaign_id,operation_type,payload_fingerprint,idempotency_key,state,safe_payload_summary,meta_campaign_id,meta_adset_id,meta_creative_id,meta_ad_id,error_category,error_safe_message",
+    )
+    .eq("user_id", input.userId)
+    .eq("ally_campaign_id", input.allyCampaignId)
+    .eq("operation_type", "FULL_PUBLISH_PAUSED")
+    .in("state", ["CONFIRMED", "IN_PROGRESS", "PARTIALLY_CREATED", "COMPLETED"])
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data as MetaWriteOperationRow;
+}
+
+export async function getFullPublishOperationByIdempotency(input: {
+  userId: string;
+  allyCampaignId: string;
+  idempotencyKey: string;
+}): Promise<MetaWriteOperationRow | null> {
+  const admin = createSupabaseAdmin();
+  const { data, error } = await admin
+    .from("meta_write_operations")
+    .select(
+      "id,user_id,client_id,ally_campaign_id,operation_type,payload_fingerprint,idempotency_key,state,safe_payload_summary,meta_campaign_id,meta_adset_id,meta_creative_id,meta_ad_id,error_category,error_safe_message",
+    )
+    .eq("user_id", input.userId)
+    .eq("ally_campaign_id", input.allyCampaignId)
+    .eq("operation_type", "FULL_PUBLISH_PAUSED")
+    .eq("idempotency_key", input.idempotencyKey)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data as MetaWriteOperationRow;
+}
+
+export async function logFullPublishPreviewOperation(input: {
+  userId: string;
+  clientId: string;
+  allyCampaignId: string;
+  fingerprint: string;
+  idempotencyKey: string;
+  safePayloadSummary: Record<string, unknown>;
+}): Promise<{ id: string } | { error: string }> {
+  const admin = createSupabaseAdmin();
+  const protectedOp = await getProtectedFullPublishOperation({
+    userId: input.userId,
+    allyCampaignId: input.allyCampaignId,
+  });
+  if (protectedOp) {
+    const { error: updErr } = await admin
+      .from("meta_write_operations")
+      .update({
+        safe_payload_summary: {
+          ...input.safePayloadSummary,
+          preservedWriteState: protectedOp.state,
+          meta_campaign_id: protectedOp.meta_campaign_id,
+          meta_adset_id: protectedOp.meta_adset_id,
+          meta_creative_id: protectedOp.meta_creative_id,
+          meta_ad_id: protectedOp.meta_ad_id,
+          previewFingerprintObserved: input.fingerprint,
+        },
+      })
+      .eq("id", protectedOp.id);
+    if (updErr) return { error: updErr.message };
+    return { id: protectedOp.id };
+  }
+
+  const { data, error } = await admin
+    .from("meta_write_operations")
+    .upsert(
+      {
+        user_id: input.userId,
+        client_id: input.clientId,
+        ally_campaign_id: input.allyCampaignId,
+        operation_type: "FULL_PUBLISH_PAUSED",
+        payload_fingerprint: input.fingerprint,
+        idempotency_key: input.idempotencyKey,
+        state: "PREVIEWED",
+        safe_payload_summary: input.safePayloadSummary,
+        meta_campaign_id: null,
+        meta_adset_id: null,
+        meta_creative_id: null,
+        meta_ad_id: null,
+        error_category: null,
+        error_safe_message: null,
+      },
+      {
+        onConflict:
+          "user_id,ally_campaign_id,operation_type,idempotency_key",
+      },
+    )
+    .select("id")
+    .maybeSingle();
+
+  if (error) return { error: error.message };
+  const id = (data as { id?: string } | null)?.id;
+  if (!id) return { error: "Operazione non salvata." };
+  return { id };
+}
+
 export async function updateMetaWriteOperation(input: {
   id: string;
   patch: {
     state?: MetaWriteOperationState;
     meta_campaign_id?: string | null;
     meta_adset_id?: string | null;
+    meta_creative_id?: string | null;
+    meta_ad_id?: string | null;
     error_category?: MetaWriteErrorCategory | null;
     error_safe_message?: string | null;
     confirmed_at?: string | null;

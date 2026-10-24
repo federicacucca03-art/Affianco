@@ -12,6 +12,7 @@ import { getClientMetaAccount } from "@/lib/meta/client-accounts";
 import { isUuid } from "@/lib/meta/ids";
 import { MetaError } from "@/lib/meta/errors";
 import { isMetaWritesLiveEnabled } from "@/lib/meta/config";
+import { isLegacyMetaMutationAllowed } from "@/lib/meta/legacy-write-gate";
 import { buildMetaWritePreview } from "@/lib/meta/write/preview";
 import { logMetaWritePreviewOperation } from "@/lib/meta/write/operations";
 import {
@@ -19,6 +20,7 @@ import {
   formStateFromCanonical,
   loadPersistedCanonicalPlan,
 } from "@/lib/meta/write/canonical-plan";
+import { stripImplicitStaleSchedule } from "@/lib/meta/write/schedule";
 import type {
   MetaWriteCanonicalPlan,
   MetaWriteDestinationKind,
@@ -31,6 +33,10 @@ import {
   mapBusinessIntentToMetaArchitecture,
   resolveGuidedDestination,
 } from "@/lib/meta/guided-plan/map-intent";
+import { userFacingCampaignText } from "@/lib/campagne-creation-mode";
+import type { AllyWebsiteTrackingConfig } from "@/lib/meta/write/tracking";
+import { resolvePlanDestinationUrl } from "@/lib/meta/write/destination-tracking";
+import { mergeSpecialAdCategoriesDecision } from "@/lib/meta/write/special-ad-categories";
 
 type CampaignRow = {
   id: string;
@@ -49,6 +55,11 @@ type CampaignRow = {
   booking_channel: string | null;
   target_type: string | null;
   creativita: unknown;
+  variante_a: string | null;
+  variante_b: string | null;
+  variante_c: string | null;
+  titolo_annuncio: string | null;
+  page_name: string | null;
   clients:
     | { id: string; website: string | null }
     | { id: string; website: string | null }[]
@@ -120,8 +131,19 @@ export async function buildWritePreviewForAllyCampaign(input: {
   startAtIso?: string | null;
   endAtIso?: string | null;
   destinationOverride?: MetaWriteDestinationKind | null;
+  /** Easy Builder confirmed objective (e.g. OUTCOME_LEADS) — must not be lost before DB persist. */
+  objectiveRawOverride?: string | null;
   pageIdOverride?: string | null;
   formIdOverride?: string | null;
+  formPrivacyPolicyUrlOverride?: string | null;
+  websiteTrackingOverride?: AllyWebsiteTrackingConfig | null;
+  instantFormRelationOverride?: "VERIFIED" | "MISMATCH" | "UNCHECKED" | null;
+  instantFormNameOverride?: string | null;
+  pageNameOverride?: string | null;
+  destinationTrackingModeOverride?: "NONE" | "AUTO_UTM" | "CUSTOM" | null;
+  instagramUserIdOverride?: string | null;
+  preferPageOnlyOverride?: boolean | null;
+  instagramDiscoveryOverride?: MetaWritePlanInput["instagramDiscovery"];
   /** When true, omit client field soup — load persisted canonical plan. */
   hydrateFromCanonical?: boolean;
   persist?: boolean;
@@ -141,8 +163,19 @@ export async function buildWritePreviewBundle(input: {
   startAtIso?: string | null;
   endAtIso?: string | null;
   destinationOverride?: MetaWriteDestinationKind | null;
+  /** Easy Builder confirmed objective (e.g. OUTCOME_LEADS) — must not be lost before DB persist. */
+  objectiveRawOverride?: string | null;
   pageIdOverride?: string | null;
   formIdOverride?: string | null;
+  formPrivacyPolicyUrlOverride?: string | null;
+  websiteTrackingOverride?: AllyWebsiteTrackingConfig | null;
+  instantFormRelationOverride?: "VERIFIED" | "MISMATCH" | "UNCHECKED" | null;
+  instantFormNameOverride?: string | null;
+  pageNameOverride?: string | null;
+  destinationTrackingModeOverride?: "NONE" | "AUTO_UTM" | "CUSTOM" | null;
+  instagramUserIdOverride?: string | null;
+  preferPageOnlyOverride?: boolean | null;
+  instagramDiscoveryOverride?: MetaWritePlanInput["instagramDiscovery"];
   hydrateFromCanonical?: boolean;
   persist?: boolean;
 }): Promise<BuildWritePreviewResult> {
@@ -154,7 +187,7 @@ export async function buildWritePreviewBundle(input: {
   const { data, error } = await admin
     .from("campaigns")
     .select(
-      "id, user_id, client_id, name, objective, status, daily_budget, page_id, form_id, citta, raggio_km, eta_min, eta_max, booking_channel, target_type, creativita, clients(id, website)",
+      "id, user_id, client_id, name, objective, status, daily_budget, page_id, form_id, citta, raggio_km, eta_min, eta_max, booking_channel, target_type, creativita, variante_a, variante_b, variante_c, titolo_annuncio, page_name, clients(id, website)",
     )
     .eq("id", input.allyCampaignId)
     .maybeSingle();
@@ -234,18 +267,33 @@ export async function buildWritePreviewBundle(input: {
     account = null;
   }
 
-  const persisted = await loadPersistedCanonicalPlan({
+  let persisted = await loadPersistedCanonicalPlan({
     userId: input.userId,
     allyCampaignId: row.id,
   });
+  if (persisted) {
+    const stripped = stripImplicitStaleSchedule({
+      startAtIso: persisted.startAtIso,
+      endAtIso: persisted.endAtIso,
+    });
+    if (stripped.clearedStale) {
+      persisted = {
+        ...persisted,
+        startAtIso: stripped.startAtIso,
+        endAtIso: stripped.endAtIso,
+      };
+    }
+  }
 
   const hydrate = input.hydrateFromCanonical === true;
 
-  const specialAdCategories: MetaWriteSpecialAdCategoriesDecision = hydrate
-    ? (persisted?.specialAdCategories ??
-      input.specialAdCategories ?? { kind: "UNRESOLVED" })
-    : (input.specialAdCategories ??
-      persisted?.specialAdCategories ?? { kind: "UNRESOLVED" });
+  // UNRESOLVED incoming = not provided — never wipe persisted NONE/CATEGORIES.
+  const specialAdCategories: MetaWriteSpecialAdCategoriesDecision =
+    mergeSpecialAdCategoriesDecision({
+      hydrate,
+      incoming: input.specialAdCategories ?? null,
+      persisted: persisted?.specialAdCategories ?? null,
+    });
 
   const destinationOverride =
     !hydrate &&
@@ -283,33 +331,64 @@ export async function buildWritePreviewBundle(input: {
 
   const startAtIso = hydrate
     ? (persisted?.startAtIso ?? input.startAtIso ?? null)
-    : (input.startAtIso ?? persisted?.startAtIso ?? null);
+    : input.startAtIso !== undefined
+      ? input.startAtIso
+      : (persisted?.startAtIso ?? null);
 
   const endAtIso = hydrate
     ? (persisted?.endAtIso ?? input.endAtIso ?? null)
-    : (input.endAtIso ?? persisted?.endAtIso ?? null);
+    : input.endAtIso !== undefined
+      ? input.endAtIso
+      : (persisted?.endAtIso ?? null);
+
+  // Empty-string overrides mean "not provided" — never wipe persisted page/form.
+  const pageOverride = input.pageIdOverride?.trim() || null;
+  const formOverride = input.formIdOverride?.trim() || null;
 
   const pageId = hydrate
-    ? (persisted?.pageId ?? input.pageIdOverride ?? row.page_id)
-    : (input.pageIdOverride?.trim() ||
-      persisted?.pageId ||
-      row.page_id);
+    ? (persisted?.pageId ?? pageOverride ?? row.page_id)
+    : (pageOverride || persisted?.pageId || row.page_id);
 
   const formId = hydrate
-    ? (persisted?.formId ?? input.formIdOverride ?? row.form_id)
-    : (input.formIdOverride?.trim() ||
-      persisted?.formId ||
-      row.form_id);
+    ? (persisted?.formId ?? formOverride ?? row.form_id)
+    : (formOverride || persisted?.formId || row.form_id);
 
+  const formPrivacyOverride =
+    input.formPrivacyPolicyUrlOverride?.trim() || null;
+  const formPrivacyPolicyUrl = hydrate
+    ? (formPrivacyOverride ?? persisted?.formPrivacyPolicyUrl ?? null)
+    : (formPrivacyOverride || persisted?.formPrivacyPolicyUrl || null);
+
+  const trackingOverride =
+    !hydrate && input.websiteTrackingOverride !== undefined
+      ? input.websiteTrackingOverride
+      : undefined;
+  const websiteTracking: AllyWebsiteTrackingConfig | null = hydrate
+    ? (persisted?.websiteTracking ?? null)
+    : trackingOverride !== undefined
+      ? trackingOverride
+      : (persisted?.websiteTracking ?? null);
+
+  const objectiveOverride =
+    !hydrate && typeof input.objectiveRawOverride === "string"
+      ? input.objectiveRawOverride.trim()
+      : "";
+  const planDestinationUrl = resolvePlanDestinationUrl({
+    destination,
+    clientWebsite: website,
+  });
   const plan: MetaWritePlanInput = {
     allyCampaignId: row.id,
     clientId,
     campaignName: row.name?.trim() || "Campagna Ally",
-    objectiveRaw: row.objective,
+    // Easy draft selection wins over stale/empty DB objective so review stays consistent.
+    objectiveRaw: objectiveOverride || row.objective,
     destination,
-    destinationUrl: website,
+    // Instant Form: never inherit clients.website as creative destination URL.
+    destinationUrl: planDestinationUrl,
     pageId,
     formId,
+    formPrivacyPolicyUrl,
     whatsappNumber: null,
     budgetDailyMajor: asNum(row.daily_budget),
     budgetLevel: "AD_SET",
@@ -331,6 +410,7 @@ export async function buildWritePreviewBundle(input: {
     grantedScopes: connection?.scopes ?? [],
     hasMetaConnection: Boolean(connection),
     hasAdAccount: Boolean(account?.metaAdAccountId),
+    metaAdAccountId: account?.metaAdAccountId ?? null,
     adAccountCurrency: account?.currency ?? "EUR",
     adAccountTimezone: account?.timezoneName ?? null,
     buyingType: "AUCTION",
@@ -341,15 +421,44 @@ export async function buildWritePreviewBundle(input: {
       persisted?.allyAudienceMode === "ADVANTAGE_AUDIENCE"
         ? persisted.allyAudienceMode
         : "ADVANTAGE_AUDIENCE",
-    // Advantage+ Audience: hard minimum 18 (QA intent); never hard age_max.
-    etaMin:
-      persisted?.allyAudienceMode === "MANUAL_AUDIENCE"
-        ? asNum(row.eta_min)
-        : 18,
-    etaMax:
-      persisted?.allyAudienceMode === "MANUAL_AUDIENCE"
-        ? asNum(row.eta_max)
-        : null,
+    // Always pass Ally persisted ages. Advantage+ mapping (hard min / suggestion /
+    // omit hard max) happens in resolveWriteAgeFields — never silently widen here.
+    etaMin: asNum(row.eta_min),
+    etaMax: asNum(row.eta_max),
+    websiteTracking,
+    instantFormRelation: hydrate
+      ? "UNCHECKED"
+      : (input.instantFormRelationOverride ?? "UNCHECKED"),
+    instantFormName: hydrate
+      ? null
+      : (input.instantFormNameOverride ?? null),
+    pageName:
+      (!hydrate && input.pageNameOverride?.trim()) ||
+      row.page_name?.trim() ||
+      null,
+    destinationTrackingMode: hydrate
+      ? (persisted?.destinationTrackingMode ?? null)
+      : input.destinationTrackingModeOverride !== undefined
+        ? input.destinationTrackingModeOverride
+        : (persisted?.destinationTrackingMode ?? null),
+    utmSource: persisted?.utmSource ?? null,
+    utmMedium: persisted?.utmMedium ?? null,
+    utmCampaign: persisted?.utmCampaign ?? null,
+    utmContent: persisted?.utmContent ?? null,
+    utmTerm: persisted?.utmTerm ?? null,
+    instagramUserId: hydrate
+      ? (persisted?.instagramUserId ?? null)
+      : input.instagramUserIdOverride !== undefined
+        ? input.instagramUserIdOverride
+        : (persisted?.instagramUserId ?? null),
+    preferPageOnly: hydrate
+      ? (persisted?.preferPageOnly ?? null)
+      : input.preferPageOnlyOverride !== undefined
+        ? input.preferPageOnlyOverride
+        : (persisted?.preferPageOnly ?? null),
+    instagramDiscovery: hydrate
+      ? null
+      : (input.instagramDiscoveryOverride ?? null),
   };
 
   const canonicalPlan = buildCanonicalPlanFromParts({
@@ -362,13 +471,33 @@ export async function buildWritePreviewBundle(input: {
     endAtIso,
     pageId,
     formId,
+    formPrivacyPolicyUrl,
     allyAudienceMode: plan.allyAudienceMode ?? "ADVANTAGE_AUDIENCE",
+    websiteTracking,
+    destinationTrackingMode: plan.destinationTrackingMode ?? null,
+    utmSource: plan.utmSource ?? null,
+    utmMedium: plan.utmMedium ?? null,
+    utmCampaign: plan.utmCampaign ?? null,
+    utmContent: plan.utmContent ?? null,
+    utmTerm: plan.utmTerm ?? null,
+    instagramUserId: plan.instagramUserId ?? null,
+    preferPageOnly: plan.preferPageOnly ?? null,
   });
 
+  // Never map Ally machine markers / canon JSON into Meta creative copy.
   const preview = buildMetaWritePreview(plan, {
     userId: input.userId,
     previousFingerprint: input.previousFingerprint ?? null,
     canonicalPlan,
+    creativeIntent: {
+      varianteA: userFacingCampaignText(row.variante_a),
+      varianteB: userFacingCampaignText(row.variante_b),
+      varianteC: userFacingCampaignText(row.variante_c),
+      titoloAnnuncio: userFacingCampaignText(row.titolo_annuncio),
+      creativitaRaw: row.creativita,
+      pageName: plan.pageName,
+      formName: plan.instantFormName,
+    },
   });
 
   if (input.persist && preview.canPreview) {
@@ -388,12 +517,17 @@ export async function buildWritePreviewBundle(input: {
     timezoneName: account?.timezoneName ?? null,
     accountLabel: account?.metaAdAccountName ?? null,
     adAccountId: account?.metaAdAccountId ?? null,
+    destinationUrl: planDestinationUrl,
+    campaignPageId: row.page_id,
+    clientId,
   });
 
   return {
     preview,
     formState,
-    liveWritesEnabled: isMetaWritesLiveEnabled(),
+    // ADV.2.4.0.3 — UI must not imply live writes when Preview secondary gate is off.
+    liveWritesEnabled:
+      isMetaWritesLiveEnabled() && isLegacyMetaMutationAllowed(),
     canonicalPlan,
   };
 }

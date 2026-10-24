@@ -8,11 +8,33 @@ import {
   buildIdempotencyKey,
   fingerprintPayload,
 } from "@/lib/meta/write/fingerprint";
+import { resolveMetaObjectiveCode } from "@/lib/meta/write/objective";
 import {
-  resolveMetaObjectiveCode,
-  resolveOptimizationAndDestination,
-} from "@/lib/meta/write/objective";
+  resolveConversionPublishPlan,
+  conversionPlanToLegacyDestOpts,
+} from "@/lib/meta/write/conversion-resolver";
 import { validateWriteObjectiveConfiguration } from "@/lib/meta/write/objective-matrix";
+import {
+  etichettaConversionEvent,
+  hasUsableWebsiteTracking,
+} from "@/lib/meta/write/tracking";
+import {
+  buildCanonicalPublishPreview,
+  type CreativeIntentSnapshot,
+} from "@/lib/meta/write/canonical-publish-preview";
+import { assessInstantFormEasyReadiness } from "@/lib/meta/write/instant-form-readiness";
+import {
+  isValidMetaLeadFormTechnicalUrl,
+  normalizeMetaLeadFormTechnicalUrl,
+} from "@/lib/meta/publish/payloads";
+import {
+  evaluateSpecialAdCategoryPublishGates,
+  selectionFromWriteDecision,
+  specialAdCategoriesGraphValue,
+  etichettaSpecialAdCategoryEasy,
+} from "@/lib/meta/write/special-ad-categories";
+import { resolveDestinationTracking } from "@/lib/meta/write/destination-tracking";
+import { resolveAdIdentity } from "@/lib/meta/write/ad-identity";
 import { resolveWritePlacements } from "@/lib/meta/write/placements";
 import { resolveWriteSchedule } from "@/lib/meta/write/schedule";
 import { translateWriteTargeting } from "@/lib/meta/write/targeting";
@@ -57,14 +79,10 @@ function labelSpecialAdCategories(
   decision: MetaWritePlanInput["specialAdCategories"],
 ): string {
   if (decision.kind === "UNRESOLVED") return "Da confermare";
-  if (decision.kind === "NONE") return "Nessuna";
-  const map: Record<string, string> = {
-    CREDIT: "Credito",
-    EMPLOYMENT: "Lavoro",
-    HOUSING: "Alloggi",
-    ISSUES_ELECTIONS_POLITICS: "Temi sociali / politici",
-  };
-  return decision.categories.map((c) => map[c] ?? c).join(", ");
+  if (decision.kind === "NONE") return "Nessuna categoria speciale";
+  return decision.categories
+    .map((c) => etichettaSpecialAdCategoryEasy(c))
+    .join(", ");
 }
 
 function labelDestination(kind: MetaWritePlanInput["destination"]): string {
@@ -98,10 +116,14 @@ export function connectionHasAdsManagement(scopes: string[]): boolean {
 
 function specialCategoriesValue(
   decision: MetaWritePlanInput["specialAdCategories"],
+  countryCode?: string | null,
 ): string[] | null {
-  if (decision.kind === "NONE") return [];
-  if (decision.kind === "CATEGORIES") return [...decision.categories];
-  return null;
+  const selection = selectionFromWriteDecision({
+    decision,
+    source: "USER",
+    countryCode,
+  });
+  return specialAdCategoriesGraphValue(selection);
 }
 
 /**
@@ -114,6 +136,7 @@ export function buildMetaWritePreview(
     userId?: string;
     previousFingerprint?: string | null;
     canonicalPlan?: MetaWriteCanonicalPlan | null;
+    creativeIntent?: CreativeIntentSnapshot | null;
   },
 ): MetaWritePreviewResult {
   const readiness: MetaWriteReadinessCode[] = [];
@@ -178,9 +201,37 @@ export function buildMetaWritePreview(
     );
   }
 
+  const sacSelection = selectionFromWriteDecision({
+    decision: input.specialAdCategories,
+    source: "USER",
+    countryCode: input.countryCode,
+  });
+  const sacGates = evaluateSpecialAdCategoryPublishGates({
+    selection: sacSelection,
+    allyAudienceMode: input.allyAudienceMode ?? null,
+    etaMin: input.etaMin,
+    etaMax: input.etaMax,
+  });
+  const sacWarningMessages: string[] = sacGates.warnings.map((w) => w.messageIt);
   if (input.specialAdCategories.kind === "UNRESOLVED") {
     readiness.push("MISSING_SPECIAL_AD_CATEGORY_DECISION");
-    blockersIt.push("Categoria speciale Meta: da confermare.");
+    readiness.push("SPECIAL_AD_CATEGORY_REQUIRED");
+    blockersIt.push(
+      "Prima di pubblicare devi confermare se questa campagna rientra in una categoria speciale.",
+    );
+  } else {
+    for (const b of sacGates.blockers) {
+      if (b.code === "SPECIAL_AD_CATEGORY_NEEDS_VERIFICATION") {
+        readiness.push("SPECIAL_AD_CATEGORY_NEEDS_VERIFICATION");
+      } else if (b.code === "SPECIAL_AD_CATEGORY_COUNTRY_REQUIRED") {
+        readiness.push("SPECIAL_AD_CATEGORY_COUNTRY_REQUIRED");
+      } else if (b.code === "SPECIAL_AD_CATEGORY_REQUIRED") {
+        readiness.push("SPECIAL_AD_CATEGORY_REQUIRED");
+      } else {
+        readiness.push("UNSUPPORTED_CONFIGURATION");
+      }
+      blockersIt.push(b.messageIt);
+    }
   }
 
   const objective = resolveMetaObjectiveCode(input.objectiveRaw);
@@ -194,21 +245,32 @@ export function buildMetaWritePreview(
     blockersIt.push("Destinazione: da scegliere.");
   }
 
-  const destOpts = resolveOptimizationAndDestination({
+  const conversionPlan = resolveConversionPublishPlan({
     metaObjective: objective,
     destination: input.destination,
+    websiteTracking: input.websiteTracking,
+    pageId: input.pageId,
+    formId: input.formId,
+    destinationUrl: input.destinationUrl,
   });
+  const destOpts = conversionPlanToLegacyDestOpts(conversionPlan);
 
   const crossLevel = validateWriteObjectiveConfiguration({
     metaObjective: objective,
     destination: input.destination,
     optimizationGoal: destOpts.optimizationGoal,
   });
-  if (!crossLevel.ok || !destOpts.optimizationGoal) {
-    readiness.push("UNSUPPORTED_CONFIGURATION");
-    blockersIt.push(
-      "Combinazione obiettivo / ottimizzazione Meta non supportata.",
-    );
+  // Incomplete inputs → MISSING_* only. UNSUPPORTED_CONFIGURATION is reserved
+  // for designs Ally cannot execute (not "objective not filled yet").
+  if ((!crossLevel.ok || !destOpts.optimizationGoal) && objective) {
+    const destMissing =
+      input.destination === "UNRESOLVED" || input.destination === "UNKNOWN";
+    if (!destMissing) {
+      readiness.push("UNSUPPORTED_CONFIGURATION");
+      blockersIt.push(
+        "Combinazione obiettivo / ottimizzazione Meta non supportata.",
+      );
+    }
   }
 
   if (destOpts.needsPage && !(input.pageId ?? "").trim()) {
@@ -217,16 +279,93 @@ export function buildMetaWritePreview(
   }
   if (destOpts.needsForm && !(input.formId ?? "").trim()) {
     readiness.push("MISSING_FORM");
-    blockersIt.push("Indica il modulo contatti Meta.");
+    blockersIt.push("Indica il modulo Instant Form.");
+  }
+  // P0.3 — Page ↔ Form ownership (fail closed on verified mismatch).
+  if (
+    input.destination === "META_LEAD_FORM" &&
+    input.instantFormRelation === "MISMATCH"
+  ) {
+    readiness.push("FORM_PAGE_MISMATCH");
+    blockersIt.push(
+      "Il modulo Instant Form non appartiene alla Pagina Facebook selezionata.",
+    );
+  }
+  // Instant Form technical link: privacy_policy_url only (no Page / website fallback).
+  const leadTechnicalUrl = normalizeMetaLeadFormTechnicalUrl(
+    input.formPrivacyPolicyUrl,
+  );
+  if (
+    input.destination === "META_LEAD_FORM" &&
+    (input.formId ?? "").trim() &&
+    !isValidMetaLeadFormTechnicalUrl(leadTechnicalUrl)
+  ) {
+    readiness.push("MISSING_FORM_TECHNICAL_URL");
+    blockersIt.push(
+      "Il modulo Instant Form selezionato non fornisce un URL esterno valido (informativa privacy) richiesto da Meta per la creatività.",
+    );
   }
   if (destOpts.needsUrl && !(input.destinationUrl ?? "").trim()) {
     readiness.push("MISSING_DESTINATION");
     blockersIt.push("Indica l'URL di destinazione.");
   }
-  if (destOpts.needsTracking) {
+
+  const destinationTracking = resolveDestinationTracking({
+    destination: input.destination,
+    destinationUrl: input.destinationUrl,
+    mode: input.destinationTrackingMode,
+    utmSource: input.utmSource,
+    utmMedium: input.utmMedium,
+    utmCampaign: input.utmCampaign,
+    utmContent: input.utmContent,
+    utmTerm: input.utmTerm,
+    campaignName: input.campaignName,
+    creativeLabel: input.campaignName,
+    source: "USER",
+  });
+  if (
+    input.destination === "WEBSITE" &&
+    destinationTracking.blockReasonCode === "MALFORMED_DESTINATION_URL"
+  ) {
+    readiness.push("MALFORMED_DESTINATION_URL");
+    blockersIt.push(
+      destinationTracking.blockReasonIt ??
+        "L’URL di destinazione non è valido.",
+    );
+  }
+
+  const igDiscovery = input.instagramDiscovery ?? null;
+  const adIdentity = resolveAdIdentity({
+    facebookPageId: input.pageId,
+    facebookPageName: input.pageName,
+    selectedInstagramUserId: input.instagramUserId,
+    preferPageOnly: input.preferPageOnly === true,
+    discovered: igDiscovery?.accounts ?? null,
+    discoveryEmptyReason: igDiscovery?.emptyReason ?? "UNCHECKED",
+    source: "USER",
+  });
+  if (adIdentity.blockReasonCode === "IG_PAGE_MISMATCH") {
+    readiness.push("IG_PAGE_MISMATCH");
+    blockersIt.push(
+      adIdentity.blockReasonIt ??
+        "Account Instagram non valido per la Pagina selezionata.",
+    );
+  } else if (adIdentity.blockReasonCode === "MISSING_INSTAGRAM_SELECTION") {
+    readiness.push("MISSING_INSTAGRAM_SELECTION");
+    blockersIt.push(
+      adIdentity.blockReasonIt ??
+        "Seleziona l’account Instagram oppure conferma solo Facebook.",
+    );
+  }
+  // Professional Website Leads/Sales: block — never silently use LINK_CLICKS.
+  if (
+    conversionPlan.blockReasonCode === "MISSING_TRACKING_CONFIG" ||
+    (destOpts.needsTracking && !hasUsableWebsiteTracking(input.websiteTracking))
+  ) {
     readiness.push("MISSING_TRACKING_CONFIG");
     blockersIt.push(
-      "Manca la configurazione tracking (pixel/dataset) necessaria per questa ottimizzazione.",
+      conversionPlan.blockReasonIt ??
+        "Per ottimizzare le conversioni dal sito collega un Pixel/Dataset e scegli l’evento.",
     );
   }
 
@@ -267,6 +406,12 @@ export function buildMetaWritePreview(
     } else if (targeting.reason === "INVALID_AGE") {
       readiness.push("MISSING_GEO");
       blockersIt.push("Età: fascia non valida.");
+    } else if (targeting.reason === "INVALID_RADIUS") {
+      readiness.push("UNSUPPORTED_CONFIGURATION");
+      blockersIt.push(
+        targeting.messageIt ??
+          "Raggio geografico non supportato da Meta per targeting città.",
+      );
     } else {
       readiness.push("MISSING_GEO");
       blockersIt.push("Zona: incompleta.");
@@ -277,9 +422,11 @@ export function buildMetaWritePreview(
     placementsAdvantage: input.placementsAdvantage,
   });
   if (!placements.ok) {
+    // Honesty: do not silently publish Advantage+ when user requested manual.
+    readiness.push("UNSUPPORTED_CONFIGURATION");
     blockersIt.push(
       placements.reason === "MANUAL_UNSUPPORTED"
-        ? "Placement manuali non supportati in questo slice."
+        ? "Posizionamenti manuali non ancora supportati da Ally — pubblicazione bloccata (nessuna sostituzione silenziosa con Advantage+)."
         : "Strategia di distribuzione non confermata.",
     );
   }
@@ -296,7 +443,9 @@ export function buildMetaWritePreview(
         ? "Programmazione: timezone account Meta mancante."
         : schedule.reason === "PAST_SCHEDULE"
           ? "Programmazione: data inizio già passata — aggiornala esplicitamente (nessuno spostamento automatico)."
-          : "Programmazione: da aggiornare.",
+          : schedule.reason === "MISSING_SCHEDULE"
+            ? "Programmazione: data fine senza data inizio."
+            : "Programmazione: intervallo non valido.",
     );
   }
 
@@ -337,13 +486,19 @@ export function buildMetaWritePreview(
   }
 
   const ageMode = audience.ok ? audience.allyAudienceMode : "UNRESOLVED";
-  // Advantage Audience: hard age_max from campaign must not be sent — pass null for hard max.
+  // Advantage Audience: hard age_max must not be sent. Ally eta_max becomes a
+  // suggestion (age_range) — never silently drop/widen Ally eta_min.
+  const ageSuggestion =
+    ageMode === "ADVANTAGE_AUDIENCE" &&
+    input.etaMin != null &&
+    input.etaMax != null
+      ? { min: Math.round(input.etaMin), max: Math.round(input.etaMax) }
+      : null;
   const age = resolveWriteAgeFields({
     allyAudienceMode: ageMode,
     etaMin: input.etaMin,
-    etaMax:
-      ageMode === "ADVANTAGE_AUDIENCE" ? null : input.etaMax,
-    ageSuggestion: null,
+    etaMax: ageMode === "ADVANTAGE_AUDIENCE" ? null : input.etaMax,
+    ageSuggestion,
   });
   if (!age.ok) {
     readiness.push("UNSUPPORTED_CONFIGURATION");
@@ -381,12 +536,22 @@ export function buildMetaWritePreview(
    * even when special category / geo / schedule / permission block writes.
    */
   if (!input.isImportedMetaOnly) {
-    const cats = specialCategoriesValue(input.specialAdCategories);
+    const cats = specialCategoriesValue(
+      input.specialAdCategories,
+      input.countryCode,
+    );
+    const sacCountry =
+      cats != null && cats.length > 0
+        ? sacSelection.categoryCountryCodes.length > 0
+          ? sacSelection.categoryCountryCodes
+          : null
+        : null;
     campaign = {
       name: input.campaignName.trim() || "Campagna Ally",
       objective,
       status: META_WRITE_SAFE_STATUS,
       special_ad_categories: cats,
+      special_ad_category_country: sacCountry,
       buying_type: "AUCTION",
       daily_budget: campaignBudget,
       lifetime_budget: null,
@@ -408,8 +573,17 @@ export function buildMetaWritePreview(
       },
     };
 
-    let promoted: Record<string, unknown> | null = null;
-    if (destOpts.needsPage && (input.pageId ?? "").trim()) {
+    // Canonical resolver owns promoted_object (page/tracking/event).
+    // Instant Form form_id is NOT on Ad Set — Creative CTA uses lead_gen_form_id.
+    let promoted: Record<string, unknown> | null =
+      conversionPlan.promotedObject
+        ? { ...conversionPlan.promotedObject }
+        : null;
+    if (
+      !promoted &&
+      destOpts.needsPage &&
+      (input.pageId ?? "").trim()
+    ) {
       promoted = { page_id: input.pageId!.trim() };
     }
 
@@ -452,7 +626,11 @@ export function buildMetaWritePreview(
               : "MISSING"
             : "DERIVABLE",
         targeting: targeting.ok ? "AVAILABLE" : "MISSING",
-        schedule: schedule.ok ? "AVAILABLE" : "MISSING",
+        schedule: schedule.ok
+          ? schedule.startTime || schedule.endTime
+            ? "AVAILABLE"
+            : "DERIVABLE"
+          : "MISSING",
         placements: placements.ok ? "DERIVABLE" : "UNRESOLVED",
         bid_strategy: bid.ok ? "DERIVABLE" : "MISSING",
         audience_mode: audience.ok ? "DERIVABLE" : "MISSING",
@@ -472,6 +650,17 @@ export function buildMetaWritePreview(
     budgetLevel: input.budgetLevel,
     budgetDailyMajor: input.budgetDailyMajor,
     currency: input.adAccountCurrency,
+    destinationTracking: {
+      mode: destinationTracking.mode,
+      finalDestinationUrl: destinationTracking.finalDestinationUrl,
+      metaUrlTags: destinationTracking.metaUrlTags,
+    },
+    adIdentity: {
+      facebookPageId: adIdentity.facebookPageId,
+      instagramUserId: adIdentity.instagramUserId,
+      instagramIdentityStatus: adIdentity.instagramIdentityStatus,
+      preferPageOnly: input.preferPageOnly === true,
+    },
   };
   const fingerprint = fingerprintPayload(fingerprintBody);
   const idempotencyKey = buildIdempotencyKey({
@@ -648,6 +837,11 @@ export function buildMetaWritePreview(
         } else if (input.etaMin != null) {
           adSetLines.push(`Età minima: ${input.etaMin} — vincolo`);
         }
+        if (ageMode === "ADVANTAGE_AUDIENCE") {
+          adSetLines.push("Età massima: Nessun limite rigido (Advantage+)");
+        } else if (age.ok && age.age_max != null) {
+          adSetLines.push(`Età massima: ${age.age_max} — vincolo`);
+        }
         adSetLines.push(
           `Fascia d'età suggerita: ${age.ok ? age.suggestionHuman : "Nessuna"}`,
         );
@@ -661,6 +855,27 @@ export function buildMetaWritePreview(
     adSetLines.push(`Programmazione: ${scheduleHuman}`);
     adSetLines.push(`Ottimizzazione: ${optHuman}`);
     adSetLines.push(`Fatturazione: ${billHuman}`);
+    if (
+      input.destination === "WEBSITE" &&
+      (objective === "OUTCOME_LEADS" || objective === "OUTCOME_SALES")
+    ) {
+      if (hasUsableWebsiteTracking(input.websiteTracking)) {
+        const t = input.websiteTracking!;
+        adSetLines.push(
+          `Tracking: ${t.sourceName?.trim() || t.sourceType} (${t.sourceType})`,
+        );
+        adSetLines.push(
+          `Evento conversione: ${etichettaConversionEvent(t.eventType)}`,
+        );
+      } else {
+        adSetLines.push("Tracking: Pixel/Dataset richiesto — non configurato");
+        adSetLines.push(
+          `Evento conversione: ${etichettaConversionEvent(
+            conversionPlan.conversionEvent,
+          )} (da confermare)`,
+        );
+      }
+    }
     adSetLines.push(
       `Destinazione finale: ${labelDestination(input.destination)}${
         input.destination === "WEBSITE" && !adSet.destination_type
@@ -730,8 +945,17 @@ export function buildMetaWritePreview(
         : "Configurazione pronta. Premi «Conferma creazione su Meta» solo dopo verifica esplicita — nessun write automatico.",
     );
   }
+  for (const w of sacWarningMessages) {
+    if (!footnoteParts.includes(w)) footnoteParts.push(w);
+  }
+  for (const w of destinationTracking.warningsIt) {
+    if (!footnoteParts.includes(w)) footnoteParts.push(w);
+  }
+  for (const w of adIdentity.warningsIt) {
+    if (!footnoteParts.includes(w)) footnoteParts.push(w);
+  }
 
-  return {
+  const result: MetaWritePreviewResult = {
     operationType: "CAMPAIGN_ADSET_PAUSED",
     readinessCodes: [...new Set(readiness)],
     canPreview,
@@ -763,6 +987,9 @@ export function buildMetaWritePreview(
       ),
       footnote: footnoteParts.join(" "),
     },
+    conversionPublishPlan: conversionPlan,
+    destinationTracking,
+    adIdentity,
     safePayloadSummary: {
       operationType: "CAMPAIGN_ADSET_PAUSED",
       fingerprint,
@@ -774,12 +1001,29 @@ export function buildMetaWritePreview(
       destination: input.destination,
       clientId: input.clientId,
       allyCampaignId: input.allyCampaignId,
+      formId: input.formId,
+      formPrivacyPolicyUrl: leadTechnicalUrl,
+      adAccountId: input.metaAdAccountId ?? null,
+      timezoneName: input.adAccountTimezone ?? null,
       adsManagementPresent,
       canPreview,
       canWrite,
       resumeMode,
       writeAlreadyCompleted,
       readinessCodes: [...new Set(readiness)],
+      conversionPublishPlan: {
+        metaObjective: conversionPlan.metaObjective,
+        conversionLocation: conversionPlan.conversionLocation,
+        optimizationGoal: conversionPlan.optimizationGoal,
+        destinationType: conversionPlan.destinationType,
+        trackingSource: conversionPlan.trackingSource,
+        conversionEvent: conversionPlan.conversionEvent,
+        promotedObject: conversionPlan.promotedObject,
+        trackingRequirement: conversionPlan.trackingRequirement,
+        valid: conversionPlan.valid,
+        blockReasonCode: conversionPlan.blockReasonCode,
+        needsMetaVerification: conversionPlan.needsMetaVerification,
+      },
       canonicalPlan:
         opts?.canonicalPlan ??
         ({
@@ -792,11 +1036,68 @@ export function buildMetaWritePreview(
           endAtIso: input.endAtIso,
           pageId: input.pageId,
           formId: input.formId,
+          formPrivacyPolicyUrl: leadTechnicalUrl,
           allyAudienceMode: input.allyAudienceMode ?? "ADVANTAGE_AUDIENCE",
+          websiteTracking: input.websiteTracking ?? null,
+          destinationTrackingMode: input.destinationTrackingMode ?? null,
+          utmSource: input.utmSource ?? null,
+          utmMedium: input.utmMedium ?? null,
+          utmCampaign: input.utmCampaign ?? null,
+          utmContent: input.utmContent ?? null,
+          utmTerm: input.utmTerm ?? null,
+          instagramUserId: input.instagramUserId ?? null,
+          preferPageOnly: input.preferPageOnly ?? null,
         } satisfies MetaWriteCanonicalPlan),
     },
     metaValidation: null,
   };
+
+  const canonicalPublishPreview = buildCanonicalPublishPreview({
+    planInput: input,
+    preview: result,
+    creativeIntent: {
+      ...(opts?.creativeIntent ?? {}),
+      pageName: input.pageName ?? opts?.creativeIntent?.pageName ?? null,
+      formName: input.instantFormName ?? null,
+    },
+  });
+  result.canonicalPublishPreview = canonicalPublishPreview;
+  result.publishAllowed = canonicalPublishPreview.publishAllowed;
+
+  const instantFormEasyReadiness = assessInstantFormEasyReadiness({
+    planInput: input,
+    preview: result,
+    formRelation: input.instantFormRelation ?? "UNCHECKED",
+    formName: input.instantFormName ?? null,
+  });
+  result.instantFormEasyReadiness = instantFormEasyReadiness;
+
+  (result.safePayloadSummary as Record<string, unknown>).publishAllowed =
+    canonicalPublishPreview.publishAllowed;
+  (result.safePayloadSummary as Record<string, unknown>).canonicalPreviewKeys =
+    Object.keys(canonicalPublishPreview.expectedByKey);
+  if (instantFormEasyReadiness) {
+    (result.safePayloadSummary as Record<string, unknown>).instantFormEasyReadiness =
+      {
+        readiness: instantFormEasyReadiness.readiness,
+        requiredInputsCount: instantFormEasyReadiness.requiredInputsCount,
+        completedInputsCount: instantFormEasyReadiness.completedInputsCount,
+        estimatedUserSteps: instantFormEasyReadiness.estimatedUserSteps,
+        automaticDecisionsCount: instantFormEasyReadiness.automaticDecisionsCount,
+        formRelation: instantFormEasyReadiness.formRelation,
+      };
+  }
+  // Never leak tokens — assert none present in technical dump.
+  // Require a token-like shape (avoid false positives on hex fingerprints).
+  const techJson = JSON.stringify(canonicalPublishPreview.technicalDetails);
+  if (
+    /access_token/i.test(techJson) ||
+    /\bEAA[A-Za-z0-9]{20,}\b/.test(techJson)
+  ) {
+    throw new Error("CANONICAL_PREVIEW_SECRET_LEAK");
+  }
+
+  return result;
 }
 
 /** Confirm fingerprint must match current preview — fail closed. */

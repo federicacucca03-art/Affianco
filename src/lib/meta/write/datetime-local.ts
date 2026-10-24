@@ -109,6 +109,9 @@ export function formatScheduleRangeIt(
   const end = fmt(endIso);
   if (start && end) return `${start} → ${end} (${tz})`;
   if (start) return `Da ${start} (${tz})`;
+  if (!startIso && !endIso) {
+    return `Opzionale — nessuna data inizio/fine (${tz})`;
+  }
   return "Da aggiornare";
 }
 

@@ -124,6 +124,25 @@ export async function getMetaConnectionForClient(
   return record;
 }
 
+/** Workspace inventory of persisted Meta connections (same table as publish-plan). */
+export async function listMetaConnectionsForUser(
+  userId: string,
+): Promise<MetaConnectionRecord[]> {
+  const uid = assertUserId(userId);
+  const { data, error } = await adminClient()
+    .from("meta_connections")
+    .select(SELECT_COLS)
+    .eq("user_id", uid)
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    throw new MetaError("META_CONNECTION_INVALID", "Lettura connessione non riuscita.");
+  }
+  return ((data ?? []) as MetaConnectionRow[])
+    .map(toRecord)
+    .filter((row) => row.userId === uid);
+}
+
 export async function getDecryptedMetaAccessToken(
   userId: string,
   clientId: string,

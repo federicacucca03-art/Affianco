@@ -51,8 +51,10 @@ function graphBase(version: string, path: string): string {
  * Facebook Login for Business: i permessi li definisce la login configuration.
  * Non si aggiunge `scope` nell'URL (config_id sostituisce scope).
  *
- * Read: META_LOGIN_CONFIG_ID (ads_read).
- * Write upgrade: META_WRITE_LOGIN_CONFIG_ID (must include ads_management).
+ * Read: META_LOGIN_CONFIG_ID (ads_read + pages list/engagement as configured).
+ * Write upgrade: META_WRITE_LOGIN_CONFIG_ID must include ads_management AND
+ * pages_manage_ads (ADV.2.4 Instant Form discovery — see oauth-scopes.ts).
+ * Ally asserts granted scopes after callback; Login Config must stay aligned.
  */
 export function buildMetaAuthorizationUrl(
   config: MetaServerConfig,
@@ -72,7 +74,7 @@ export function buildMetaAuthorizationUrl(
     throw new MetaError(
       "META_CONFIG_MISSING",
       purpose === "write_upgrade"
-        ? "Configurazione permesso scrittura Meta mancante (META_WRITE_LOGIN_CONFIG_ID)."
+        ? "Funzione Meta non disponibile in questo ambiente."
         : "Configurazione Meta incompleta.",
     );
   }
