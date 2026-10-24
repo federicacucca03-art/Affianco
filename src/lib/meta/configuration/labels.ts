@@ -169,11 +169,24 @@ export function etichettaSpecialAdCategories(
   raw: unknown,
   value: string[] | null,
 ): string {
-  if (Array.isArray(raw) && raw.length === 0) return "Nessuna";
-  if (value && value.length > 0) return value.join(", ");
+  const mapIt = (code: string): string => {
+    const key = code.trim().toUpperCase();
+    const known: Record<string, string> = {
+      NONE: "Nessuna categoria speciale",
+      HOUSING: "Casa / alloggi",
+      EMPLOYMENT: "Lavoro",
+      FINANCIAL_PRODUCTS_SERVICES: "Credito / prodotti e servizi finanziari",
+      CREDIT: "Credito (deprecato)",
+      ISSUES_ELECTIONS_POLITICS: "Temi sociali, elezioni o politica",
+      ONLINE_GAMBLING_AND_GAMING: "Gioco d’azzardo online",
+    };
+    return known[key] ?? code;
+  };
+  if (Array.isArray(raw) && raw.length === 0) return "Nessuna categoria speciale";
+  if (value && value.length > 0) return value.map(mapIt).join(", ");
   if (Array.isArray(raw) && raw.length > 0) {
     return raw
-      .map((x) => (typeof x === "string" ? x : null))
+      .map((x) => (typeof x === "string" ? mapIt(x) : null))
       .filter((x): x is string => Boolean(x))
       .join(", ");
   }

@@ -54,6 +54,14 @@ export type CampagnaAssets = {
   creativitaMeta?: CreativitaMeta[];
   /** LEADS: provenienza tasso di conversione. */
   conversionRateSource?: ConversionRateSource;
+  /** P0.12 — HOW the campaign is prepared. */
+  creationPath?: "ALLY_ASSISTED" | "MANUAL";
+  /** P0.12 — manual control level (null when Ally-assisted). */
+  manualMode?: "EASY" | "FULL";
+  /** @deprecated Prefer manualMode — legacy alias for MANUAL path. */
+  creationMode?: "EASY" | "FULL";
+  /** P0.12 — natural-language brief for Ally-assisted path (interim). */
+  allyCreationBrief?: string;
 };
 
 function leggiMappa(): Record<string, CampagnaAssets> {

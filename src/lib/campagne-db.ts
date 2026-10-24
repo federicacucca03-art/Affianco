@@ -119,6 +119,9 @@ export type CampaignRow = {
   hero_product?: string | null;
   creativita?: unknown;
   conversion_rate_source?: string | null;
+  /** ADV.1.5.1 — durable CanonicalCampaignState V2 (QA). */
+  canonical_state?: unknown | null;
+  canonical_state_updated_at?: string | null;
   clients?: ClientJoin | ClientJoin[] | null;
 };
 
@@ -132,7 +135,8 @@ export type DatiSalvataggioCampagna = {
   averageTicketValue?: number;
   closingRate?: number;
   /** LEADS | BOOKINGS | ECOMMERCE | IN_STORE | RETARGETING | AWARENESS */
-  objective?: CampagnaObjective;
+  /** null = unset until user confirms (Easy Mode Step 1). */
+  objective?: CampagnaObjective | null;
   bookingServiceValue?: number;
   showUpRate?: number;
   bookingChannel?: BookingChannel;
@@ -222,7 +226,7 @@ function statoDaCampagna(row: CampaignRow): string {
   if (status === "REVISION_REQUESTED") {
     return "Il cliente ha richiesto modifiche";
   }
-  if (status === "DRAFT") return "In attesa di approvazione cliente";
+  if (status === "DRAFT") return "In configurazione";
   if (status === "ACTIVE" || status === "RUNNING") {
     return "Attiva · in attesa di review o già live";
   }
@@ -334,6 +338,7 @@ export function mappaCampagnaDaRow(
   const nomeCliente = cliente?.name?.trim() || "Cliente";
   const base: Campagna = {
     id: row.id ?? "",
+    clienteId: row.client_id?.trim() || cliente?.id?.trim() || undefined,
     nomeCliente,
     iniziali: inizialiDaNome(nomeCliente),
     stato: statoDaCampagna(row),
@@ -383,6 +388,8 @@ export function mappaCampagnaDaRow(
     status: row.status ?? undefined,
     targetMargin: row.target_margin ?? undefined,
     frontEndOffer: row.front_end_offer ?? undefined,
+    canonicalState: row.canonical_state ?? null,
+    canonicalStateUpdatedAt: row.canonical_state_updated_at ?? null,
     targetType: normalizzaTargetType(row.target_type),
     targetAge: normalizzaTargetAgeBand(row.target_age),
     shippingMarket: normalizzaShippingMarket(row.shipping_market),
@@ -531,7 +538,8 @@ type CampagnaWriteInput = {
   dailyBudget: number;
   maxSustainableCpa?: number;
   status?: string;
-  objective?: CampagnaObjective;
+  /** null = unset until Easy Mode Step 1 confirms the business goal. */
+  objective?: CampagnaObjective | null;
   bookingServiceValue?: number;
   showUpRate?: number;
   bookingChannel?: BookingChannel;
@@ -585,15 +593,25 @@ export function costruisciPayloadCampagna(
   input: CampagnaWriteInput,
   opts?: { includeStatus?: boolean; id?: string; scriviVuoti?: boolean },
 ): Record<string, unknown> {
-  const objective = input.objective ?? "LEADS";
   const includeStatus = opts?.includeStatus !== false;
   const scriviVuoti = Boolean(opts?.scriviVuoti ?? input.permettiCampiVuoti);
+  /** Explicit null = leave unset (Easy Mode before Step 1 confirm). */
+  const objectiveResolved =
+    input.objective === null
+      ? null
+      : (input.objective ?? "LEADS");
   const payload: Record<string, unknown> = {
     client_id: input.clientId,
-    name: input.name.trim() || nomeCampagnaFallback(objective),
-    objective,
+    name:
+      input.name.trim() ||
+      nomeCampagnaFallback(objectiveResolved ?? "LEADS"),
     daily_budget: input.dailyBudget,
   };
+  if (objectiveResolved === null) {
+    payload.objective = null;
+  } else {
+    payload.objective = objectiveResolved;
+  }
   if (input.maxSustainableCpa != null && input.maxSustainableCpa > 0) {
     payload.max_sustainable_cpa = input.maxSustainableCpa;
   }
@@ -1012,10 +1030,13 @@ const SELECT_LISTA =
   "id, created_at, client_id, name, objective, status, daily_budget, max_sustainable_cpa, booking_service_value, show_up_rate, booking_channel, average_order_value, product_margin, average_receipt, store_margin, recovery_value, recovery_margin, recovery_discount, launch_budget, awareness_radius_km, estimated_cpm, approved_at, revision_notes, approval_token, clients(id, name, elevator_pitch, average_ticket_value, closing_rate)";
 
 const SELECT_DETTAGLIO_SENZA_CRS =
-  "id, created_at, client_id, name, objective, status, daily_budget, max_sustainable_cpa, variante_a, variante_b, variante_c, page_id, form_id, settore, citta, raggio_km, eta_min, eta_max, titolo_annuncio, target_margin, booking_service_value, show_up_rate, booking_channel, booking_confirmation_policy, average_order_value, product_margin, average_receipt, store_margin, recovery_value, recovery_margin, recovery_discount, launch_budget, awareness_radius_km, estimated_cpm, front_end_offer, target_type, target_age, shipping_market, hero_product, creativita, approved_at, revision_notes, approval_token, clients(id, name, elevator_pitch, average_ticket_value, closing_rate, website)";
+  "id, created_at, client_id, name, objective, status, daily_budget, max_sustainable_cpa, variante_a, variante_b, variante_c, page_id, page_name, form_id, settore, citta, raggio_km, eta_min, eta_max, titolo_annuncio, target_margin, booking_service_value, show_up_rate, booking_channel, booking_confirmation_policy, average_order_value, product_margin, average_receipt, store_margin, recovery_value, recovery_margin, recovery_discount, launch_budget, awareness_radius_km, estimated_cpm, front_end_offer, target_type, target_age, shipping_market, hero_product, creativita, approved_at, revision_notes, approval_token, clients(id, name, elevator_pitch, average_ticket_value, closing_rate, website)";
 
 const SELECT_DETTAGLIO =
-  "id, created_at, client_id, name, objective, status, daily_budget, max_sustainable_cpa, variante_a, variante_b, variante_c, page_id, form_id, settore, citta, raggio_km, eta_min, eta_max, titolo_annuncio, target_margin, booking_service_value, show_up_rate, booking_channel, booking_confirmation_policy, average_order_value, product_margin, average_receipt, store_margin, recovery_value, recovery_margin, recovery_discount, launch_budget, awareness_radius_km, estimated_cpm, front_end_offer, target_type, target_age, shipping_market, hero_product, creativita, conversion_rate_source, approved_at, revision_notes, approval_token, clients(id, name, elevator_pitch, average_ticket_value, closing_rate, website)";
+  "id, created_at, client_id, name, objective, status, daily_budget, max_sustainable_cpa, variante_a, variante_b, variante_c, page_id, page_name, form_id, settore, citta, raggio_km, eta_min, eta_max, titolo_annuncio, target_margin, booking_service_value, show_up_rate, booking_channel, booking_confirmation_policy, average_order_value, product_margin, average_receipt, store_margin, recovery_value, recovery_margin, recovery_discount, launch_budget, awareness_radius_km, estimated_cpm, front_end_offer, target_type, target_age, shipping_market, hero_product, creativita, conversion_rate_source, approved_at, revision_notes, approval_token, clients(id, name, elevator_pitch, average_ticket_value, closing_rate, website)";
+
+/** Prefer V2 columns when present (QA). Falls back if column missing. */
+const SELECT_DETTAGLIO_CON_CANON = `${SELECT_DETTAGLIO}, canonical_state, canonical_state_updated_at`;
 
 /** Elenco campagne con join sul cliente, dalla più recente. */
 export async function leggiCampagneDaSupabase(): Promise<Campagna[]> {
@@ -1050,11 +1071,28 @@ export async function leggiCampagnaDaSupabase(
     mappaCampagnaDaRow(row, {
       ignoraCacheLocale: opts?.ignoraCacheLocale,
     });
-  const tentativoDettaglio = await supabase
+  const tentativoCanon = await supabase
     .from("campaigns")
-    .select(SELECT_DETTAGLIO)
+    .select(SELECT_DETTAGLIO_CON_CANON)
     .eq("id", id)
     .maybeSingle();
+
+  if (!tentativoCanon.error && tentativoCanon.data) {
+    return map(tentativoCanon.data as CampaignRow);
+  }
+
+  const erroreCanon = tentativoCanon.error;
+  const colonnaCanonMancante =
+    Boolean(erroreCanon) &&
+    /canonical_state/i.test(erroreCanon?.message ?? "");
+
+  const tentativoDettaglio = colonnaCanonMancante
+    ? await supabase
+        .from("campaigns")
+        .select(SELECT_DETTAGLIO)
+        .eq("id", id)
+        .maybeSingle()
+    : tentativoCanon;
 
   if (!tentativoDettaglio.error && tentativoDettaglio.data) {
     return map(tentativoDettaglio.data as CampaignRow);

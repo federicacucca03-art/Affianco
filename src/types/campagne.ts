@@ -167,6 +167,8 @@ export function normalizzaObjective(
 
 export type Campagna = {
   id: string;
+  /** Canonical clients.id when known (Brand Brain / inventory). */
+  clienteId?: string;
   nomeCliente: string;
   iniziali: string;
   stato: string;
@@ -217,6 +219,8 @@ export type Campagna = {
   varianteB?: string;
   varianteC?: string;
   pageId?: string;
+  /** Facebook Page display name for the selected page_id (Meta ad identity). */
+  pageName?: string;
   formId?: string;
   raggioKm?: number;
   etaMin?: number;
@@ -237,6 +241,13 @@ export type Campagna = {
   approvalToken?: string;
   /** Offerta d'ingresso / gancio (front-end offer). */
   frontEndOffer?: string;
+  /**
+   * ADV.1.5.1 — Ally CanonicalCampaignState V2 JSON (campaigns.canonical_state).
+   * When present and valid, wins over ALY_CANON_V1 / columns for design.
+   */
+  canonicalState?: unknown | null;
+  /** Last Ally write to canonical_state (not Meta sync). */
+  canonicalStateUpdatedAt?: string | null;
   /** Tipo cliente: B2C o B2B. */
   targetType?: TargetType;
   /** Fascia d'età prevalente. */
